@@ -3,6 +3,9 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Request;
+use Illuminate\Support\Facades\Log;
 
 class AuditLog extends Model
 {
@@ -22,28 +25,28 @@ class AuditLog extends Model
         'new_values' => 'array',
     ];
 
-    // Simple relationship - no complex logic
+    // Relationship
     public function user()
     {
         return $this->belongsTo(User::class);
     }
 
-    // Simple static method to create logs
+    // Static method to create logs - FULLY FIXED
     public static function record($action, $model, $modelId = null, $oldValues = null, $newValues = null)
     {
         try {
             return self::create([
-                'user_id' => auth()->id(),
+                'user_id' => Auth::id(),  // FIXED: Use Auth facade
                 'action' => $action,
                 'model' => $model,
                 'model_id' => $modelId,
                 'old_values' => $oldValues,
                 'new_values' => $newValues,
-                'ip_address' => request()->ip(),
-                'user_agent' => request()->userAgent(),
+                'ip_address' => Request::ip(),  // FIXED: Use Request facade
+                'user_agent' => Request::userAgent(),  // FIXED: Use Request facade
             ]);
         } catch (\Exception $e) {
-            \Log::error('Audit log failed: ' . $e->getMessage());
+            Log::error('Audit log failed: ' . $e->getMessage());
             return null;
         }
     }

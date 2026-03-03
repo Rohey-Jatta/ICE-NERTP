@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
 use App\Http\Controllers\Public\ResultsSummaryController;
 use App\Http\Controllers\Public\ResultsMapController;
@@ -17,7 +18,7 @@ Route::get('/results/stations', [ResultsStationsController::class, 'index'])->na
 
 // Dashboard route - FIXED
 Route::get('/dashboard', function () {
-    $user = auth()->user();
+    $user = Auth::user(); // Use Auth facade instead of auth() helper
     
     if (!$user) {
         return redirect('/auth/login');
