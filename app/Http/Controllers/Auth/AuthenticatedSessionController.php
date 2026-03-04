@@ -3,12 +3,21 @@
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
+use App\Services\TwoFactorAuthService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 
 class AuthenticatedSessionController extends Controller
 {
+    protected $twoFactorService;
+
+    public function __construct(TwoFactorAuthService $twoFactorService)
+    {
+        $this->twoFactorService = $twoFactorService;
+    }
+
     public function create()
     {
         return Inertia::render('Auth/Login');
@@ -16,32 +25,38 @@ class AuthenticatedSessionController extends Controller
 
     public function store(Request $request)
     {
-        // SUPER SIMPLE - No heavy validation
-        $credentials = $request->only('email', 'password');
+        $credentials = $request->validate([
+            'email' => 'required|email',
+            'password' => 'required',
+        ]);
 
         if (Auth::attempt($credentials)) {
-            $request->session()->regenerate();
-            
-            // Check if user needs 2FA
             $user = Auth::user();
             
-            if ($user->two_factor_enabled) {
-                // Redirect to 2FA page
-                return redirect()->route('two-factor.verify');
-            }
+            // Generate and send 2FA code
+            $code = $this->twoFactorService->generateCode($user);
+            $this->twoFactorService->sendCode($user, $code);
             
-            // No 2FA - go straight to dashboard
-            return redirect()->intended('/dashboard');
+            Log::info('2FA Code for ' . $user->email . ': ' . $code);
+            
+            // Store user ID in session
+            $request->session()->put('2fa_user_id', $user->id);
+            
+            // Logout temporarily
+            Auth::logout();
+            
+            // FORCE redirect to 2FA
+            return to_route('two-factor.show');
         }
 
         return back()->withErrors([
-            'email' => 'The provided credentials do not match our records.',
+            'email' => 'Invalid credentials.',
         ])->withInput($request->only('email'));
     }
 
     public function destroy(Request $request)
     {
-        Auth::guard('web')->logout();
+        Auth::logout();
         $request->session()->invalidate();
         $request->session()->regenerateToken();
         return redirect('/');

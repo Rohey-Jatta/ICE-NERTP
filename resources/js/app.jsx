@@ -13,5 +13,7 @@ createInertiaApp({
         const root = createRoot(el);
         root.render(<App {...props} />);
     },
-    progress: false, // NO LOADING BAR
+    progress: false,
+}).catch(error => {
+    console.error('Inertia error:', error);
 });

@@ -1,203 +1,123 @@
-import { useState, useRef, useEffect } from "react";
-import { router } from "@inertiajs/react";
+import { useState, useEffect } from 'react';
+import { useForm } from '@inertiajs/react';
 
-export default function TwoFactor({ phone_hint, is_locked_out }) {
-    const [digits, setDigits] = useState(["", "", "", "", "", ""]);
-    const [message, setMessage] = useState("");
-    const [isError, setIsError] = useState(false);
-    const [isLockedOut, setIsLockedOut] = useState(is_locked_out);
-    const [cooldown, setCooldown] = useState(0);
-    const [processing, setProcessing] = useState(false);
-    const refs = useRef([]);
+export default function TwoFactor() {
+    const { data, setData, post, processing, errors } = useForm({
+        code: '',
+    });
+
+    const [countdown, setCountdown] = useState(300); // 5 minutes
 
     useEffect(() => {
-        refs.current[0]?.focus();
+        const timer = setInterval(() => {
+            setCountdown((prev) => (prev > 0 ? prev - 1 : 0));
+        }, 1000);
+        return () => clearInterval(timer);
     }, []);
 
-    useEffect(() => {
-        if (cooldown > 0) {
-            const timer = setTimeout(() => setCooldown(c => c - 1), 1000);
-            return () => clearTimeout(timer);
-        }
-    }, [cooldown]);
-
-    function handleChange(i, val) {
-        const d = val.replace(/\D/g, "").slice(-1);
-        const next = [...digits];
-        next[i] = d;
-        setDigits(next);
-        if (d && i < 5) refs.current[i + 1]?.focus();
-        if (d && i === 5) {
-            const code = [...next.slice(0, 5), d].join("");
-            if (code.length === 6) submit(code);
-        }
-    }
-
-    function handleKeyDown(i, e) {
-        if (e.key === "Backspace" && !digits[i] && i > 0) {
-            refs.current[i - 1]?.focus();
-        }
-    }
-
-    function handlePaste(e) {
+    const handleSubmit = (e) => {
         e.preventDefault();
-        const p = e.clipboardData.getData("text").replace(/\D/g, "").slice(0, 6);
-        if (p.length === 6) {
-            setDigits(p.split(""));
-            submit(p);
-        }
-    }
+        post('/auth/two-factor');
+    };
 
-    async function submit(code) {
-        if (processing) return;
-        setProcessing(true);
-        setMessage("");
-        setIsError(false);
-
-        try {
-            const r = await fetch("/auth/two-factor/verify", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    "X-CSRF-TOKEN": document.querySelector('meta[name="csrf-token"]')?.content,
-                },
-                body: JSON.stringify({ code }),
-            });
-            const d = await r.json();
-
-            if (r.ok) {
-                if (d.status === "device_registration_required") {
-                    router.visit("/auth/device/register");
-                } else if (d.status === "authenticated") {
-                    window.location.href = d.redirect_url;
-                }
-            } else {
-                setIsError(true);
-                setDigits(["", "", "", "", "", ""]);
-                refs.current[0]?.focus();
-                if (r.status === 429 && d.locked_out) {
-                    setIsLockedOut(true);
-                }
-                setMessage(d.message || "Invalid code.");
-            }
-        } catch {
-            setIsError(true);
-            setMessage("Network error.");
-        } finally {
-            setProcessing(false);
-        }
-    }
-
-    async function resend() {
-        if (cooldown > 0) return;
-        const r = await fetch("/auth/two-factor/resend", {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                "X-CSRF-TOKEN": document.querySelector('meta[name="csrf-token"]')?.content,
-            },
-        });
-        const d = await r.json();
-        setMessage(d.message);
-        setIsError(d.status === "failed");
-        if (d.status === "sent") {
-            setCooldown(60);
-            setDigits(["", "", "", "", "", ""]);
-            refs.current[0]?.focus();
-        }
-    }
+    const minutes = Math.floor(countdown / 60);
+    const seconds = countdown % 60;
 
     return (
-        <div className="min-h-screen bg-gray-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
-            <div className="sm:mx-auto sm:w-full sm:max-w-md">
-                <div className="flex justify-center mb-4">
-                    <img
-                        src="/asset/logo.png"
-                        alt="IEC Logo"
-                        className="w-16 h-16 object-contain rounded-full flex items-center"
-                    />
+        <div className="min-h-screen bg-gradient-to-br from-[#1a1a2e] via-[#16213e] to-[#0f3460] flex items-center justify-center p-4 relative overflow-hidden">
+            {/* SLOW SPARKLE ANIMATION */}
+            <div className="fixed inset-0 overflow-hidden pointer-events-none">
+                <div className="absolute inset-0 opacity-40">
+                    {[...Array(60)].map((_, i) => (
+                        <div
+                            key={i}
+                            className="absolute bg-slate-400 rounded-full animate-float"
+                            style={{
+                                width: `${Math.random() * 3 + 1}px`,
+                                height: `${Math.random() * 3 + 1}px`,
+                                left: `${Math.random() * 100}%`,
+                                top: `${Math.random() * 100}%`,
+                                animationDelay: `${Math.random() * 20}s`,
+                                animationDuration: `${Math.random() * 40 + 40}s`, // 40-80 seconds
+                            }}
+                        />
+                    ))}
                 </div>
-                <h1 className="text-center text-2xl font-bold text-blue-800">Verification Required</h1>
-                <p className="mt-2 text-center text-sm text-gray-600">
-                    Enter the 6-digit code sent to <span className="font-medium">{phone_hint}</span>
-                </p>
+                
+                <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-teal-500/10 rounded-full blur-3xl animate-slow-pulse" />
+                <div 
+                    className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl animate-slow-pulse" 
+                    style={{ animationDelay: '4s' }} 
+                />
             </div>
 
-            <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
-                <div className="bg-white py-8 px-4 shadow-lg sm:rounded-lg sm:px-10 border border-gray-200">
-                    {isLockedOut ? (
-                        <div className="text-center">
-                            <p className="text-lg font-medium text-red-800 mb-2">Account Temporarily Locked</p>
-                            <p className="text-sm text-red-600 mb-4">{message}</p>
-                            <button
-                                onClick={() => router.visit("/auth/login")}
-                                className="text-sm text-blue-900 underline"
-                            >
-                                Return to login
-                            </button>
+            <div className="max-w-md w-full relative z-10">
+                <div className="text-center mb-8">
+                    <h1 className="text-4xl font-bold text-white mb-2">Two-Factor Authentication</h1>
+                    <p className="text-gray-400 text-sm">Enter the 6-digit code sent to your phone</p>
+                </div>
+
+                <div className="bg-white/95 backdrop-blur-sm rounded-xl shadow-2xl p-8">
+                    <div className="text-center mb-6">
+                        <div className="text-6xl mb-4">Ì≥±</div>
+                        <p className="text-gray-600 text-sm">
+                            A verification code has been sent to your registered phone number
+                        </p>
+                        <div className="mt-4 p-3 bg-blue-50 rounded-lg">
+                            <div className="text-sm text-gray-600">Code expires in:</div>
+                            <div className="text-2xl font-bold text-blue-600">
+                                {minutes}:{seconds.toString().padStart(2, '0')}
+                            </div>
                         </div>
-                    ) : (
-                        <>
-                            {message && (
-                                <div
-                                    className={`mb-4 p-3 rounded-md border ${
-                                        isError
-                                            ? "bg-red-50 border-red-200 text-red-500"
-                                            : "bg-green-50 border-green-200 text-green-500"
-                                    }`}
-                                >
-                                    <p className="text-sm">{message}</p>
-                                </div>
-                            )}
+                    </div>
 
-                            <div className="flex gap-3 justify-center mb-6" onPaste={handlePaste}>
-                                {digits.map((d, i) => (
-                                    <input
-                                        key={i}
-                                        ref={(el) => (refs.current[i] = el)}
-                                        type="text"
-                                        inputMode="numeric"
-                                        maxLength={1}
-                                        value={d}
-                                        onChange={(e) => handleChange(i, e.target.value)}
-                                        onKeyDown={(e) => handleKeyDown(i, e)}
-                                        disabled={processing}
-                                        className={`w-12 h-14 text-center text-2xl font-bold border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors disabled:opacity-50 ${
-                                            isError
-                                                ? "border-red-400 bg-red-50"
-                                                : d
-                                                ? "border-blue-500 bg-blue-50"
-                                                : "border-gray-300 bg-white"
-                                        }`}
-                                    />
-                                ))}
-                            </div>
-
-                            <button
-                                onClick={() => submit(digits.join(""))}
-                                disabled={processing || digits.join("").length !== 6}
-                                className="w-full py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-700 hover:bg-blue-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                            >
-                                {processing ? "Verifying..." : "Verify Code"}
-                            </button>
-
-                            <div className="mt-4 flex justify-between text-sm">
-                                <button
-                                    onClick={() => router.visit("/auth/login")}
-                                    className="text-gray-500 hover:text-gray-700"
-                                >
-                                    ‚Üê Back
-                                </button>
-                                <button
-                                    onClick={resend}
-                                    disabled={cooldown > 0}
-                                    className="text-blue-900 hover:text-blue-700 disabled:text-gray-400"
-                                >
-                                    {cooldown > 0 ? `Resend in ${cooldown}s` : "Resend code"}
-                                </button>
-                            </div>
-                        </>
+                    {errors.code && (
+                        <div className="mb-4 p-3 bg-red-100 border border-red-300 text-red-800 rounded-lg text-sm">
+                            {errors.code}
+                        </div>
                     )}
+
+                    <form onSubmit={handleSubmit}>
+                        <div className="mb-6">
+                            <label className="block text-sm font-medium text-gray-700 mb-2 text-center">
+                                Verification Code
+                            </label>
+                            <input
+                                type="text"
+                                value={data.code}
+                                onChange={(e) => setData('code', e.target.value.replace(/\D/g, '').slice(0, 6))}
+                                placeholder="000000"
+                                maxLength="6"
+                                className="w-full px-4 py-4 text-center text-3xl font-mono tracking-widest border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                required
+                                autoFocus
+                                disabled={processing}
+                            />
+                        </div>
+
+                        <button
+                            type="submit"
+                            disabled={processing || data.code.length !== 6}
+                            className="w-full py-3 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 disabled:from-blue-400 disabled:to-blue-500 text-white font-semibold rounded-lg transition-all shadow-lg"
+                        >
+                            {processing ? 'Verifying...' : 'Verify Code'}
+                        </button>
+                    </form>
+
+                    <div className="mt-6 text-center">
+                        <a href="/auth/login" className="text-sm text-blue-600 hover:text-blue-800">
+                            ‚Üê Back to login
+                        </a>
+                    </div>
+
+                    <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                        <p className="text-xs text-amber-800">
+                            Ì≤° <strong>Development Mode:</strong> Check Laravel logs for the code:
+                        </p>
+                        <code className="text-xs text-amber-900 block mt-2">
+                            docker-compose exec php tail -f storage/logs/laravel.log
+                        </code>
+                    </div>
                 </div>
             </div>
         </div>

@@ -16,15 +16,15 @@ export default function AppLayout({ children }) {
                                 height: `${Math.random() * 4 + 1}px`,
                                 left: `${Math.random() * 100}%`,
                                 top: `${Math.random() * 100}%`,
-                                animationDelay: `${Math.random() * 5}s`,
-                                animationDuration: `${Math.random() * 10 + 10}s`,
+                                animationDuration: `${Math.random() * 25 + 45}s`,
+                                animationDelay: `${Math.random() * 10}s`,
                             }}
                         />
                     ))}
                 </div>
             </div>
 
-            <header className="fixed top-0 left-0 right-0 z-50 bg-[#0f1419]/95 backdrop-blur-md border-b border-slate-700/50 shadow-lg">
+            <header className="fixed top-0 left-0 right-0 z-50 bg-[#091722]/95 backdrop-blur-md border-b border-slate-700/50 shadow-lg">
                 <div className="container mx-auto px-4 py-4">
                     <div className="flex items-center justify-between">
                         <a href="/" className="flex items-center gap-3">
@@ -64,7 +64,7 @@ export default function AppLayout({ children }) {
 
             <main className="relative z-10 pt-20">{children}</main>
 
-            <footer className="relative z-10 bg-[#0f1419]/95 border-t border-slate-700/50 py-8 mt-20">
+            <footer className="relative z-10 bg-[#091722]/95 border-t border-slate-700/50 py-8 mt-20">
                 <div className="container mx-auto px-4 text-center text-gray-400">
                     <p>© 2026 Independent Electoral Commission of The Gambia</p>
                     <p className="text-sm mt-2">Fair-Play, Integrity and Transparency</p>
