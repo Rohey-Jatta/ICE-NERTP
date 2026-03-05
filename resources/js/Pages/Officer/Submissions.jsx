@@ -14,12 +14,12 @@ export default function Submissions({ auth, submissions = [] }) {
             <div className="container mx-auto px-4 py-8">
                 <div className="flex justify-between items-center mb-6">
                     <h1 className="text-3xl font-bold text-white">My Submissions</h1>
-                    <Link
+                    <a
                         href="/officer/results/submit"
-                        className="px-6 py-3 bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-lg"
+                        className="px-6 py-3 bg-pink-600 hover:bg-pink-700 text-white font-bold rounded-lg"
                     >
                         + New Submission
-                    </Link>
+                    </a>
                 </div>
 
                 <div className="space-y-4">
@@ -50,14 +50,12 @@ export default function Submissions({ auth, submissions = [] }) {
                         ))
                     ) : (
                         <div className="bg-slate-800/40 rounded-xl p-12 border border-slate-700/50 text-center">
-                            <div className="text-6xl mb-4">📄</div>
                             <p className="text-gray-300 text-lg">No submissions yet</p>
-                            <Link
+                            <a
                                 href="/officer/results/submit"
-                                className="inline-block mt-4 px-6 py-3 bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-lg"
-                            >
+                                className="inline-block mt-4 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg">
                                 Submit Your First Result
-                            </Link>
+                            </a>
                         </div>
                     )}
                 </div>

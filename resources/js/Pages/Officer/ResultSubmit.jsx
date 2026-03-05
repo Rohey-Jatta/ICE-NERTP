@@ -43,7 +43,7 @@ export default function ResultSubmit({ auth, candidates = [], election = null })
                 <form onSubmit={handleSubmit} className="max-w-4xl">
                     {/* Turnout Information */}
                     <div className="bg-slate-800/40 rounded-xl p-6 border border-slate-700/50 mb-6">
-                        <h2 className="text-xl font-bold text-white mb-4">📊 Turnout Information</h2>
+                        <h2 className="text-xl font-bold text-white mb-4">Turnout Information</h2>
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
@@ -52,7 +52,7 @@ export default function ResultSubmit({ auth, candidates = [], election = null })
                                     type="number"
                                     value={data.registered_voters}
                                     onChange={(e) => setData('registered_voters', e.target.value)}
-                                    className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white"
+                                    className="w-full px-4 py-3 bg-slate-900/50 border border-pink-300 rounded-lg text-white"
                                     placeholder="0"
                                     required
                                 />
@@ -64,7 +64,7 @@ export default function ResultSubmit({ auth, candidates = [], election = null })
                                     type="number"
                                     value={data.total_votes_cast}
                                     onChange={(e) => setData('total_votes_cast', e.target.value)}
-                                    className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white"
+                                    className="w-full px-4 py-3 bg-slate-900/50 border border-pink-300 rounded-lg text-white"
                                     placeholder="0"
                                     required
                                 />
@@ -76,7 +76,7 @@ export default function ResultSubmit({ auth, candidates = [], election = null })
                                     type="number"
                                     value={data.valid_votes}
                                     onChange={(e) => setData('valid_votes', e.target.value)}
-                                    className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white"
+                                    className="w-full px-4 py-3 bg-slate-900/50 border border-pink-300 rounded-lg text-white"
                                     placeholder="0"
                                     required
                                 />
@@ -88,7 +88,7 @@ export default function ResultSubmit({ auth, candidates = [], election = null })
                                     type="number"
                                     value={data.rejected_votes}
                                     onChange={(e) => setData('rejected_votes', e.target.value)}
-                                    className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white"
+                                    className="w-full px-4 py-3 bg-slate-900/50 border border-pink-300 rounded-lg text-white"
                                     placeholder="0"
                                     required
                                 />
@@ -99,7 +99,7 @@ export default function ResultSubmit({ auth, candidates = [], election = null })
                     {/* Candidate Vote Counts */}
                     {candidates.length > 0 && (
                         <div className="bg-slate-800/40 rounded-xl p-6 border border-slate-700/50 mb-6">
-                            <h2 className="text-xl font-bold text-white mb-4">🗳️ Vote Counts by Candidate</h2>
+                            <h2 className="text-xl font-bold text-white mb-4">Vote Counts by Candidate</h2>
 
                             <div className="space-y-4">
                                 {candidates.map((candidate) => (
@@ -115,7 +115,7 @@ export default function ResultSubmit({ auth, candidates = [], election = null })
                                                 ...data.candidate_votes,
                                                 [candidate.id]: e.target.value
                                             })}
-                                            className="w-32 px-4 py-3 bg-slate-800 border border-slate-600 rounded-lg text-white text-center"
+                                            className="w-32 px-4 py-3 bg-slate-800 border border-pink-300 rounded-lg text-white text-center"
                                             placeholder="0"
                                             required
                                         />
@@ -126,16 +126,16 @@ export default function ResultSubmit({ auth, candidates = [], election = null })
                     )}
 
                     {candidates.length === 0 && (
-                        <div className="bg-amber-500/20 border border-amber-500/50 rounded-xl p-6 mb-6">
-                            <p className="text-amber-300">No candidates configured. Please contact administrator.</p>
+                        <div className="bg-pink-500/20 border border-pink-500/50 rounded-xl p-6 mb-6">
+                            <p className="text-pink-300">No candidates configured. Please contact administrator.</p>
                         </div>
                     )}
 
                     {/* Photo Upload */}
                     <div className="bg-slate-800/40 rounded-xl p-6 border border-slate-700/50 mb-6">
-                        <h2 className="text-xl font-bold text-white mb-4">📷 Upload Result Sheet Photo</h2>
+                        <h2 className="text-xl font-bold text-white mb-4">Upload Result Sheet Photo</h2>
 
-                        <div className="border-2 border-dashed border-slate-600 rounded-lg p-8 text-center">
+                        <div className="border-2 border-dashed border-pink-300 rounded-lg p-8 text-center">
                             <input
                                 type="file"
                                 accept="image/*"
@@ -148,18 +148,17 @@ export default function ResultSubmit({ auth, candidates = [], election = null })
                                 {photoPreview ? (
                                     <div>
                                         <img src={photoPreview} alt="Preview" className="max-w-md mx-auto rounded-lg mb-4" />
-                                        <p className="text-teal-400">Click to change photo</p>
+                                        <p className="text-pink-400">Click to change photo</p>
                                     </div>
                                 ) : (
                                     <div>
-                                        <div className="text-6xl mb-4">📸</div>
                                         <p className="text-white font-semibold mb-2">Click to upload result sheet photo</p>
                                         <p className="text-gray-400 text-sm">PNG, JPG up to 10MB</p>
                                     </div>
                                 )}
                             </label>
                         </div>
-                        {errors.photo && <p className="text-red-400 mt-2">{errors.photo}</p>}
+                        {errors.photo && <p className="text-pink-400 mt-2">{errors.photo}</p>}
                     </div>
 
                     {/* Submit Button */}
@@ -167,14 +166,14 @@ export default function ResultSubmit({ auth, candidates = [], election = null })
                         <button
                             type="submit"
                             disabled={processing}
-                            className="px-8 py-4 bg-gradient-to-r from-teal-600 to-teal-700 hover:from-teal-700 hover:to-teal-800 disabled:from-gray-600 disabled:to-gray-700 text-white font-bold rounded-lg shadow-lg"
+                            className="px-8 py-4 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 disabled:from-blue-600 disabled:to-blue-700 text-white font-bold rounded-lg shadow-lg"
                         >
                             {processing ? 'Submitting...' : 'Submit Results'}
                         </button>
 
 
                             <a href="/officer/dashboard"
-                            className="px-8 py-4 bg-slate-700 hover:bg-slate-600 text-white font-bold rounded-lg">
+                            className="px-8 py-4 bg-pink-600 hover:bg-pink-700 text-white font-bold rounded-lg">
                             Cancel
                         </a>
                     </div>

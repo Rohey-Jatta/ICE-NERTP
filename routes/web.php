@@ -2,6 +2,9 @@
 
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Http\Request;
 use Inertia\Inertia;
 use App\Http\Controllers\Public\ResultsSummaryController;
 use App\Http\Controllers\Public\ResultsMapController;
@@ -10,7 +13,11 @@ use App\Http\Controllers\Auth\TwoFactorController;
 use App\Models\AuditLog;
 use App\Models\User;
 use App\Models\Election;
+use App\Models\Candidate;
 use App\Models\PollingStation;
+use App\Models\Result;
+use App\Models\ResultCandidateVote;
+
 
 // Public routes
 Route::get('/', function () {
@@ -35,23 +42,186 @@ Route::middleware('auth')->group(function () {
 
     // POLLING OFFICER ROUTES
     Route::prefix('officer')->name('officer.')->middleware('role:polling-officer')->group(function () {
-        Route::get('/dashboard', function () {
-            $user = Auth::user();
-            return Inertia::render('Officer/Dashboard', [
-                'auth' => ['user' => $user],
-                'station' => $user->assignedStation ?? null,
-                'submissions' => [],
-            ]);
-        })->name('dashboard');
 
-        Route::get('/results/submit', function () {
-            return Inertia::render('Officer/ResultSubmit');
-        })->name('results.submit');
+    Route::get('/dashboard', function () {
+        $user = Auth::user();
+        return Inertia::render('Officer/Dashboard', [
+            'auth' => ['user' => $user],
+            'station' => $user->assignedStation ?? null,
+            'submissions' => [],
+        ]);
+    })->name('dashboard');
+
+    // SHOW FORM
+    Route::get('/results/submit', function () {
+        return Inertia::render('Officer/ResultSubmit', [
+        'auth' => [
+            'user' => Auth::user()
+        ],
+        'candidates' => Candidate::all(), 
+        'election' => Election::where('status', 'active')->first()
+    ]);
+    })->name('results.submit');
+
+//     // HANDLE SUBMISSION
+//     Route::post('/results/submit', function (\Illuminate\Http\Request $request) {
+//         Log::info('Result submitted', $request->all());
+
+//          $request->validate([
+//         'election_id' => 'required',
+//         'registered_voters' => 'required|integer',
+//         'total_votes_cast' => 'required|integer',
+//         'valid_votes' => 'required|integer',
+//         'rejected_votes' => 'required|integer',
+//         'photo' => 'required|image|max:10240',
+//         'candidate_votes' => 'required|array'
+//     ]);
+
+//     $photoPath = null;
+
+//     if ($request->hasFile('photo')) {
+//         $photoPath = $request->file('photo')->store('result-photos', 'public');
+//     }
+
+//     $result = Result::create([
+//         'user_id' => Auth::id(),
+//         'election_id' => $request->election_id,
+//         'polling_station_id' => Auth::user()->polling_station_id,
+//         'registered_voters' => $request->registered_voters,
+//         'total_votes_cast' => $request->total_votes_cast,
+//         'valid_votes' => $request->valid_votes,
+//         'rejected_votes' => $request->rejected_votes,
+//         'turnout' => $request->turnout,
+//         'photo_path' => $photoPath,
+//         'certification_status' => 'Pending Ward Approval'
+//     ]);
+
+//     foreach ($request->candidate_votes as $candidateId => $votes) {
+//         ResultCandidateVote::create([
+//             'result_id' => $result->id,
+//             'candidate_id' => $candidateId,
+//             'votes' => $votes
+//         ]);
+//     }
+
+//         return redirect()->route('officer.submissions')
+//             ->with('success', 'Results submitted successfully');
+//     })->name('results.store');
+
+//     Route::get('/submissions', function () {
+//          $results = Result::where('user_id', Auth::id())
+//         ->with('pollingStation')
+//         ->latest()
+//         ->get()
+//         ->map(function ($result) {
+//             return [
+//                 'id' => $result->id,
+//                 'polling_station' => $result->pollingStation->name ?? 'Unknown Station',
+//                 'submitted_at' => $result->created_at->format('Y-m-d H:i'),
+//                 'status' => $result->certification_status,
+//                 'total_votes' => $result->total_votes,
+//                 'turnout' => $result->turnout,
+//                 'rejected_votes' => $result->rejected_votes,
+//                 'photo_url' => $result->photo_path ? Storage::url($result->photo_path) : null,
+//             ];
+//         });
+
+//         return Inertia::render('Officer/Submissions', [
+//             'auth' => ['user' => Auth::user()],
+//             'submissions' => $results
+//         ]);
+//     })->name('submissions');
+
+    // HANDLE SUBMISSION
+        Route::post('/results/submit', function (Request $request) {
+            Log::info('Result submission started', $request->all());
+
+            // Calculate turnout
+            $turnout = 0;
+            if ($request->registered_voters > 0) {
+                $turnout = ($request->total_votes_cast / $request->registered_voters) * 100;
+            }
+
+            $request->validate([
+                'election_id' => 'required|exists:elections,id',
+                'registered_voters' => 'required|integer|min:0',
+                'total_votes_cast' => 'required|integer|min:0',
+                'valid_votes' => 'required|integer|min:0',
+                'rejected_votes' => 'required|integer|min:0',
+                'photo' => 'required|image|max:10240',
+                'candidate_votes' => 'required|array'
+            ]);
+
+            $photoPath = null;
+            if ($request->hasFile('photo')) {
+                $photoPath = $request->file('photo')->store('result-photos', 'public');
+                Log::info('Photo uploaded', ['path' => $photoPath]);
+            }
+
+            try {
+                $result = Result::create([
+                    'user_id' => Auth::id(),
+                    'election_id' => $request->election_id,
+                    'polling_station_id' => Auth::user()->polling_station_id,
+                    'registered_voters' => $request->registered_voters,
+                    'total_votes_cast' => $request->total_votes_cast,
+                    'valid_votes' => $request->valid_votes,
+                    'rejected_votes' => $request->rejected_votes,
+                    'turnout' => round($turnout, 2),
+                    'photo_path' => $photoPath,
+                    'certification_status' => 'Pending Ward Approval'
+                ]);
+
+                Log::info('Result created', ['result_id' => $result->id]);
+
+                // Save candidate votes
+                foreach ($request->candidate_votes as $candidateId => $votes) {
+                    ResultCandidateVote::create([
+                        'result_id' => $result->id,
+                        'candidate_id' => $candidateId,
+                        'votes' => $votes
+                    ]);
+                }
+
+                Log::info('Candidate votes saved');
+
+                return redirect()->route('officer.submissions')
+                    ->with('success', 'Results submitted successfully!');
+
+            } catch (\Exception $e) {
+                Log::error('Result submission failed', [
+                    'error' => $e->getMessage(),
+                    'trace' => $e->getTraceAsString()
+                ]);
+
+                return back()->withErrors(['error' => 'Failed to submit results: ' . $e->getMessage()]);
+            }
+        })->name('results.store');
 
         Route::get('/submissions', function () {
-            return Inertia::render('Officer/Submissions');
+            $results = Result::where('user_id', Auth::id())
+                ->with('pollingStation')
+                ->latest()
+                ->get()
+                ->map(function ($result) {
+                    return [
+                        'id' => $result->id,
+                        'polling_station' => $result->pollingStation->name ?? 'Unknown Station',
+                        'submitted_at' => $result->created_at->format('Y-m-d H:i'),
+                        'status' => $result->certification_status,
+                        'total_votes' => $result->total_votes_cast,
+                        'turnout' => $result->turnout,
+                        'rejected_votes' => $result->rejected_votes,
+                        'photo_url' => $result->photo_path ? Storage::url($result->photo_path) : null,
+                    ];
+                });
+
+            return Inertia::render('Officer/Submissions', [
+                'auth' => ['user' => Auth::user()],
+                'submissions' => $results
+            ]);
         })->name('submissions');
-    });
+});
 
     // WARD APPROVER ROUTES
     Route::prefix('ward')->name('ward.')->middleware('role:ward-approver')->group(function () {
