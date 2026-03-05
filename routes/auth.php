@@ -3,11 +3,15 @@
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use Illuminate\Support\Facades\Route;
 
-Route::middleware('guest')->group(function () {
-    Route::get('auth/login', [AuthenticatedSessionController::class, 'create'])->name('login');
-    Route::post('auth/login', [AuthenticatedSessionController::class, 'store']);
-});
+// Login routes - MUST be accessible to guests
+Route::get('/auth/login', [AuthenticatedSessionController::class, 'create'])
+    ->middleware('guest')
+    ->name('login');
 
-Route::middleware('auth')->group(function () {
-    Route::post('logout', [AuthenticatedSessionController::class, 'destroy'])->name('logout');
-});
+Route::post('/auth/login', [AuthenticatedSessionController::class, 'store'])
+    ->middleware('guest');
+
+// Logout route
+Route::post('/logout', [AuthenticatedSessionController::class, 'destroy'])
+    ->middleware('auth')
+    ->name('logout');

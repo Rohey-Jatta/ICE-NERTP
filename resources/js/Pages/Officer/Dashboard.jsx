@@ -6,22 +6,22 @@ export default function OfficerDashboard({ auth, station, submissions }) {
         <AppLayout user={auth.user}>
             <div className="container mx-auto px-4 py-8">
                 <h1 className="text-3xl font-bold text-white mb-6">Polling Officer Dashboard</h1>
-                
+
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
                     <div className="bg-slate-800/40 rounded-xl p-6 border border-slate-700/50">
-                        <div className="text-4xl mb-2">Ì∑≥Ô∏è</div>
+                        <div className="text-4xl mb-2">Ì≥ç</div>
                         <div className="text-2xl font-bold text-white">{station?.name || 'N/A'}</div>
                         <div className="text-gray-400 text-sm">Your Polling Station</div>
                     </div>
-                    
+
                     <div className="bg-slate-800/40 rounded-xl p-6 border border-slate-700/50">
                         <div className="text-4xl mb-2">Ì±•</div>
                         <div className="text-2xl font-bold text-white">{station?.registered_voters || 0}</div>
                         <div className="text-gray-400 text-sm">Registered Voters</div>
                     </div>
-                    
+
                     <div className="bg-slate-800/40 rounded-xl p-6 border border-slate-700/50">
-                        <div className="text-4xl mb-2">Ì≥ù</div>
+                        <div className="text-4xl mb-2">Ì≥Ñ</div>
                         <div className="text-2xl font-bold text-white">{submissions?.length || 0}</div>
                         <div className="text-gray-400 text-sm">Submissions</div>
                     </div>
@@ -38,7 +38,7 @@ export default function OfficerDashboard({ auth, station, submissions }) {
                             <div className="text-xl font-bold text-white">Submit Results</div>
                             <div className="text-teal-200 text-sm">Enter vote counts</div>
                         </Link>
-                        
+
                         <Link
                             href="/officer/submissions"
                             className="p-6 bg-slate-700 hover:bg-slate-600 rounded-lg transition-colors"

@@ -16,9 +16,10 @@ class TwoFactorAuthService
     }
 
     /**
-     * Generate and send 2FA code
+     * Generate code and cahe a 6-digit 2FA code for the given user
      */
-    public function sendCode(User $user): bool
+
+    public function generateCode(User $user): string
     {
         // Generate 6-digit code
         $code = str_pad(rand(0, 999999), 6, '0', STR_PAD_LEFT);
@@ -27,7 +28,13 @@ class TwoFactorAuthService
         $cacheKey = "2fa_code_{$user->id}";
         Cache::put($cacheKey, $code, now()->addMinutes(10));
 
-        // Log for development
+        return $code;
+    }
+
+    // send the generated code to the user's phone number via SMS
+    public function sendCode(User $user, string $code): bool
+    {
+
         Log::info("2FA Code for {$user->email} ({$user->phone}): {$code}");
 
         // Send SMS

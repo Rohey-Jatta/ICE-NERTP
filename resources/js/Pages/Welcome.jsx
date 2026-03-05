@@ -57,7 +57,7 @@ export default function Welcome() {
                                     <img
                                         src="/asset/secure.png"
                                         alt="Secure"
-                                        className="w-20 h-20 flex items-center justify-center rounded-full  transition-all duration-300 group-hover:scale-110"
+                                        className="w-20 h-20 flex items-center justify-center rounded-full transition-all duration-300 group-hover:scale-110"
                                     />
                                 </div>
                             </div>
@@ -76,7 +76,7 @@ export default function Welcome() {
                                     <img
                                         src="/asset/transparent.png"
                                         alt="Transparent"
-                                        className="w-20 h-20 flex items-center justify-center rounded-full  transition-all duration-300 group-hover:scale-110"
+                                        className="w-20 h-20 flex items-center justify-center rounded-full transition-all duration-300 group-hover:scale-110"
                                     />
                                 </div>
                             </div>
@@ -95,7 +95,7 @@ export default function Welcome() {
                                     <img
                                         src="/asset/real-time.png"
                                         alt="Real-time"
-                                        className="w-20 h-20 flex items-center justify-center rounded-full  transition-all duration-300 group-hover:scale-110"
+                                        className="w-20 h-20 flex items-center justify-center rounded-full transition-all duration-300 group-hover:scale-110"
                                     />
                                 </div>
                             </div>
@@ -116,18 +116,18 @@ export default function Welcome() {
                             isVisible.cta ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'
                         }`}
                     >
-                        <a
+                        <Link
                             href="/auth/login"
                             className="w-full sm:w-auto px-8 sm:px-10 py-4 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white rounded-xl font-bold text-base sm:text-lg shadow-xl transform hover:scale-105 transition-all text-center"
                         >
                             IEC Staff Login
-                        </a>
-                        <a
+                        </Link>
+                        <Link
                             href="/results"
                             className="w-full sm:w-auto px-8 sm:px-10 py-4 bg-gradient-to-r from-pink-500 to-pink-600 hover:from-pink-600 hover:to-pink-700 text-white rounded-xl font-bold text-base sm:text-lg shadow-xl transform hover:scale-105 transition-all text-center"
                         >
                             View Public Results
-                        </a>
+                        </Link>
                     </div>
                 </div>
             </div>

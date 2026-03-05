@@ -32,19 +32,19 @@ class AuthenticatedSessionController extends Controller
 
         if (Auth::attempt($credentials)) {
             $user = Auth::user();
-            
+
             // Generate and send 2FA code
             $code = $this->twoFactorService->generateCode($user);
             $this->twoFactorService->sendCode($user, $code);
-            
+
             Log::info('2FA Code for ' . $user->email . ': ' . $code);
-            
+
             // Store user ID in session
             $request->session()->put('2fa_user_id', $user->id);
-            
+
             // Logout temporarily
             Auth::logout();
-            
+
             // FORCE redirect to 2FA
             return to_route('two-factor.show');
         }

@@ -24,7 +24,7 @@ export default function PendingAcceptance({ auth, pendingResults }) {
 
                 <div className="bg-slate-800/40 rounded-xl p-6 border border-slate-700/50">
                     <h2 className="text-xl font-bold text-white mb-4">Results Awaiting Your Decision ({pendingResults?.length || 0})</h2>
-                    
+
                     {pendingResults?.length > 0 ? (
                         <div className="space-y-4">
                             {pendingResults.map((result) => (
@@ -62,19 +62,19 @@ export default function PendingAcceptance({ auth, pendingResults }) {
                                                 onClick={() => handleSubmit(result.id, 'accepted')}
                                                 className="px-4 py-3 bg-teal-700 hover:bg-teal-600 text-white rounded-lg font-semibold"
                                             >
-                                                ✓ Accept
+                                                Accept
                                             </button>
                                             <button
                                                 onClick={() => setSelectedResult(result.id)}
                                                 className="px-4 py-3 bg-amber-700 hover:bg-amber-600 text-white rounded-lg font-semibold"
                                             >
-                                                ⚠️ Accept with Reservation
+                                                Accept with Reservation
                                             </button>
                                             <button
                                                 onClick={() => setSelectedResult(result.id)}
                                                 className="px-4 py-3 bg-red-700 hover:bg-red-600 text-white rounded-lg font-semibold"
                                             >
-                                                ✗ Reject
+                                                Reject
                                             </button>
                                         </div>
                                     </div>

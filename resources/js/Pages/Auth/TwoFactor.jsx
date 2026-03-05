@@ -25,7 +25,7 @@ export default function TwoFactor() {
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-[#1a1a2e] via-[#16213e] to-[#0f3460] flex items-center justify-center p-4 relative overflow-hidden">
-            {/* SLOW SPARKLE ANIMATION */}
+
             <div className="fixed inset-0 overflow-hidden pointer-events-none">
                 <div className="absolute inset-0 opacity-40">
                     {[...Array(60)].map((_, i) => (
@@ -43,11 +43,11 @@ export default function TwoFactor() {
                         />
                     ))}
                 </div>
-                
+
                 <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-teal-500/10 rounded-full blur-3xl animate-slow-pulse" />
-                <div 
-                    className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl animate-slow-pulse" 
-                    style={{ animationDelay: '4s' }} 
+                <div
+                    className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl animate-slow-pulse"
+                    style={{ animationDelay: '4s' }}
                 />
             </div>
 
@@ -59,7 +59,7 @@ export default function TwoFactor() {
 
                 <div className="bg-white/95 backdrop-blur-sm rounded-xl shadow-2xl p-8">
                     <div className="text-center mb-6">
-                        <div className="text-6xl mb-4">í³±</div>
+                        <div className="text-6xl mb-4"></div>
                         <p className="text-gray-600 text-sm">
                             A verification code has been sent to your registered phone number
                         </p>
@@ -110,14 +110,6 @@ export default function TwoFactor() {
                         </a>
                     </div>
 
-                    <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
-                        <p className="text-xs text-amber-800">
-                            í²¡ <strong>Development Mode:</strong> Check Laravel logs for the code:
-                        </p>
-                        <code className="text-xs text-amber-900 block mt-2">
-                            docker-compose exec php tail -f storage/logs/laravel.log
-                        </code>
-                    </div>
                 </div>
             </div>
         </div>

@@ -8,7 +8,7 @@ export default function Login() {
 
     const handleSubmit = (e) => {
         e.preventDefault();
-        
+
         // Simple post - no callbacks, let Inertia handle redirect
         post('/auth/login', {
             preserveScroll: false,
@@ -18,7 +18,7 @@ export default function Login() {
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-[#1a1a2e] via-[#16213e] to-[#0f3460] flex items-center justify-center p-4 relative overflow-hidden">
-            {/* SLOW SPARKLE ANIMATION BACKGROUND */}
+
             <div className="fixed inset-0 overflow-hidden pointer-events-none">
                 <div className="absolute inset-0 opacity-40">
                     {[...Array(60)].map((_, i) => (
@@ -31,17 +31,16 @@ export default function Login() {
                                 left: `${Math.random() * 100}%`,
                                 top: `${Math.random() * 100}%`,
                                 animationDelay: `${Math.random() * 20}s`,
-                                animationDuration: `${Math.random() * 40 + 40}s`, // 40-80 seconds (VERY SLOW)
+                                animationDuration: `${Math.random() * 40 + 40}s`,
                             }}
                         />
                     ))}
                 </div>
-                
-                {/* SLOW GLOWING ORBS */}
+
                 <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-teal-500/10 rounded-full blur-3xl animate-slow-pulse" />
-                <div 
-                    className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl animate-slow-pulse" 
-                    style={{ animationDelay: '4s' }} 
+                <div
+                    className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl animate-slow-pulse"
+                    style={{ animationDelay: '4s' }}
                 />
             </div>
 
@@ -111,7 +110,7 @@ export default function Login() {
                     </form>
 
                     <div className="mt-6 text-center text-xs text-gray-500">
-                        í´’ Secured with 2FA Â· Device Binding Â· Audit Logging
+                         Secured with 2FA Â· Device Binding Â· Audit Logging
                     </div>
                 </div>
 

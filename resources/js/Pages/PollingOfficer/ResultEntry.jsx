@@ -200,7 +200,7 @@ export default function ResultEntry({
 
         setMessage({
             type: 'success',
-            text: `✓ Result submitted successfully! ${data.warnings?.length ? 'Warnings: ' + data.warnings.join(', ') : ''}`,
+            text: `Result submitted successfully! ${data.warnings?.length ? 'Warnings: ' + data.warnings.join(', ') : ''}`,
         });
 
         // Reset form

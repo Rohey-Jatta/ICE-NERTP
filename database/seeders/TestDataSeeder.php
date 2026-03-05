@@ -22,17 +22,17 @@ class TestDataSeeder extends Seeder
         $users = [
             [
                 'name' => 'System Administrator',
-                'email' => 'admin@iec.gm',
-                'phone' => '+2205872319',
+                'email' => 'admina@iec.gm',
+                'phone' => '+2203329739',
                 'password' => Hash::make('password123'),
-                'employee_id' => 'IEC-ADMIN-001',
+                'employee_id' => 'IEC-ADMIN-002',
                 'status' => 'active',
                 'role' => 'iec-administrator',
             ],
             [
                 'name' => 'Test Polling Officer',
                 'email' => 'officer@iec.gm',
-                'phone' => '+2205872320',
+                'phone' => '+2203329739',
                 'password' => Hash::make('password123'),
                 'employee_id' => 'TEST-POL',
                 'status' => 'active',
@@ -41,7 +41,7 @@ class TestDataSeeder extends Seeder
             [
                 'name' => 'Ward Approver',
                 'email' => 'ward@iec.gm',
-                'phone' => '+2205872321',
+                'phone' => '+2203329739',
                 'password' => Hash::make('password123'),
                 'employee_id' => 'WARD-APP-001',
                 'status' => 'active',
@@ -50,7 +50,7 @@ class TestDataSeeder extends Seeder
             [
                 'name' => 'Constituency Approver',
                 'email' => 'constituency@iec.gm',
-                'phone' => '+2205872322',
+                'phone' => '+2203329739',
                 'password' => Hash::make('password123'),
                 'employee_id' => 'CONST-APP-001',
                 'status' => 'active',
@@ -59,7 +59,7 @@ class TestDataSeeder extends Seeder
             [
                 'name' => 'Admin Area Approver',
                 'email' => 'adminarea@iec.gm',
-                'phone' => '+2205872323',
+                'phone' => '+2203329739',
                 'password' => Hash::make('password123'),
                 'employee_id' => 'ADMIN-APP-001',
                 'status' => 'active',
@@ -68,7 +68,7 @@ class TestDataSeeder extends Seeder
             [
                 'name' => 'IEC Chairman',
                 'email' => 'chairman@iec.gm',
-                'phone' => '+2205872324',
+                'phone' => '+2203329739',
                 'password' => Hash::make('password123'),
                 'employee_id' => 'IEC-CHAIR-001',
                 'status' => 'active',
@@ -77,7 +77,7 @@ class TestDataSeeder extends Seeder
             [
                 'name' => 'Party Representative',
                 'email' => 'party@iec.gm',
-                'phone' => '+2205872325',
+                'phone' => '+2203329739',
                 'password' => Hash::make('password123'),
                 'employee_id' => 'PARTY-REP-001',
                 'status' => 'active',
@@ -86,7 +86,7 @@ class TestDataSeeder extends Seeder
             [
                 'name' => 'Election Monitor',
                 'email' => 'monitor@iec.gm',
-                'phone' => '+2205872326',
+                'phone' => '+2203329739',
                 'password' => Hash::make('password123'),
                 'employee_id' => 'MON-001',
                 'status' => 'active',
@@ -97,10 +97,10 @@ class TestDataSeeder extends Seeder
         foreach ($users as $userData) {
             $role = $userData['role'];
             unset($userData['role']);
-            
+
             $user = User::create($userData);
             $user->assignRole($role);
-            
+
             $this->command->info("âœ“ Created user: {$user->name} ({$user->email}) - Role: {$role}");
         }
 
@@ -142,7 +142,7 @@ class TestDataSeeder extends Seeder
 
         // Create polling stations
         $pollingOfficer = User::where('email', 'officer@iec.gm')->first();
-        
+
         $stations = [
             [
                 'code' => 'BNL-001',
@@ -247,9 +247,9 @@ class TestDataSeeder extends Seeder
         $this->command->info("\n========================================");
         $this->command->info("âœ… TEST DATA SEEDING COMPLETE!");
         $this->command->info("========================================\n");
-        
-        $this->command->info("í´ LOGIN CREDENTIALS FOR ALL ROLES:\n");
-        
+
+        $this->command->info("ï¿½ï¿½ï¿½ LOGIN CREDENTIALS FOR ALL ROLES:\n");
+
         $this->command->table(
             ['Role', 'Email', 'Password', 'Phone'],
             [
@@ -263,8 +263,8 @@ class TestDataSeeder extends Seeder
                 ['Election Monitor', 'monitor@iec.gm', 'password123', '+2205872326'],
             ]
         );
-        
+
         $this->command->info("\nâš ï¸  2FA CODES: Check Laravel logs during login");
-        $this->command->info("í³ Run: docker-compose exec php tail -f storage/logs/laravel.log\n");
+        $this->command->info("ï¿½ï¿½ï¿½ Run: docker-compose exec php tail -f storage/logs/laravel.log\n");
     }
 }
