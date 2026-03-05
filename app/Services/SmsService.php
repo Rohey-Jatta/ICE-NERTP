@@ -51,8 +51,13 @@ class SmsService
     /**
      * Send 2FA verification code
      */
-    public function send2FACode(string $phoneNumber, string $code): bool
+    public function send2FACode(?string $phoneNumber, string $code): bool
     {
+        if (empty($phoneNumber)) {
+            Log::warning("Cannot send 2FA code: Phone number is empty.");
+            return false;
+        }
+
         $message = "Your IEC NERTP verification code is: {$code}. This code expires in 10 minutes. Do not share this code with anyone.";
         return $this->send($phoneNumber, $message);
     }

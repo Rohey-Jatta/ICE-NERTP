@@ -14,10 +14,14 @@ class Candidate extends Model
     protected $fillable = [
         'election_id',
         'political_party_id',
-        'candidate_number',
-        'full_name',
+        'constituency_id',
+        'name',
+        'ballot_number',
         'photo_path',
         'is_independent',
+        'is_active',
+        'is_withdrawn',
+        'withdrawn_at',
     ];
 
     protected $casts = [

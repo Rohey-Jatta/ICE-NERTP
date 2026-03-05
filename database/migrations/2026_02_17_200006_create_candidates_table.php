@@ -21,6 +21,7 @@ return new class extends Migration
             $table->boolean('is_withdrawn')->default(false);
             $table->timestamp('withdrawn_at')->nullable();
             $table->timestamps();
+            $table->softDeletes();
             $table->index('election_id');
             $table->index('political_party_id');
             $table->index('constituency_id');

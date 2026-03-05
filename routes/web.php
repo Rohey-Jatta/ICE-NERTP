@@ -202,6 +202,13 @@ Route::middleware('auth')->group(function () {
         Route::get('/roles', function () {
             return Inertia::render('Admin/Roles', [
                 'auth' => ['user' => Auth::user()],
+                'roles' => \Spatie\Permission\Models\Role::with('permissions')->get()->map(function ($role) {
+                    return [
+                        'id' => $role->id,
+                        'name' => $role->name,
+                        'permissions' => $role->permissions->pluck('name'),
+                    ];
+                }),
             ]);
         })->name('roles');
 
@@ -224,7 +231,7 @@ Route::middleware('auth')->group(function () {
         })->name('parties');
 
         Route::get('/audit-logs', function () {
-            $logs = AuditLog::with('user')->latest()->paginate(50);
+            $logs = AuditLog::with('user')->latest('created_at')->paginate(50);
             return Inertia::render('Admin/AuditLogs', [
                 'auth' => ['user' => Auth::user()],
                 'logs' => $logs,

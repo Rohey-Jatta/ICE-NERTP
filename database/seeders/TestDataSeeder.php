@@ -104,6 +104,8 @@ class TestDataSeeder extends Seeder
             $this->command->info("✓ Created user: {$user->name} ({$user->email}) - Role: {$role}");
         }
 
+        $adminUser = User::where('email', 'admina@iec.gm')->first();
+
         // Create test election
         $election = Election::create([
             'name' => '2026 Presidential Election',
@@ -112,6 +114,7 @@ class TestDataSeeder extends Seeder
             'end_date' => now()->addDays(31),
             'status' => 'active',
             'allow_provisional_public_display' => true,
+            'created_by' => $adminUser->id,
         ]);
 
         $this->command->info("✓ Created election: {$election->name}");
@@ -192,6 +195,7 @@ class TestDataSeeder extends Seeder
 
         $createdParties = [];
         foreach ($parties as $partyData) {
+            $partyData['election_id'] = $election->id;
             $party = PoliticalParty::create($partyData);
             $createdParties[] = $party;
         }
@@ -211,7 +215,7 @@ class TestDataSeeder extends Seeder
                 'election_id' => $election->id,
                 'political_party_id' => $party->id,
                 'name' => $candidateNames[$index],
-                'position' => 'Presidential Candidate',
+                'ballot_number' => $index + 1,
             ]);
         }
 
@@ -224,6 +228,8 @@ class TestDataSeeder extends Seeder
         $result = Result::create([
             'election_id' => $election->id,
             'polling_station_id' => $station->id,
+            'submission_uuid' => \Illuminate\Support\Str::uuid(),
+            'total_registered_voters' => $station->registered_voters,
             'total_votes_cast' => 420,
             'valid_votes' => 410,
             'rejected_votes' => 10,
@@ -238,6 +244,7 @@ class TestDataSeeder extends Seeder
             ResultCandidateVote::create([
                 'result_id' => $result->id,
                 'candidate_id' => $candidate->id,
+                'election_id' => $election->id,
                 'votes' => $votes[$index],
             ]);
         }
@@ -253,14 +260,14 @@ class TestDataSeeder extends Seeder
         $this->command->table(
             ['Role', 'Email', 'Password', 'Phone'],
             [
-                ['IEC Administrator', 'admin@iec.gm', 'password123', '+2205872319'],
-                ['Polling Officer', 'officer@iec.gm', 'password123', '+2205872320'],
-                ['Ward Approver', 'ward@iec.gm', 'password123', '+2205872321'],
-                ['Constituency Approver', 'constituency@iec.gm', 'password123', '+2205872322'],
-                ['Admin Area Approver', 'adminarea@iec.gm', 'password123', '+2205872323'],
-                ['IEC Chairman', 'chairman@iec.gm', 'password123', '+2205872324'],
-                ['Party Representative', 'party@iec.gm', 'password123', '+2205872325'],
-                ['Election Monitor', 'monitor@iec.gm', 'password123', '+2205872326'],
+                ['IEC Administrator', 'admin@iec.gov', 'password', '+2205872319'],
+                ['Polling Officer', 'officer@iec.gm', 'password123', '+2203329739'],
+                ['Ward Approver', 'ward@iec.gm', 'password123', '+2203329739'],
+                ['Constituency Approver', 'constituency@iec.gm', 'password123', '+2203329739'],
+                ['Admin Area Approver', 'adminarea@iec.gm', 'password123', '+2203329739'],
+                ['IEC Chairman', 'chairman@iec.gm', 'password123', '+2203329739'],
+                ['Party Representative', 'party@iec.gm', 'password123', '+2203329739'],
+                ['Election Monitor', 'monitor@iec.gm', 'password123', '+2203329739'],
             ]
         );
 

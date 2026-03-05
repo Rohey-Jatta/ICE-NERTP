@@ -35,7 +35,7 @@ class TwoFactorAuthService
     public function sendCode(User $user, string $code): bool
     {
 
-        Log::info("2FA Code for {$user->email} ({$user->phone}): {$code}");
+        Log::info("2FA Code for {$user->email} (" . ($user->phone ?? 'NO PHONE') . "): {$code}");
 
         // Send SMS
         return $this->smsService->send2FACode($user->phone, $code);

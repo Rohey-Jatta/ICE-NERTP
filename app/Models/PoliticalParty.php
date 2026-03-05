@@ -7,6 +7,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
+use Illuminate\Support\Str;
+
 class PoliticalParty extends Model
 {
     use SoftDeletes;
@@ -15,9 +17,19 @@ class PoliticalParty extends Model
         'election_id',
         'name',
         'abbreviation',
+        'slug',
         'color',
         'logo_path',
     ];
+
+    protected static function booted(): void
+    {
+        static::creating(function (PoliticalParty $party) {
+            if (empty($party->slug)) {
+                $party->slug = Str::slug($party->name);
+            }
+        });
+    }
 
     public function election(): BelongsTo
     {

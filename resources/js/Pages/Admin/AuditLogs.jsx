@@ -50,7 +50,8 @@ export default function AuditLogs({ auth, logs, filters }) {
                                     <th className="px-6 py-4 text-left text-white font-semibold">Timestamp</th>
                                     <th className="px-6 py-4 text-left text-white font-semibold">User</th>
                                     <th className="px-6 py-4 text-left text-white font-semibold">Action</th>
-                                    <th className="px-6 py-4 text-left text-white font-semibold">Model</th>
+                                    <th className="px-6 py-4 text-left text-white font-semibold">Module</th>
+                                    <th className="px-6 py-4 text-left text-white font-semibold">Outcome</th>
                                     <th className="px-6 py-4 text-left text-white font-semibold">IP Address</th>
                                     <th className="px-6 py-4 text-left text-white font-semibold">Details</th>
                                 </tr>
@@ -68,7 +69,16 @@ export default function AuditLogs({ auth, logs, filters }) {
                                                     {log.action}
                                                 </span>
                                             </td>
-                                            <td className="px-6 py-4 text-gray-300">{log.model}</td>
+                                            <td className="px-6 py-4 text-gray-300">{log.module}</td>
+                                            <td className="px-6 py-4">
+                                                <span className={`px-2 py-1 rounded-full text-xs ${
+                                                    log.outcome === 'success' ? 'bg-green-500/20 text-green-300' :
+                                                    log.outcome === 'failure' ? 'bg-red-500/20 text-red-300' :
+                                                    'bg-yellow-500/20 text-yellow-300'
+                                                }`}>
+                                                    {log.outcome}
+                                                </span>
+                                            </td>
                                             <td className="px-6 py-4 text-gray-400 text-sm">{log.ip_address}</td>
                                             <td className="px-6 py-4">
                                                 <button
@@ -82,7 +92,7 @@ export default function AuditLogs({ auth, logs, filters }) {
                                     ))
                                 ) : (
                                     <tr>
-                                        <td colSpan="6" className="px-6 py-12 text-center text-gray-400">
+                                        <td colSpan="7" className="px-6 py-12 text-center text-gray-400">
                                             No audit logs found
                                         </td>
                                     </tr>
@@ -111,10 +121,26 @@ export default function AuditLogs({ auth, logs, filters }) {
                                     <div className="text-sm text-gray-400">Action</div>
                                     <div className="text-white font-semibold">{selectedLog.action}</div>
                                 </div>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <div className="text-sm text-gray-400">Module</div>
+                                        <div className="text-white">{selectedLog.module}</div>
+                                    </div>
+                                    <div>
+                                        <div className="text-sm text-gray-400">Outcome</div>
+                                        <div className="text-white">{selectedLog.outcome}</div>
+                                    </div>
+                                </div>
                                 <div>
                                     <div className="text-sm text-gray-400">User</div>
-                                    <div className="text-white">{selectedLog.user?.name}</div>
+                                    <div className="text-white">{selectedLog.user?.name || 'System'}</div>
                                 </div>
+                                {selectedLog.failure_reason && (
+                                    <div>
+                                        <div className="text-sm text-gray-400">Failure Reason</div>
+                                        <div className="text-red-400">{selectedLog.failure_reason}</div>
+                                    </div>
+                                )}
                                 <div>
                                     <div className="text-sm text-gray-400">IP Address</div>
                                     <div className="text-white">{selectedLog.ip_address}</div>

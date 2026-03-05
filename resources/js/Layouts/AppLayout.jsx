@@ -1,6 +1,9 @@
 import { useState } from 'react';
+import { usePage, Link, router } from '@inertiajs/react';
 
-export default function AppLayout({ user, children }) {
+export default function AppLayout({ children }) {
+    const { auth } = usePage().props;
+    const user = auth?.user;
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
     return (
@@ -39,7 +42,21 @@ export default function AppLayout({ user, children }) {
                         <nav className="hidden md:flex items-center gap-6 text-white">
                             <a href="/" className="hover:text-amber-300 transition-colors font-medium">Home</a>
                             <a href="/results" className="hover:text-amber-300 transition-colors font-medium">Results</a>
-                            <a href="/auth/login" className="px-6 py-2 bg-gradient-to-r from-pink-600 to-pink-700 rounded-lg font-semibold">Staff Login</a>
+                            {user ? (
+                                <>
+                                    <Link href="/auth/login" className="px-6 py-2 bg-gradient-to-r from-blue-600 to-blue-700 rounded-lg font-semibold">Dashboard</Link>
+                                    <Link
+                                        href="/logout"
+                                        method="post"
+                                        as="button"
+                                        className="px-6 py-2 bg-gradient-to-r from-red-600 to-red-700 rounded-lg font-semibold"
+                                    >
+                                        Logout
+                                    </Link>
+                                </>
+                            ) : (
+                                <a href="/auth/login" className="px-6 py-2 bg-gradient-to-r from-pink-600 to-pink-700 rounded-lg font-semibold">Staff Login</a>
+                            )}
                         </nav>
 
                         <button onClick={() => setMobileMenuOpen(!mobileMenuOpen)} className="md:hidden text-white p-2">
@@ -57,7 +74,14 @@ export default function AppLayout({ user, children }) {
                         <nav className="md:hidden mt-4 pb-4 border-t border-slate-700/50 pt-4 space-y-3">
                             <a href="/" className="block text-white py-2">Home</a>
                             <a href="/results" className="block text-white py-2">Results</a>
-                            <a href="/auth/login" className="block w-full text-center px-6 py-3 bg-pink-600 text-white rounded-lg">Staff Login</a>
+                            {user ? (
+                                <>
+                                    <Link href="/auth/login" className="block w-full text-center px-6 py-3 bg-blue-600 text-white rounded-lg">Dashboard</Link>
+                                    <Link href="/logout" method="post" as="button" className="block w-full text-center px-6 py-3 bg-red-600 text-white rounded-lg mt-2">Logout</Link>
+                                </>
+                            ) : (
+                                <a href="/auth/login" className="block w-full text-center px-6 py-3 bg-pink-600 text-white rounded-lg">Staff Login</a>
+                            )}
                         </nav>
                     )}
                 </div>
