@@ -8,27 +8,27 @@ export default function WardAnalytics({ auth, stats = {}, stationBreakdown = [] 
 
                 {/* Summary Cards */}
                 <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
-                    <div className="bg-slate-800/40 rounded-xl p-6 border border-slate-700/50">
+                    <div className="bg-slate-800/40 rounded-xl p-6 border border-pink-300/50">
                         <div className="text-gray-400 text-sm mb-2">Total Stations</div>
                         <div className="text-white font-bold text-3xl">{stats.totalStations || 0}</div>
                     </div>
-                    <div className="bg-teal-600/20 border border-teal-500/50 rounded-xl p-6">
-                        <div className="text-teal-300 text-sm mb-2">Certified</div>
+                    <div className="bg-slate-800/40 border border-pink-300/50 rounded-xl p-6">
+                        <div className="text-gray-400 text-sm mb-2">Certified</div>
                         <div className="text-white font-bold text-3xl">{stats.certified || 0}</div>
                     </div>
-                    <div className="bg-amber-600/20 border border-amber-500/50 rounded-xl p-6">
-                        <div className="text-amber-300 text-sm mb-2">Pending</div>
+                    <div className="bg-slate-800/40 border border-pink-300/50 rounded-xl p-6">
+                        <div className="text-gray-400 text-sm mb-2">Pending</div>
                         <div className="text-white font-bold text-3xl">{stats.pending || 0}</div>
                     </div>
-                    <div className="bg-red-600/20 border border-red-500/50 rounded-xl p-6">
-                        <div className="text-red-300 text-sm mb-2">Rejected</div>
+                    <div className="bg-slate-800/40 border border-pink-300/50 rounded-xl p-6">
+                        <div className="text-gray-400 text-sm mb-2">Rejected</div>
                         <div className="text-white font-bold text-3xl">{stats.rejected || 0}</div>
                     </div>
-                    <div className="bg-slate-800/40 rounded-xl p-6 border border-slate-700/50">
+                    <div className="bg-slate-800/40 rounded-xl p-6 border border-pink-300/50">
                         <div className="text-gray-400 text-sm mb-2">Total Votes</div>
                         <div className="text-white font-bold text-3xl">{stats.totalVotes?.toLocaleString() || 0}</div>
                     </div>
-                    <div className="bg-slate-800/40 rounded-xl p-6 border border-slate-700/50">
+                    <div className="bg-slate-800/40 rounded-xl p-6 border border-pink-300/50">
                         <div className="text-gray-400 text-sm mb-2">Turnout Rate</div>
                         <div className="text-white font-bold text-3xl">{stats.turnoutRate || 0}%</div>
                     </div>
@@ -36,7 +36,7 @@ export default function WardAnalytics({ auth, stats = {}, stationBreakdown = [] 
 
                 {/* Progress Chart */}
                 {stats.totalStations > 0 && (
-                    <div className="bg-slate-800/40 rounded-xl p-6 border border-slate-700/50 mb-6">
+                    <div className="bg-slate-800/40 rounded-xl p-6 border border-pink-300/50 mb-6">
                         <h2 className="text-xl font-bold text-white mb-4">Certification Progress</h2>
                         <div className="space-y-4">
                             <div>
@@ -59,12 +59,12 @@ export default function WardAnalytics({ auth, stats = {}, stationBreakdown = [] 
 
                 {/* Station Breakdown */}
                 {stationBreakdown.length > 0 && (
-                    <div className="bg-slate-800/40 rounded-xl p-6 border border-slate-700/50">
+                    <div className="bg-slate-800/40 rounded-xl p-6 border border-pink-300/50">
                         <h2 className="text-xl font-bold text-white mb-4">Station-by-Station Breakdown</h2>
                         <div className="overflow-x-auto">
                             <table className="w-full">
                                 <thead>
-                                    <tr className="border-b border-slate-700">
+                                    <tr className="border-b border-pink-300">
                                         <th className="text-left text-gray-400 py-3">Station</th>
                                         <th className="text-right text-gray-400 py-3">Votes</th>
                                         <th className="text-right text-gray-400 py-3">Turnout</th>
@@ -73,15 +73,15 @@ export default function WardAnalytics({ auth, stats = {}, stationBreakdown = [] 
                                 </thead>
                                 <tbody>
                                     {stationBreakdown.map((station, i) => (
-                                        <tr key={i} className="border-b border-slate-700/50">
+                                        <tr key={i} className="border-b border-pink-300/50">
                                             <td className="py-3 text-white">{station.name}</td>
                                             <td className="py-3 text-right text-white">{station.votes}</td>
                                             <td className="py-3 text-right text-white">{station.turnout}%</td>
                                             <td className="py-3 text-center">
                                                 <span className={`px-3 py-1 rounded-full text-sm ${
                                                     station.status === 'Certified'
-                                                        ? 'bg-teal-500/20 text-teal-300'
-                                                        : 'bg-amber-500/20 text-amber-300'
+                                                        ? 'bg-teal-500/20 text-gray-400'
+                                                        : 'bg-slate-500/20 text-gray-400'
                                                 }`}>
                                                     {station.status}
                                                 </span>

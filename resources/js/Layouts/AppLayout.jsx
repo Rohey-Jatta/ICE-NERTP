@@ -57,7 +57,7 @@ export default function AppLayout({ user, children }) {
                         <nav className="md:hidden mt-4 pb-4 border-t border-slate-700/50 pt-4 space-y-3">
                             <a href="/" className="block text-white py-2">Home</a>
                             <a href="/results" className="block text-white py-2">Results</a>
-                            <a href="/auth/login" className="block w-full text-center px-6 py-3 bg-pink-600 text-white rounded-lg">Staff Login</a>
+                            <a href="/auth/login" className="block w-full text-center px-6 py-3 bg-pink-600 text-white runded-lg">Staff Login</a>
                         </nav>
                     )}
                 </div>
