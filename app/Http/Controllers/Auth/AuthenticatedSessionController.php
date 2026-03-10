@@ -33,9 +33,8 @@ class AuthenticatedSessionController extends Controller
         if (Auth::attempt($credentials)) {
             $user = Auth::user();
 
-            // Generate and send 2FA code
+            // Generate 2FA code (stored in cache)
             $code = $this->twoFactorService->generateCode($user);
-            $this->twoFactorService->sendCode($user, $code);
 
             Log::info('2FA Code for ' . $user->email . ': ' . $code);
 
@@ -45,7 +44,7 @@ class AuthenticatedSessionController extends Controller
             // Logout temporarily
             Auth::logout();
 
-            // FORCE redirect to 2FA
+            // Redirect to 2FA page (SMS will be sent when page loads)
             return to_route('two-factor.show');
         }
 

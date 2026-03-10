@@ -1,6 +1,10 @@
 import AppLayout from '@/Layouts/AppLayout';
 
 export default function Settings({ auth, settings = {} }) {
+    const handleSave = () => {
+        alert('Settings saved (not persisted).');
+    };
+
     return (
         <AppLayout user={auth?.user}>
             <div className="container mx-auto px-4 py-8 max-w-4xl">
@@ -43,7 +47,10 @@ export default function Settings({ auth, settings = {} }) {
                         </div>
                     </div>
 
-                    <button className="w-full px-8 py-4 bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-lg">
+                    <button
+                        onClick={handleSave}
+                        className="w-full px-8 py-4 bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-lg"
+                    >
                         Save Settings
                     </button>
                 </div>

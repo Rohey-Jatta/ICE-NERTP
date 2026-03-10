@@ -1,8 +1,15 @@
 import AppLayout from '@/Layouts/AppLayout';
 import { useState } from 'react';
 
+// simple stub for filter functionality
+
+
 export default function AuditLogs({ auth, logs, filters }) {
     const [selectedLog, setSelectedLog] = useState(null);
+
+    const applyFilters = () => {
+        alert('Filters applied (stub)');
+    };
 
     return (
         <AppLayout user={auth.user}>
@@ -35,7 +42,7 @@ export default function AuditLogs({ auth, logs, filters }) {
                             type="date"
                             className="px-4 py-2 bg-slate-900/50 border border-slate-700 rounded-lg text-white"
                         />
-                        <button className="px-4 py-2 bg-teal-700 hover:bg-teal-600 text-white rounded-lg">
+                        <button onClick={applyFilters} className="px-4 py-2 bg-teal-700 hover:bg-teal-600 text-white rounded-lg">
                             Apply Filters
                         </button>
                     </div>

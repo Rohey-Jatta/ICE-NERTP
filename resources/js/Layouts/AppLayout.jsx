@@ -1,7 +1,25 @@
 import { useState } from 'react';
+import { router } from '@inertiajs/react';
 
 export default function AppLayout({ user, children }) {
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+    const [isLoggingOut, setIsLoggingOut] = useState(false);
+    const [isLoggingIn, setIsLoggingIn] = useState(false);
+    const isAuthenticated = !!user;
+
+    const handleLogout = () => {
+        setIsLoggingOut(true);
+        router.post('/logout', {}, {
+            onFinish: () => setIsLoggingOut(false)
+        });
+    };
+
+    const handleLogin = () => {
+        setIsLoggingIn(true);
+        router.visit('/auth/login', {
+            onFinish: () => setIsLoggingIn(false)
+        });
+    };
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-[#1a1a2e] via-[#16213e] to-[#0f3460]">
@@ -39,7 +57,35 @@ export default function AppLayout({ user, children }) {
                         <nav className="hidden md:flex items-center gap-6 text-white">
                             <a href="/" className="hover:text-amber-300 transition-colors font-medium">Home</a>
                             <a href="/results" className="hover:text-amber-300 transition-colors font-medium">Results</a>
-                            <a href="/auth/login" className="px-6 py-2 bg-gradient-to-r from-pink-600 to-pink-700 rounded-lg font-semibold">Staff Login</a>
+                            {isAuthenticated ? (
+                                <button
+                                    onClick={handleLogout}
+                                    disabled={isLoggingOut}
+                                    className="px-6 py-2 bg-red-600 rounded-lg font-semibold disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                                >
+                                    {isLoggingOut && (
+                                        <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"></circle>
+                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                        </svg>
+                                    )}
+                                    Logout
+                                </button>
+                            ) : (
+                                <button
+                                    onClick={handleLogin}
+                                    disabled={isLoggingIn}
+                                    className="px-6 py-2 bg-gradient-to-r from-pink-600 to-pink-700 rounded-lg font-semibold disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                                >
+                                    {isLoggingIn && (
+                                        <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"></circle>
+                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                        </svg>
+                                    )}
+                                    Staff Login
+                                </button>
+                            )}
                         </nav>
 
                         <button onClick={() => setMobileMenuOpen(!mobileMenuOpen)} className="md:hidden text-white p-2">
@@ -57,7 +103,35 @@ export default function AppLayout({ user, children }) {
                         <nav className="md:hidden mt-4 pb-4 border-t border-slate-700/50 pt-4 space-y-3">
                             <a href="/" className="block text-white py-2">Home</a>
                             <a href="/results" className="block text-white py-2">Results</a>
-                            <a href="/auth/login" className="block w-full text-center px-6 py-3 bg-pink-600 text-white runded-lg">Staff Login</a>
+                            {isAuthenticated ? (
+                                <button
+                                    onClick={handleLogout}
+                                    disabled={isLoggingOut}
+                                    className="w-full text-center px-6 py-3 bg-red-600 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                                >
+                                    {isLoggingOut && (
+                                        <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"></circle>
+                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                        </svg>
+                                    )}
+                                    Logout
+                                </button>
+                            ) : (
+                                <button
+                                    onClick={handleLogin}
+                                    disabled={isLoggingIn}
+                                    className="w-full text-center px-6 py-3 bg-pink-600 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                                >
+                                    {isLoggingIn && (
+                                        <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"></circle>
+                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                        </svg>
+                                    )}
+                                    Staff Login
+                                </button>
+                            )}
                         </nav>
                     )}
                 </div>

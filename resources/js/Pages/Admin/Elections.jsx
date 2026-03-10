@@ -1,12 +1,16 @@
 import AppLayout from '@/Layouts/AppLayout';
+import { router } from '@inertiajs/react';
 
 export default function Elections({ auth, elections = [] }) {
+    const handleCreate = () => router.visit('/admin/elections/create');
+    const handleCreateFirst = () => router.visit('/admin/elections/create');
+
     return (
         <AppLayout user={auth?.user}>
             <div className="container mx-auto px-4 py-8">
                 <div className="flex justify-between items-center mb-6">
                     <h1 className="text-3xl font-bold text-white">Election Management</h1>
-                    <button className="px-6 py-3 bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-lg">
+                    <button onClick={handleCreate} className="px-6 py-3 bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-lg">
                         + Create New Election
                     </button>
                 </div>
@@ -33,7 +37,7 @@ export default function Elections({ auth, elections = [] }) {
                     ) : (
                         <div className="bg-slate-800/40 rounded-xl p-12 border border-slate-700/50 text-center">
                             <p className="text-gray-400 mb-4">No elections configured</p>
-                            <button className="px-6 py-3 bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-lg">
+                            <button onClick={handleCreateFirst} className="px-6 py-3 bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-lg">
                                 Create First Election
                             </button>
                         </div>

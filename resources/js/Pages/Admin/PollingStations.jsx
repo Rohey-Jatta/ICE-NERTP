@@ -1,12 +1,16 @@
 import AppLayout from '@/Layouts/AppLayout';
+import { router } from '@inertiajs/react';
 
 export default function PollingStations({ auth, stations = [] }) {
+    const handleRegister = () => router.visit('/admin/polling-stations/create');
+    const handleEdit = (id) => router.visit(`/admin/polling-stations/${id}/edit`);
+
     return (
         <AppLayout user={auth?.user}>
             <div className="container mx-auto px-4 py-8">
                 <div className="flex justify-between items-center mb-6">
                     <h1 className="text-3xl font-bold text-white">Polling Station Management</h1>
-                    <button className="px-6 py-3 bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-lg">
+                    <button onClick={handleRegister} className="px-6 py-3 bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-lg">
                         + Register Station
                     </button>
                 </div>
@@ -32,7 +36,7 @@ export default function PollingStations({ auth, stations = [] }) {
                                             <td className="py-4 text-white">{station.ward}</td>
                                             <td className="py-4 text-right text-white">{station.voters}</td>
                                             <td className="py-4 text-center">
-                                                <button className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm">
+                                                <button onClick={() => handleEdit(station.id)} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm">
                                                     Edit
                                                 </button>
                                             </td>

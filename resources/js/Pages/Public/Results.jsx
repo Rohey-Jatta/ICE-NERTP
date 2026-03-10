@@ -5,11 +5,11 @@ export default function Results({ election, stats, candidates }) {
         return (
             <AppLayout>
                 <div className="container mx-auto px-4 py-12 min-h-screen flex items-center justify-center">
-                    <div className="text-center p-12 bg-slate-800/40 rounded-xl border border-slate-700/50 max-w-2xl">
+                    <div className="text-center p-12 bg-slate-800/40 rounded-xl border border-pink-300/50 max-w-2xl">
                         <div className="text-6xl mb-6"></div>
                         <h1 className="text-3xl font-bold text-white mb-4">No Results Available</h1>
-                        <p className="text-gray-400 mb-6">Results will be published once voting concludes.</p>
-                        <a href="/" className="inline-block px-6 py-3 bg-teal-700 text-white rounded-lg font-semibold hover:bg-teal-800 transition-colors">
+                        <p className="text-pink-200 mb-6">Results will be published once voting concludes.</p>
+                        <a href="/" className="inline-block px-6 py-3 bg-pink-600 text-white rounded-lg font-semibold hover:bg-pink-700 transition-colors">
                             ← Back Home
                         </a>
                     </div>
@@ -25,24 +25,24 @@ export default function Results({ election, stats, candidates }) {
             <div className="container mx-auto px-4 py-8">
                 <div className="max-w-7xl mx-auto">
                     <div className="text-center mb-8">
-                        
+
                         <h1 className="text-4xl font-bold text-white mb-6">{election.name}</h1>
-                        
+
                         {/* Navigation Tabs - USING REGULAR <a> TAGS */}
                         <div className="flex justify-center gap-4 mb-8 flex-wrap">
-                            <a 
+                            <a
                                 href="/results"
                                 className="px-6 py-3 bg-slate-700 text-white rounded-lg font-semibold shadow-lg hover:bg-slate-600 transition-colors"
                             >
                                 Summary
                             </a>
-                            <a 
+                            <a
                                 href="/results/map"
                                 className="px-6 py-3 bg-slate-800/30 text-gray-300 rounded-lg font-semibold hover:bg-slate-700 transition-all"
                             >
                                 Map
                             </a>
-                            <a 
+                            <a
                                 href="/results/stations"
                                 className="px-6 py-3 bg-slate-800/30 text-gray-300 rounded-lg font-semibold hover:bg-slate-700 transition-all"
                             >
@@ -92,7 +92,7 @@ export default function Results({ election, stats, candidates }) {
                             </div>
                         </div>
                         <div className="w-full bg-slate-700/50 rounded-full h-4">
-                            <div 
+                            <div
                                 className="bg-gradient-to-r from-teal-500 to-teal-600 h-4 rounded-full transition-all duration-500"
                                 style={{ width: `${stats.total_stations > 0 ? (stats.stations_reported / stats.total_stations) * 100 : 0}%` }}
                             />
@@ -121,9 +121,9 @@ export default function Results({ election, stats, candidates }) {
                                             </div>
                                         </div>
                                         <div className="w-full bg-slate-700/50 rounded-full h-3">
-                                            <div 
-                                                className="bg-gradient-to-r from-slate-500 to-slate-600 h-3 rounded-full transition-all duration-500" 
-                                                style={{ width: `${percentage}%` }} 
+                                            <div
+                                                className="bg-gradient-to-r from-slate-500 to-slate-600 h-3 rounded-full transition-all duration-500"
+                                                style={{ width: `${percentage}%` }}
                                             />
                                         </div>
                                     </div>
@@ -131,7 +131,7 @@ export default function Results({ election, stats, candidates }) {
                             })}
                         </div>
 
-                        
+
                     </div>
                 </div>
             </div>

@@ -1,6 +1,11 @@
 import AppLayout from '@/Layouts/AppLayout';
+import { router } from '@inertiajs/react';
 
 export default function AdminAreaApprovalQueue({ auth, constituencyResults = [] }) {
+    const handleCertify = (id) => router.post(`/admin-area/certify/${id}`);
+    const handleReject = (id) => router.post(`/admin-area/reject/${id}`);
+    const handleView = (id) => router.visit(`/admin-area/constituency/${id}`);
+
     return (
         <AppLayout user={auth?.user}>
             <div className="container mx-auto px-4 py-8">
@@ -40,13 +45,13 @@ export default function AdminAreaApprovalQueue({ auth, constituencyResults = [] 
                                 </div>
 
                                 <div className="flex gap-3">
-                                    <button className="flex-1 px-6 py-3 bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-lg">
+                                    <button onClick={() => handleCertify(constituency.id)} className="flex-1 px-6 py-3 bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-lg">
                                         ✓ Certify at Admin Area Level
                                     </button>
-                                    <button className="flex-1 px-6 py-3 bg-red-600 hover:bg-red-700 text-white font-bold rounded-lg">
+                                    <button onClick={() => handleReject(constituency.id)} className="flex-1 px-6 py-3 bg-red-600 hover:bg-red-700 text-white font-bold rounded-lg">
                                         ✗ Reject & Return
                                     </button>
-                                    <button className="px-6 py-3 bg-slate-700 hover:bg-slate-600 text-white font-bold rounded-lg">
+                                    <button onClick={() => handleView(constituency.id)} className="px-6 py-3 bg-slate-700 hover:bg-slate-600 text-white font-bold rounded-lg">
                                         View Full Details
                                     </button>
                                 </div>

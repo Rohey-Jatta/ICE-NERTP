@@ -37,7 +37,7 @@ export default function OfficerDashboard({ auth, station, submissions }) {
 
                         <a
                             href="/officer/submissions"
-                            className="p-6 bg-blue-800 hover:bg-blue-900 rounded-lg transition-colors">
+                            className="p-6 bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors">
                             <div className="text-xl font-bold text-white">My Submissions</div>
                             <div className="text-blue-300 text-sm">View submitted results</div>
                         </a>

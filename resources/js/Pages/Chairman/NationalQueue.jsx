@@ -58,7 +58,10 @@ export default function NationalQueue({ auth, adminAreaResults = [] }) {
                                     >
                                         ✗ REJECT & Return to Admin Area
                                     </button>
-                                    <button className="px-8 py-4 bg-slate-700 hover:bg-slate-600 text-white font-bold rounded-lg">
+                                    <button
+                                        onClick={() => window.open(`/chairman/report/${area.id}`, '_blank')}
+                                        className="px-8 py-4 bg-slate-700 hover:bg-slate-600 text-white font-bold rounded-lg"
+                                    >
                                         📊 Full Report
                                     </button>
                                 </div>

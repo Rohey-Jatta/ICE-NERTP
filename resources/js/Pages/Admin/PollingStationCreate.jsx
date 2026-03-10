@@ -1,0 +1,93 @@
+import AppLayout from '@/Layouts/AppLayout';
+import { useForm, router } from '@inertiajs/react';
+
+export default function PollingStationCreate({ auth, wards = [] }) {
+    const { data, setData, post, processing, errors } = useForm({
+        code: '',
+        name: '',
+        ward_id: '',
+    });
+
+    const handleSubmit = (e) => {
+        e.preventDefault();
+        post('/admin/polling-stations');
+    };
+
+    return (
+        <AppLayout user={auth?.user}>
+            <div className="container mx-auto px-4 py-8 max-w-2xl">
+                <div className="flex items-center justify-between mb-6">
+                    <h1 className="text-3xl font-bold text-white">Create New Polling Station</h1>
+                    <button
+                        onClick={() => router.visit('/admin/polling-stations')}
+                        className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg"
+                    >
+                        ← Back to Polling Stations
+                    </button>
+                </div>
+
+                <div className="bg-slate-800/40 rounded-xl p-6 border border-slate-700/50">
+                    <form onSubmit={handleSubmit} className="space-y-6">
+                        <div>
+                            <label className="block text-gray-300 mb-2 font-semibold">Polling Station Code</label>
+                            <input
+                                type="text"
+                                value={data.code}
+                                onChange={(e) => setData('code', e.target.value)}
+                                className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white"
+                                placeholder="e.g., PS-001"
+                            />
+                            {errors.code && <p className="text-red-400 text-sm mt-1">{errors.code}</p>}
+                        </div>
+
+                        <div>
+                            <label className="block text-gray-300 mb-2 font-semibold">Polling Station Name</label>
+                            <input
+                                type="text"
+                                value={data.name}
+                                onChange={(e) => setData('name', e.target.value)}
+                                className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white"
+                                placeholder="e.g., Central School"
+                            />
+                            {errors.name && <p className="text-red-400 text-sm mt-1">{errors.name}</p>}
+                        </div>
+
+                        <div>
+                            <label className="block text-gray-300 mb-2 font-semibold">Ward</label>
+                            <select
+                                value={data.ward_id}
+                                onChange={(e) => setData('ward_id', e.target.value)}
+                                className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white"
+                            >
+                                <option value="">Select a Ward</option>
+                                {wards.map((ward) => (
+                                    <option key={ward.id} value={ward.id}>
+                                        {ward.name}
+                                    </option>
+                                ))}
+                            </select>
+                            {errors.ward_id && <p className="text-red-400 text-sm mt-1">{errors.ward_id}</p>}
+                        </div>
+
+                        <div className="flex gap-4">
+                            <button
+                                type="submit"
+                                disabled={processing}
+                                className="flex-1 px-6 py-3 bg-teal-600 hover:bg-teal-700 disabled:bg-teal-600 text-white font-bold rounded-lg"
+                            >
+                                {processing ? 'Creating...' : 'Create Polling Station'}
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => router.visit('/admin/polling-stations')}
+                                className="flex-1 px-6 py-3 bg-slate-700 hover:bg-slate-600 text-white font-bold rounded-lg"
+                            >
+                                Cancel
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </AppLayout>
+    );
+}

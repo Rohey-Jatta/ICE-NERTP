@@ -10,6 +10,7 @@ use App\Http\Controllers\Public\ResultsSummaryController;
 use App\Http\Controllers\Public\ResultsMapController;
 use App\Http\Controllers\Public\ResultsStationsController;
 use App\Http\Controllers\Auth\TwoFactorController;
+use App\Http\Controllers\ReportController;
 use App\Models\AuditLog;
 use App\Models\User;
 use App\Models\Election;
@@ -17,6 +18,8 @@ use App\Models\Candidate;
 use App\Models\PollingStation;
 use App\Models\Result;
 use App\Models\ResultCandidateVote;
+use App\Models\PoliticalParty;
+use App\Models\AdministrativeHierarchy;
 
 
 // Public routes
@@ -369,6 +372,52 @@ Route::middleware('auth')->group(function () {
             ]);
         })->name('users');
 
+        Route::get('/users/create', function () {
+            return Inertia::render('Admin/UserCreate', [
+                'auth' => ['user' => Auth::user()],
+            ]);
+        })->name('users.create');
+
+        Route::post('/users', function (Request $request) {
+            $request->validate([
+                'name' => 'required|string|max:255',
+                'email' => 'required|email|unique:users,email',
+                'password' => 'required|string|min:8|confirmed',
+                'role' => 'required|string',
+            ]);
+            
+            try {
+                $user = User::create([
+                    'name' => $request->name,
+                    'email' => $request->email,
+                    'password' => bcrypt($request->password),
+                    'phone_number' => $request->phone_number ?? null,
+                    'status' => 'active',
+                ]);
+
+                // Assign role to user
+                if ($request->role) {
+                    $user->assignRole($request->role);
+                }
+
+                // Log audit trail
+                AuditLog::create([
+                    'user_id' => Auth::id(),
+                    'action' => 'User Created',
+                    'description' => "Created user: {$user->email}",
+                    'model_type' => 'User',
+                    'model_id' => $user->id,
+                    'ip_address' => $request->ip(),
+                    'user_agent' => $request->userAgent(),
+                ]);
+
+                return redirect()->route('admin.users')->with('success', 'User created successfully!');
+            } catch (\Exception $e) {
+                Log::error('User creation failed', ['error' => $e->getMessage()]);
+                return back()->withErrors(['error' => 'Failed to create user: ' . $e->getMessage()]);
+            }
+        })->name('users.store');
+
         Route::get('/roles', function () {
             return Inertia::render('Admin/Roles', [
                 'auth' => ['user' => Auth::user()],
@@ -381,17 +430,136 @@ Route::middleware('auth')->group(function () {
             ]);
         })->name('elections');
 
+        Route::get('/elections/create', function () {
+            return Inertia::render('Admin/ElectionCreate', [
+                'auth' => ['user' => Auth::user()],
+            ]);
+        })->name('elections.create');
+
+        Route::post('/elections', function (Request $request) {
+            $request->validate([
+                'name' => 'required|string|max:255|unique:elections,name',
+                'type' => 'required|string|in:presidential,parliamentary,local,referendum',
+                'date' => 'required|date|after:today',
+            ]);
+            
+            try {
+                $election = Election::create([
+                    'name' => $request->name,
+                    'type' => $request->type,
+                    'election_date' => $request->date,
+                    'status' => 'scheduled',
+                    'created_by' => Auth::id(),
+                ]);
+
+                // Log audit trail
+                AuditLog::create([
+                    'user_id' => Auth::id(),
+                    'action' => 'Election Created',
+                    'description' => "Created election: {$election->name} ({$election->type})",
+                    'model_type' => 'Election',
+                    'model_id' => $election->id,
+                    'ip_address' => $request->ip(),
+                    'user_agent' => $request->userAgent(),
+                ]);
+
+                return redirect()->route('admin.elections')->with('success', 'Election created successfully!');
+            } catch (\Exception $e) {
+                Log::error('Election creation failed', ['error' => $e->getMessage()]);
+                return back()->withErrors(['error' => 'Failed to create election: ' . $e->getMessage()]);
+            }
+        })->name('elections.store');
+
         Route::get('/polling-stations', function () {
             return Inertia::render('Admin/PollingStations', [
                 'auth' => ['user' => Auth::user()],
             ]);
         })->name('polling-stations');
 
+        Route::get('/polling-stations/create', function () {
+            $wards = AdministrativeHierarchy::where('level', 'ward')->get(['id', 'name']);
+            return Inertia::render('Admin/PollingStationCreate', [
+                'auth' => ['user' => Auth::user()],
+                'wards' => $wards,
+            ]);
+        })->name('polling-stations.create');
+
+        Route::post('/polling-stations', function (Request $request) {
+            $request->validate([
+                'code' => 'required|string|unique:polling_stations,code',
+                'name' => 'required|string|max:255',
+                'ward_id' => 'required|integer|exists:administrative_hierarchies,id',
+            ]);
+            
+            try {
+                $station = PollingStation::create([
+                    'code' => strtoupper($request->code),
+                    'name' => $request->name,
+                    'ward_id' => $request->ward_id,
+                    'status' => 'active',
+                ]);
+
+                // Log audit trail
+                AuditLog::create([
+                    'user_id' => Auth::id(),
+                    'action' => 'Polling Station Created',
+                    'description' => "Created polling station: {$station->code} - {$station->name}",
+                    'model_type' => 'PollingStation',
+                    'model_id' => $station->id,
+                    'ip_address' => $request->ip(),
+                    'user_agent' => $request->userAgent(),
+                ]);
+
+                return redirect()->route('admin.polling-stations')->with('success', 'Polling station registered successfully!');
+            } catch (\Exception $e) {
+                Log::error('Polling station creation failed', ['error' => $e->getMessage()]);
+                return back()->withErrors(['error' => 'Failed to create polling station: ' . $e->getMessage()]);
+            }
+        })->name('polling-stations.store');
+
         Route::get('/parties', function () {
             return Inertia::render('Admin/Parties', [
                 'auth' => ['user' => Auth::user()],
             ]);
         })->name('parties');
+
+        Route::get('/parties/create', function () {
+            return Inertia::render('Admin/PartyCreate', [
+                'auth' => ['user' => Auth::user()],
+            ]);
+        })->name('parties.create');
+
+        Route::post('/parties', function (Request $request) {
+            $request->validate([
+                'name' => 'required|string|max:255|unique:political_parties,name',
+                'abbreviation' => 'required|string|max:10|unique:political_parties,abbreviation',
+            ]);
+            
+            try {
+                $party = PoliticalParty::create([
+                    'name' => $request->name,
+                    'abbreviation' => strtoupper($request->abbreviation),
+                    'status' => 'active',
+                    'registered_by' => Auth::id(),
+                ]);
+
+                // Log audit trail
+                AuditLog::create([
+                    'user_id' => Auth::id(),
+                    'action' => 'Political Party Registered',
+                    'description' => "Registered party: {$party->name} ({$party->abbreviation})",
+                    'model_type' => 'PoliticalParty',
+                    'model_id' => $party->id,
+                    'ip_address' => $request->ip(),
+                    'user_agent' => $request->userAgent(),
+                ]);
+
+                return redirect()->route('admin.parties')->with('success', 'Party registered successfully!');
+            } catch (\Exception $e) {
+                Log::error('Party registration failed', ['error' => $e->getMessage()]);
+                return back()->withErrors(['error' => 'Failed to register party: ' . $e->getMessage()]);
+            }
+        })->name('parties.store');
 
         Route::get('/audit-logs', function () {
             $logs = AuditLog::with('user')->latest()->paginate(50);
@@ -488,10 +656,8 @@ Route::middleware('auth')->group(function () {
             ]);
         })->name('observations');
     });
-
-    // REMOVE GENERIC /dashboard ROUTE - IT WAS CAUSING WHITE PAGE
-    // Each role has their own specific dashboard route above
 });
 
-// Route::get('/constituency/reports/download/{id}', [ReportController::class, 'download']);
+Route::get('/constituency/reports/download/{id}', [ReportController::class, 'download']);
+
 // Route::post('/ward/approve/{id}', [WardApprovalController::class, 'approve']);

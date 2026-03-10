@@ -38,7 +38,7 @@ export default function AdminDashboard({ auth, statistics, systemStatus }) {
                     <div className="bg-slate-800/40 rounded-xl p-8 border border-slate-700/50">
                         <h2 className="text-2xl font-bold text-white mb-6">User Management</h2>
                         <div className="space-y-3">
-                            <Link
+                            <a
                                 href="/admin/users"
                                 className="block p-4 bg-teal-700 hover:bg-teal-600 rounded-lg transition-colors"
                             >
@@ -49,9 +49,9 @@ export default function AdminDashboard({ auth, statistics, systemStatus }) {
                                         <div className="text-teal-200 text-sm">Create, edit, deactivate users</div>
                                     </div>
                                 </div>
-                            </Link>
+                            </a>
 
-                            <Link
+                            <a
                                 href="/admin/roles"
                                 className="block p-4 bg-slate-700 hover:bg-slate-600 rounded-lg transition-colors"
                             >
@@ -62,14 +62,14 @@ export default function AdminDashboard({ auth, statistics, systemStatus }) {
                                         <div className="text-gray-300 text-sm">Manage role assignments</div>
                                     </div>
                                 </div>
-                            </Link>
+                            </a>
                         </div>
                     </div>
 
                     <div className="bg-slate-800/40 rounded-xl p-8 border border-slate-700/50">
                         <h2 className="text-2xl font-bold text-white mb-6">Election Management</h2>
                         <div className="space-y-3">
-                            <Link
+                            <a
                                 href="/admin/elections"
                                 className="block p-4 bg-teal-700 hover:bg-teal-600 rounded-lg transition-colors"
                             >
@@ -80,9 +80,9 @@ export default function AdminDashboard({ auth, statistics, systemStatus }) {
                                         <div className="text-teal-200 text-sm">Create and configure elections</div>
                                     </div>
                                 </div>
-                            </Link>
+                            </a>
 
-                            <Link
+                            <a
                                 href="/admin/polling-stations"
                                 className="block p-4 bg-slate-700 hover:bg-slate-600 rounded-lg transition-colors"
                             >
@@ -93,9 +93,9 @@ export default function AdminDashboard({ auth, statistics, systemStatus }) {
                                         <div className="text-gray-300 text-sm">Register and assign stations</div>
                                     </div>
                                 </div>
-                            </Link>
+                            </a>
 
-                            <Link
+                            <a
                                 href="/admin/parties"
                                 className="block p-4 bg-slate-700 hover:bg-slate-600 rounded-lg transition-colors"
                             >
@@ -106,14 +106,14 @@ export default function AdminDashboard({ auth, statistics, systemStatus }) {
                                         <div className="text-gray-300 text-sm">Register parties & candidates</div>
                                     </div>
                                 </div>
-                            </Link>
+                            </a>
                         </div>
                     </div>
 
                     <div className="bg-slate-800/40 rounded-xl p-8 border border-slate-700/50">
                         <h2 className="text-2xl font-bold text-white mb-6">System Settings</h2>
                         <div className="space-y-3">
-                            <Link
+                            <a
                                 href="/admin/audit-logs"
                                 className="block p-4 bg-slate-700 hover:bg-slate-600 rounded-lg transition-colors"
                             >
@@ -124,9 +124,9 @@ export default function AdminDashboard({ auth, statistics, systemStatus }) {
                                         <div className="text-gray-300 text-sm">View system activity</div>
                                     </div>
                                 </div>
-                            </Link>
+                            </a>
 
-                            <Link
+                            <a
                                 href="/admin/settings"
                                 className="block p-4 bg-slate-700 hover:bg-slate-600 rounded-lg transition-colors"
                             >
@@ -137,14 +137,14 @@ export default function AdminDashboard({ auth, statistics, systemStatus }) {
                                         <div className="text-gray-300 text-sm">Configure system settings</div>
                                     </div>
                                 </div>
-                            </Link>
+                            </a>
                         </div>
                     </div>
 
                     <div className="bg-slate-800/40 rounded-xl p-8 border border-slate-700/50">
                         <h2 className="text-2xl font-bold text-white mb-6">Monitoring</h2>
                         <div className="space-y-3">
-                            <Link
+                            <a
                                 href="/admin/system-health"
                                 className="block p-4 bg-slate-700 hover:bg-slate-600 rounded-lg transition-colors"
                             >
@@ -155,9 +155,9 @@ export default function AdminDashboard({ auth, statistics, systemStatus }) {
                                         <div className="text-gray-300 text-sm">Monitor performance</div>
                                     </div>
                                 </div>
-                            </Link>
+                            </a>
 
-                            <Link
+                            <a
                                 href="/admin/backups"
                                 className="block p-4 bg-slate-700 hover:bg-slate-600 rounded-lg transition-colors"
                             >
@@ -168,7 +168,7 @@ export default function AdminDashboard({ auth, statistics, systemStatus }) {
                                         <div className="text-gray-300 text-sm">Database backups</div>
                                     </div>
                                 </div>
-                            </Link>
+                            </a>
                         </div>
                     </div>
                 </div>

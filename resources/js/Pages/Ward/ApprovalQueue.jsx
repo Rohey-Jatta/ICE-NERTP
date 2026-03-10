@@ -1,5 +1,5 @@
 import AppLayout from '@/Layouts/AppLayout';
-import { useForm } from '@inertiajs/react';
+import { useForm, router } from '@inertiajs/react';
 
 export default function WardApprovalQueue({ auth, pendingResults = [] }) {
     const { post, processing } = useForm();
@@ -17,6 +17,10 @@ export default function WardApprovalQueue({ auth, pendingResults = [] }) {
                 data: { comments: reason }
             });
         }
+    };
+
+    const handleView = (resultId) => {
+        router.visit(`/results/${resultId}`);
     };
 
     return (
@@ -86,7 +90,10 @@ export default function WardApprovalQueue({ auth, pendingResults = [] }) {
                                     >
                                         Reject & Return
                                     </button>
-                                    <button className="px-6 py-3 bg-slate-700 hover:bg-slate-600 text-white font-bold rounded-lg">
+                                    <button
+                                        onClick={() => handleView(result.id)}
+                                        className="px-6 py-3 bg-slate-700 hover:bg-slate-600 text-white font-bold rounded-lg"
+                                    >
                                         View Details
                                     </button>
                                 </div>

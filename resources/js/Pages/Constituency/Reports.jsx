@@ -1,4 +1,5 @@
 import AppLayout from '@/Layouts/AppLayout';
+import { router } from '@inertiajs/react';
 
 export default function ConstituencyReports({ auth, reports = [] }) {
     const defaultReports = [
@@ -17,7 +18,7 @@ export default function ConstituencyReports({ auth, reports = [] }) {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     {availableReports.map((report, i) => (
-                        <div key={i} className="bg-slate-800/40 rounded-xl p-6 border border-slate-700/50">
+                        <div key={i} className="bg-slate-800/40 rounded-xl p-6 border border-pink-300/50">
                             <div className="flex items-start justify-between mb-4">
                                 <div>
                                     <h3 className="text-xl font-bold text-white mb-2">{report.name}</h3>
@@ -27,8 +28,11 @@ export default function ConstituencyReports({ auth, reports = [] }) {
                                     {report.format}
                                 </span>
                             </div>
-                            <button className="w-full px-6 py-3 bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-lg">
-                                📥 Download Report
+                            <button 
+                                onClick={() => window.open(`/constituency/reports/download/${i + 1}`, '_blank')}
+                                className="w-full px-6 py-3 bg-pink-500 hover:bg-pink-600 text-white font-bold rounded-lg"
+                            >
+                                Download Report
                             </button>
                         </div>
                     ))}

@@ -8,13 +8,22 @@ export default function SubmitObservation({ auth }) {
         severity: 'normal',
     });
 
+    const handleSubmit = (e) => {
+        e.preventDefault();
+        // send to backend if route exists; otherwise show alert
+        post('/monitor/observations', {
+            onSuccess: () => alert('Observation submitted'),
+            onError: () => alert('Failed to submit observation'),
+        });
+    };
+
     return (
         <AppLayout user={auth?.user}>
             <div className="container mx-auto px-4 py-8 max-w-2xl">
                 <h1 className="text-3xl font-bold text-white mb-6">Submit Observation</h1>
 
                 <div className="bg-slate-800/40 rounded-xl p-6 border border-slate-700/50">
-                    <form className="space-y-4">
+                    <form onSubmit={handleSubmit} className="space-y-4">
                         <div>
                             <label className="block text-gray-300 mb-2">Observation Details</label>
                             <textarea

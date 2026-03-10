@@ -1,8 +1,13 @@
 import AppLayout from '@/Layouts/AppLayout';
 import { useState } from 'react';
+import { router } from '@inertiajs/react';
 
 export default function AllResults({ auth, results = [] }) {
     const [filter, setFilter] = useState('all');
+
+    const handleViewDetails = (resultId) => {
+        router.visit(`/results/${resultId}`);
+    };
 
     const filteredResults = filter === 'all' ? results : results.filter(r => {
         if (filter === 'Nationally') return r.status?.includes('Nationally');
@@ -102,7 +107,10 @@ export default function AllResults({ auth, results = [] }) {
                                                 </span>
                                             </td>
                                             <td className="py-4 text-center">
-                                                <button className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm">
+                                                <button
+                                                    onClick={() => handleViewDetails(result.id)}
+                                                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm"
+                                                >
                                                     View Full Details
                                                 </button>
                                             </td>

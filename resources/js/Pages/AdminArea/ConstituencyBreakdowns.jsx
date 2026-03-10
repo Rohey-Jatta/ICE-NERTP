@@ -1,6 +1,11 @@
 import AppLayout from '@/Layouts/AppLayout';
+import { router } from '@inertiajs/react';
 
 export default function ConstituencyBreakdowns({ auth, constituencies = [], stats = {} }) {
+    const handleView = (name) => {
+        router.visit(`/admin-area/constituencies/${encodeURIComponent(name)}`);
+    };
+
     return (
         <AppLayout user={auth?.user}>
             <div className="container mx-auto px-4 py-8">
@@ -62,7 +67,10 @@ export default function ConstituencyBreakdowns({ auth, constituencies = [], stat
                                                 </span>
                                             </td>
                                             <td className="py-4 text-center">
-                                                <button className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm">
+                                                <button
+                                                    onClick={() => handleView(c.name)}
+                                                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm"
+                                                >
                                                     View Details
                                                 </button>
                                             </td>

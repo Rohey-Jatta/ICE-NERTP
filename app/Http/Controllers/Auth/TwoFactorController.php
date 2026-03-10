@@ -24,6 +24,20 @@ class TwoFactorController extends Controller
             return redirect()->route('login');
         }
 
+        $userId = session('2fa_user_id');
+        $user = User::find($userId);
+
+        if (!$user) {
+            return redirect()->route('login');
+        }
+
+        // Send SMS if not already sent for this session
+        if (!session('2fa_sms_sent')) {
+            $code = $this->twoFactorService->generateCode($user);
+            $this->twoFactorService->sendCode($user, $code);
+            session(['2fa_sms_sent' => true]);
+        }
+
         return Inertia::render('Auth/TwoFactor');
     }
 
@@ -48,7 +62,7 @@ class TwoFactorController extends Controller
             // Login user
             Auth::login($user);
             $request->session()->regenerate();
-            session()->forget('2fa_user_id');
+            session()->forget(['2fa_user_id', '2fa_sms_sent']);
             
             // Redirect based on role
             return $this->redirectByRole($user);
