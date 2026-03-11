@@ -2,19 +2,24 @@ import AppLayout from '@/Layouts/AppLayout';
 import { useForm, router } from '@inertiajs/react';
 import { useState } from 'react';
 
-export default function UserCreate({ auth }) {
-    const { data, setData, post, processing, errors } = useForm({
-        name: '',
-        email: '',
-        password: '',
-        role: 'polling-officer',
+export default function UserEdit({ auth, user, roles, pollingStations, wards, constituencies, adminAreas, parties }) {
+    const { data, setData, put, processing, errors } = useForm({
+        name: user.name || '',
+        email: user.email || '',
+        status: user.status || 'active',
+        role: user.roles && user.roles.length > 0 ? user.roles[0].name : 'polling-officer',
         polling_station_id: '',
         ward_id: '',
         constituency_id: '',
         admin_area_id: '',
+        party_id: '',
+        polling_station_ids: [],
+        designation: '',
+        organization: '',
+        monitor_type: 'domestic',
     });
 
-    const [selectedRole, setSelectedRole] = useState('polling-officer');
+    const [selectedRole, setSelectedRole] = useState(data.role);
 
     const handleRoleChange = (role) => {
         setSelectedRole(role);
@@ -23,7 +28,7 @@ export default function UserCreate({ auth }) {
 
     const handleSubmit = (e) => {
         e.preventDefault();
-        post('/admin/users');
+        put(`/admin/users/${user.id}`);
     };
 
     const renderRoleSpecificFields = () => {
@@ -31,61 +36,73 @@ export default function UserCreate({ auth }) {
             case 'polling-officer':
                 return (
                     <div>
-                        <label className="block text-gray-300 mb-2 font-semibold">Assign to Polling Station (Optional)</label>
+                        <label className="block text-gray-300 mb-2 font-semibold">Assign to Polling Station</label>
                         <select
                             value={data.polling_station_id}
                             onChange={(e) => setData('polling_station_id', e.target.value)}
                             className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white"
                         >
                             <option value="">Select Polling Station</option>
-                            {/* Polling stations would be passed as props */}
+                            {pollingStations.map((station) => (
+                                <option key={station.id} value={station.id}>
+                                    {station.code} - {station.name}
+                                </option>
+                            ))}
                         </select>
-                        <p className="text-gray-400 text-sm mt-1">You can assign polling stations later from the user management page</p>
                     </div>
                 );
             case 'ward-approver':
                 return (
                     <div>
-                        <label className="block text-gray-300 mb-2 font-semibold">Assign to Ward (Optional)</label>
+                        <label className="block text-gray-300 mb-2 font-semibold">Assign to Ward</label>
                         <select
                             value={data.ward_id}
                             onChange={(e) => setData('ward_id', e.target.value)}
                             className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white"
                         >
                             <option value="">Select Ward</option>
-                            {/* Wards would be passed as props */}
+                            {wards.map((ward) => (
+                                <option key={ward.id} value={ward.id}>
+                                    {ward.name}
+                                </option>
+                            ))}
                         </select>
-                        <p className="text-gray-400 text-sm mt-1">You can assign wards later from the user management page</p>
                     </div>
                 );
             case 'constituency-approver':
                 return (
                     <div>
-                        <label className="block text-gray-300 mb-2 font-semibold">Assign to Constituency (Optional)</label>
+                        <label className="block text-gray-300 mb-2 font-semibold">Assign to Constituency</label>
                         <select
                             value={data.constituency_id}
                             onChange={(e) => setData('constituency_id', e.target.value)}
                             className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white"
                         >
                             <option value="">Select Constituency</option>
-                            {/* Constituencies would be passed as props */}
+                            {constituencies.map((constituency) => (
+                                <option key={constituency.id} value={constituency.id}>
+                                    {constituency.name}
+                                </option>
+                            ))}
                         </select>
-                        <p className="text-gray-400 text-sm mt-1">You can assign constituencies later from the user management page</p>
                     </div>
                 );
             case 'admin-area-approver':
                 return (
                     <div>
-                        <label className="block text-gray-300 mb-2 font-semibold">Assign to Admin Area (Optional)</label>
+                        <label className="block text-gray-300 mb-2 font-semibold">Assign to Admin Area</label>
                         <select
                             value={data.admin_area_id}
                             onChange={(e) => setData('admin_area_id', e.target.value)}
                             className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white"
                         >
                             <option value="">Select Admin Area</option>
-                            {/* Admin areas would be passed as props */}
+                            {adminAreas.map((area) => (
+                                <option key={area.id} value={area.id}>
+                                    {area.name}
+                                </option>
+                            ))}
                         </select>
-                        <p className="text-gray-400 text-sm mt-1">You can assign admin areas later from the user management page</p>
                     </div>
                 );
             default:
@@ -97,7 +114,7 @@ export default function UserCreate({ auth }) {
         <AppLayout user={auth?.user}>
             <div className="container mx-auto px-4 py-8 max-w-2xl">
                 <div className="flex items-center justify-between mb-6">
-                    <h1 className="text-3xl font-bold text-white">Add New User</h1>
+                    <h1 className="text-3xl font-bold text-white">Edit User: {user.name}</h1>
                     <button
                         onClick={() => router.visit('/admin/users')}
                         className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg"
@@ -133,15 +150,17 @@ export default function UserCreate({ auth }) {
                         </div>
 
                         <div>
-                            <label className="block text-gray-300 mb-2 font-semibold">Password</label>
-                            <input
-                                type="password"
-                                value={data.password}
-                                onChange={(e) => setData('password', e.target.value)}
+                            <label className="block text-gray-300 mb-2 font-semibold">Status</label>
+                            <select
+                                value={data.status}
+                                onChange={(e) => setData('status', e.target.value)}
                                 className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white"
-                                placeholder="••••••••"
-                            />
-                            {errors.password && <p className="text-red-400 text-sm mt-1">{errors.password}</p>}
+                            >
+                                <option value="active">Active</option>
+                                <option value="inactive">Inactive</option>
+                                <option value="suspended">Suspended</option>
+                            </select>
+                            {errors.status && <p className="text-red-400 text-sm mt-1">{errors.status}</p>}
                         </div>
 
                         <div>
@@ -151,13 +170,11 @@ export default function UserCreate({ auth }) {
                                 onChange={(e) => handleRoleChange(e.target.value)}
                                 className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white"
                             >
-                                <option value="polling-officer">Polling Station Officer</option>
-                                <option value="ward-approver">Ward Approver</option>
-                                <option value="constituency-approver">Constituency Approver</option>
-                                <option value="admin-area-approver">Admin Area Approver</option>
-                                <option value="iec-chairman">IEC Chairman</option>
-                                <option value="party-representative">Party Representative</option>
-                                <option value="election-monitor">Election Monitor</option>
+                                {roles.map((role) => (
+                                    <option key={role} value={role}>
+                                        {role.replace('-', ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                                    </option>
+                                ))}
                             </select>
                             {errors.role && <p className="text-red-400 text-sm mt-1">{errors.role}</p>}
                         </div>
@@ -170,7 +187,7 @@ export default function UserCreate({ auth }) {
                                 disabled={processing}
                                 className="flex-1 px-6 py-3 bg-teal-600 hover:bg-teal-700 disabled:bg-teal-600 text-white font-bold rounded-lg"
                             >
-                                {processing ? 'Creating...' : 'Create User'}
+                                {processing ? 'Updating...' : 'Update User'}
                             </button>
                             <button
                                 type="button"

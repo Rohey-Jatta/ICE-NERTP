@@ -47,4 +47,14 @@ class User extends Authenticatable
     {
         return $this->hasMany(AuditLog::class);
     }
+
+    public function partyRepresentative()
+    {
+        return $this->hasOne(\App\Models\PartyRepresentative::class);
+    }
+
+    public function electionMonitor()
+    {
+        return $this->hasOne(ElectionMonitor::class);
+    }
 }

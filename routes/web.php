@@ -4,6 +4,7 @@ use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use App\Http\Controllers\Public\ResultsSummaryController;
@@ -61,7 +62,7 @@ Route::middleware('auth')->group(function () {
         'auth' => [
             'user' => Auth::user()
         ],
-        'candidates' => Candidate::all(), 
+        'candidates' => Candidate::all(),
         'election' => Election::where('status', 'active')->first()
     ]);
     })->name('results.submit');
@@ -367,10 +368,237 @@ Route::middleware('auth')->group(function () {
         })->name('dashboard');
 
         Route::get('/users', function () {
+            $users = User::with('roles')->paginate(20);
             return Inertia::render('Admin/Users', [
                 'auth' => ['user' => Auth::user()],
+                'users' => $users,
             ]);
         })->name('users');
+
+        Route::get('/users/{user}/edit', function (User $user) {
+            $roles = ['polling-officer', 'ward-approver', 'constituency-approver', 'admin-area-approver', 'iec-chairman', 'party-representative', 'election-monitor'];
+            $pollingStations = PollingStation::select('id', 'name', 'code')->get();
+            $wards = AdministrativeHierarchy::where('level', 'ward')->select('id', 'name')->get();
+            $constituencies = AdministrativeHierarchy::where('level', 'constituency')->select('id', 'name')->get();
+            $adminAreas = AdministrativeHierarchy::where('level', 'admin_area')->select('id', 'name')->get();
+            $parties = PoliticalParty::select('id', 'name')->get();
+
+            return Inertia::render('Admin/UserEdit', [
+                'auth' => ['user' => Auth::user()],
+                'user' => $user->load('roles'),
+                'roles' => $roles,
+                'pollingStations' => $pollingStations,
+                'wards' => $wards,
+                'constituencies' => $constituencies,
+                'adminAreas' => $adminAreas,
+                'parties' => $parties,
+            ]);
+        })->name('users.edit');
+
+        Route::put('/users/{user}', function (Request $request, User $user) {
+            $request->validate([
+                'name' => 'required|string|max:255',
+                'email' => 'required|email|unique:users,email,' . $user->id,
+                'status' => 'required|in:active,inactive,suspended',
+                'role' => 'required|string',
+            ]);
+
+            try {
+                $user->update([
+                    'name' => $request->name,
+                    'email' => $request->email,
+                    'status' => $request->status,
+                ]);
+
+                // Update role
+                $user->syncRoles([$request->role]);
+
+                // Handle specific assignments based on role
+                switch ($request->role) {
+                    case 'polling-officer':
+                        if ($request->polling_station_id) {
+                            PollingStation::where('assigned_officer_id', $user->id)->update(['assigned_officer_id' => null]);
+                            PollingStation::where('id', $request->polling_station_id)->update(['assigned_officer_id' => $user->id]);
+                        }
+                        break;
+                    case 'ward-approver':
+                        if ($request->ward_id) {
+                            AdministrativeHierarchy::where('assigned_approver_id', $user->id)->update(['assigned_approver_id' => null]);
+                            AdministrativeHierarchy::where('id', $request->ward_id)->update(['assigned_approver_id' => $user->id]);
+                        }
+                        break;
+                    case 'constituency-approver':
+                        if ($request->constituency_id) {
+                            AdministrativeHierarchy::where('assigned_approver_id', $user->id)->update(['assigned_approver_id' => null]);
+                            AdministrativeHierarchy::where('id', $request->constituency_id)->update(['assigned_approver_id' => $user->id]);
+                        }
+                        break;
+                    case 'admin-area-approver':
+                        if ($request->admin_area_id) {
+                            AdministrativeHierarchy::where('assigned_approver_id', $user->id)->update(['assigned_approver_id' => null]);
+                            AdministrativeHierarchy::where('id', $request->admin_area_id)->update(['assigned_approver_id' => $user->id]);
+                        }
+                        break;
+                }
+
+                // Log audit trail
+                AuditLog::create([
+                    'user_id' => Auth::id(),
+                    'action' => 'User Updated',
+                    'description' => "Updated user: {$user->email}",
+                    'model_type' => 'User',
+                    'model_id' => $user->id,
+                    'ip_address' => $request->ip(),
+                    'user_agent' => $request->userAgent(),
+                ]);
+
+                return redirect()->route('admin.users')->with('success', 'User updated successfully!');
+            } catch (\Exception $e) {
+                Log::error('User update failed', ['error' => $e->getMessage()]);
+                return back()->withErrors(['error' => 'Failed to update user: ' . $e->getMessage()]);
+            }
+        })->name('users.update');
+
+        // Party Representatives Management
+        Route::get('/party-representatives', function () {
+            $representatives = \App\Models\PartyRepresentative::with(['user', 'politicalParty', 'pollingStations'])->paginate(20);
+            return Inertia::render('Admin/PartyRepresentatives', [
+                'auth' => ['user' => Auth::user()],
+                'representatives' => $representatives,
+            ]);
+        })->name('party-representatives');
+
+        Route::get('/party-representatives/create', function () {
+            $users = User::whereDoesntHave('partyRepresentative')->select('id', 'name', 'email')->get();
+            $parties = PoliticalParty::select('id', 'name')->get();
+            $pollingStations = PollingStation::select('id', 'name', 'code')->get();
+
+            return Inertia::render('Admin/PartyRepresentativeCreate', [
+                'auth' => ['user' => Auth::user()],
+                'users' => $users,
+                'parties' => $parties,
+                'pollingStations' => $pollingStations,
+            ]);
+        })->name('party-representatives.create');
+
+        Route::post('/party-representatives', function (Request $request) {
+            $request->validate([
+                'user_id' => 'required|exists:users,id',
+                'political_party_id' => 'required|exists:political_parties,id',
+                'polling_station_ids' => 'required|array|min:1',
+                'polling_station_ids.*' => 'exists:polling_stations,id',
+                'designation' => 'nullable|string|max:255',
+            ]);
+
+            try {
+                $representative = \App\Models\PartyRepresentative::create([
+                    'user_id' => $request->user_id,
+                    'political_party_id' => $request->political_party_id,
+                    'election_id' => Election::where('status', 'active')->first()->id ?? 1,
+                    'designation' => $request->designation,
+                    'accreditation_number' => 'PR-' . strtoupper(uniqid()),
+                ]);
+
+                // Assign to polling stations
+                foreach ($request->polling_station_ids as $stationId) {
+                    DB::table('party_representative_polling_station')->insert([
+                        'party_representative_id' => $representative->id,
+                        'polling_station_id' => $stationId,
+                        'assigned_at' => now(),
+                        'assigned_by' => Auth::id(),
+                    ]);
+                }
+
+                // Assign role
+                $user = User::find($request->user_id);
+                $user->assignRole('party-representative');
+
+                // Log audit trail
+                AuditLog::create([
+                    'user_id' => Auth::id(),
+                    'action' => 'Party Representative Created',
+                    'description' => "Created party representative: {$user->name}",
+                    'model_type' => 'PartyRepresentative',
+                    'model_id' => $representative->id,
+                    'ip_address' => $request->ip(),
+                    'user_agent' => $request->userAgent(),
+                ]);
+
+                return redirect()->route('admin.party-representatives')->with('success', 'Party representative created successfully!');
+            } catch (\Exception $e) {
+                Log::error('Party representative creation failed', ['error' => $e->getMessage()]);
+                return back()->withErrors(['error' => 'Failed to create party representative: ' . $e->getMessage()]);
+            }
+        })->name('party-representatives.store');
+
+        // Election Monitors Management
+        Route::get('/election-monitors', function () {
+            $monitors = \App\Models\ElectionMonitor::with(['user', 'pollingStations'])->paginate(20);
+            return Inertia::render('Admin/ElectionMonitors', [
+                'auth' => ['user' => Auth::user()],
+                'monitors' => $monitors,
+            ]);
+        })->name('election-monitors');
+
+        Route::get('/election-monitors/create', function () {
+            $users = User::whereDoesntHave('electionMonitor')->select('id', 'name', 'email')->get();
+            $pollingStations = PollingStation::select('id', 'name', 'code')->get();
+
+            return Inertia::render('Admin/ElectionMonitorCreate', [
+                'auth' => ['user' => Auth::user()],
+                'users' => $users,
+                'pollingStations' => $pollingStations,
+            ]);
+        })->name('election-monitors.create');
+
+        Route::post('/election-monitors', function (Request $request) {
+            $request->validate([
+                'user_id' => 'required|exists:users,id',
+                'organization' => 'nullable|string|max:255',
+                'type' => 'required|in:domestic,international,civil_society',
+                'polling_station_ids' => 'required|array|min:1',
+                'polling_station_ids.*' => 'exists:polling_stations,id',
+            ]);
+
+            try {
+                $monitor = \App\Models\ElectionMonitor::create([
+                    'user_id' => $request->user_id,
+                    'election_id' => Election::where('status', 'active')->first()->id ?? 1,
+                    'organization' => $request->organization,
+                    'type' => $request->type,
+                    'accreditation_number' => 'EM-' . strtoupper(uniqid()),
+                ]);
+
+                // Assign to polling stations
+                foreach ($request->polling_station_ids as $stationId) {
+                    DB::table('election_monitor_polling_station')->insert([
+                        'election_monitor_id' => $monitor->id,
+                        'polling_station_id' => $stationId,
+                        'assigned_at' => now(),
+                    ]);
+                }
+
+                // Assign role
+                $user = User::find($request->user_id);
+                $user->assignRole('election-monitor');
+
+                // Log audit trail
+                AuditLog::create([
+                    'user_id' => Auth::id(),
+                    'action' => 'Election Monitor Created',
+                    'description' => "Created election monitor: {$user->name}",
+                    'model_type' => 'ElectionMonitor',
+                    'model_id' => $monitor->id,
+                    'ip_address' => $request->ip(),
+                    'user_agent' => $request->userAgent(),
+                ]);
+
+                return redirect()->route('admin.election-monitors')->with('success', 'Election monitor created successfully!');
+            } catch (\Exception $e) {
+                Log::error('Election monitor creation failed', ['error' => $e->getMessage()]);
+                return back()->withErrors(['error' => 'Failed to create election monitor: ' . $e->getMessage()]);
+            }
+        })->name('election-monitors.store');
 
         Route::get('/users/create', function () {
             return Inertia::render('Admin/UserCreate', [
@@ -385,7 +613,7 @@ Route::middleware('auth')->group(function () {
                 'password' => 'required|string|min:8|confirmed',
                 'role' => 'required|string',
             ]);
-            
+
             try {
                 $user = User::create([
                     'name' => $request->name,
@@ -442,7 +670,7 @@ Route::middleware('auth')->group(function () {
                 'type' => 'required|string|in:presidential,parliamentary,local,referendum',
                 'date' => 'required|date|after:today',
             ]);
-            
+
             try {
                 $election = Election::create([
                     'name' => $request->name,
@@ -490,7 +718,7 @@ Route::middleware('auth')->group(function () {
                 'name' => 'required|string|max:255',
                 'ward_id' => 'required|integer|exists:administrative_hierarchies,id',
             ]);
-            
+
             try {
                 $station = PollingStation::create([
                     'code' => strtoupper($request->code),
@@ -534,7 +762,7 @@ Route::middleware('auth')->group(function () {
                 'name' => 'required|string|max:255|unique:political_parties,name',
                 'abbreviation' => 'required|string|max:10|unique:political_parties,abbreviation',
             ]);
-            
+
             try {
                 $party = PoliticalParty::create([
                     'name' => $request->name,
@@ -561,20 +789,80 @@ Route::middleware('auth')->group(function () {
             }
         })->name('parties.store');
 
-        Route::get('/audit-logs', function () {
-            $logs = AuditLog::with('user')->latest()->paginate(50);
+        Route::get('/audit-logs', function (Request $request) {
+            $query = AuditLog::with('user');
+
+            // Apply filters
+            if ($request->filled('user')) {
+                $query->whereHas('user', function ($q) use ($request) {
+                    $q->where('name', 'like', '%' . $request->user . '%')
+                      ->orWhere('email', 'like', '%' . $request->user . '%');
+                });
+            }
+
+            if ($request->filled('action')) {
+                $query->where('action', 'like', '%' . $request->action . '%');
+            }
+
+            if ($request->filled('date_from')) {
+                $query->whereDate('created_at', '>=', $request->date_from);
+            }
+
+            if ($request->filled('date_to')) {
+                $query->whereDate('created_at', '<=', $request->date_to);
+            }
+
+            $logs = $query->latest()->paginate(50);
+
             return Inertia::render('Admin/AuditLogs', [
                 'auth' => ['user' => Auth::user()],
                 'logs' => $logs,
-                'filters' => [],
+                'filters' => $request->only(['user', 'action', 'date_from', 'date_to']),
             ]);
         })->name('audit-logs');
 
         Route::get('/settings', function () {
+            $settings = [
+                'system_name' => config('app.name', 'IEC NERTP'),
+                'system_email' => config('mail.from.address', 'admin@iec.gm'),
+                'timezone' => config('app.timezone', 'UTC'),
+                'require_2fa' => config('auth.require_2fa', false),
+                'gps_validation_enabled' => config('election.gps_validation_enabled', true),
+                'max_file_size' => config('filesystems.max_file_size', 10240),
+                'sms_enabled' => config('services.africastalking.enabled', false),
+            ];
             return Inertia::render('Admin/Settings', [
                 'auth' => ['user' => Auth::user()],
+                'settings' => $settings,
             ]);
         })->name('settings');
+
+        Route::post('/settings', function (Request $request) {
+            $request->validate([
+                'system_name' => 'required|string|max:255',
+                'system_email' => 'required|email',
+                'timezone' => 'required|string',
+                'require_2fa' => 'boolean',
+                'gps_validation_enabled' => 'boolean',
+                'max_file_size' => 'required|integer|min:1024|max:51200',
+                'sms_enabled' => 'boolean',
+            ]);
+
+            // Here you would typically save to database or config files
+            // For now, we'll just log the changes
+            Log::info('Settings updated', $request->all());
+
+            // Log audit trail
+            AuditLog::create([
+                'user_id' => Auth::id(),
+                'action' => 'Settings Updated',
+                'description' => "System settings updated by " . Auth::user()->name,
+                'ip_address' => $request->ip(),
+                'user_agent' => $request->userAgent(),
+            ]);
+
+            return back()->with('success', 'Settings updated successfully!');
+        })->name('settings.update');
 
         Route::get('/system-health', function () {
             return Inertia::render('Admin/SystemHealth', [

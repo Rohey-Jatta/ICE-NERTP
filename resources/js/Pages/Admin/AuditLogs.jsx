@@ -1,14 +1,36 @@
 import AppLayout from '@/Layouts/AppLayout';
+import { useForm, router } from '@inertiajs/react';
 import { useState } from 'react';
-
-// simple stub for filter functionality
-
 
 export default function AuditLogs({ auth, logs, filters }) {
     const [selectedLog, setSelectedLog] = useState(null);
 
-    const applyFilters = () => {
-        alert('Filters applied (stub)');
+    const { data, setData, get, processing } = useForm({
+        user: filters.user || '',
+        action: filters.action || '',
+        date_from: filters.date_from || '',
+        date_to: filters.date_to || '',
+    });
+
+    const applyFilters = (e) => {
+        e.preventDefault();
+        get('/admin/audit-logs', {
+            preserveState: true,
+            replace: true,
+        });
+    };
+
+    const clearFilters = () => {
+        setData({
+            user: '',
+            action: '',
+            date_from: '',
+            date_to: '',
+        });
+        router.get('/admin/audit-logs', {}, {
+            preserveState: false,
+            replace: true,
+        });
     };
 
     return (
@@ -16,36 +38,66 @@ export default function AuditLogs({ auth, logs, filters }) {
             <div className="container mx-auto px-4 py-8">
                 <div className="flex justify-between items-center mb-6">
                     <h1 className="text-3xl font-bold text-white">Audit Logs</h1>
-                    <a href="/admin/dashboard" className="px-4 py-2 bg-slate-700 text-white rounded-lg">
-                        ← Back to Admin
+                    <a href="/admin/dashboard" className="px-4 py-2 bg-blue-500 text-white rounded-lg">
+                        Back to Admin
                     </a>
                 </div>
 
                 {/* Filters */}
                 <div className="bg-slate-800/40 rounded-xl p-6 border border-slate-700/50 mb-6">
                     <h2 className="text-xl font-bold text-white mb-4">Filters</h2>
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                        <input
-                            type="text"
-                            placeholder="Search by user..."
-                            className="px-4 py-2 bg-slate-900/50 border border-slate-700 rounded-lg text-white"
-                        />
-                        <select className="px-4 py-2 bg-slate-900/50 border border-slate-700 rounded-lg text-white">
-                            <option>All Actions</option>
-                            <option>Login</option>
-                            <option>Result Submitted</option>
-                            <option>Result Approved</option>
-                            <option>Result Rejected</option>
-                            <option>User Created</option>
-                        </select>
-                        <input
-                            type="date"
-                            className="px-4 py-2 bg-slate-900/50 border border-slate-700 rounded-lg text-white"
-                        />
-                        <button onClick={applyFilters} className="px-4 py-2 bg-teal-700 hover:bg-teal-600 text-white rounded-lg">
-                            Apply Filters
-                        </button>
-                    </div>
+                    <form onSubmit={applyFilters} className="grid grid-cols-1 md:grid-cols-5 gap-4">
+                        <div>
+                            <input
+                                type="text"
+                                value={data.user}
+                                onChange={(e) => setData('user', e.target.value)}
+                                placeholder="Search by user name/email..."
+                                className="w-full px-4 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white"
+                            />
+                        </div>
+                        <div>
+                            <input
+                                type="text"
+                                value={data.action}
+                                onChange={(e) => setData('action', e.target.value)}
+                                placeholder="Filter by action..."
+                                className="w-full px-4 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white"
+                            />
+                        </div>
+                        <div>
+                            <input
+                                type="date"
+                                value={data.date_from}
+                                onChange={(e) => setData('date_from', e.target.value)}
+                                className="w-full px-4 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white"
+                            />
+                        </div>
+                        <div>
+                            <input
+                                type="date"
+                                value={data.date_to}
+                                onChange={(e) => setData('date_to', e.target.value)}
+                                className="w-full px-4 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white"
+                            />
+                        </div>
+                        <div className="flex gap-2">
+                            <button
+                                type="submit"
+                                disabled={processing}
+                                className="px-4 py-2 bg-teal-600 hover:bg-teal-700 disabled:bg-teal-600 text-white rounded-lg flex-1"
+                            >
+                                {processing ? 'Filtering...' : 'Apply'}
+                            </button>
+                            <button
+                                type="button"
+                                onClick={clearFilters}
+                                className="px-4 py-2 bg-slate-600 hover:bg-slate-700 text-white rounded-lg"
+                            >
+                                Clear
+                            </button>
+                        </div>
+                    </form>
                 </div>
 
                 {/* Audit Logs Table */}
