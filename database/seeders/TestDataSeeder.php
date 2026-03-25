@@ -242,14 +242,7 @@ class TestDataSeeder extends Seeder
             ]);
         }
 
-        $this->command->info("✓ Created sample result with vote breakdown");
-
-        $this->command->info("\n========================================");
-        $this->command->info("✅ TEST DATA SEEDING COMPLETE!");
-        $this->command->info("========================================\n");
-
-        $this->command->info("��� LOGIN CREDENTIALS FOR ALL ROLES:\n");
-
+        
         $this->command->table(
             ['Role', 'Email', 'Password', 'Phone'],
             [
@@ -264,7 +257,6 @@ class TestDataSeeder extends Seeder
             ]
         );
 
-        $this->command->info("\n⚠️  2FA CODES: Check Laravel logs during login");
-        $this->command->info("��� Run: docker-compose exec php tail -f storage/logs/laravel.log\n");
+        
     }
 }

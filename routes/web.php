@@ -39,6 +39,7 @@ require __DIR__.'/auth.php';
 Route::middleware('guest')->group(function () {
     Route::get('/auth/two-factor', [TwoFactorController::class, 'show'])->name('two-factor.show');
     Route::post('/auth/two-factor', [TwoFactorController::class, 'verify'])->name('two-factor.verify');
+    Route::post('/auth/two-factor/resend', [TwoFactorController::class, 'resend'])->name('two-factor.resend');
 });
 
 // Protected routes

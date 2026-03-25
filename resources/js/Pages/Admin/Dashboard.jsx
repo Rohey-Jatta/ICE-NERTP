@@ -27,120 +27,120 @@ export default function AdminDashboard({ auth, statistics, systemStatus }) {
                         <div className="text-gray-400 text-sm">Active Elections</div>
                     </div>
 
-                    <div className="bg-blue-600/40 rounded-xl p-6 border border-blue-300/50">
-                        <div className="text-2xl font-bold text-teal-300">{systemStatus?.status || 'Running'}</div>
+                    <div className="bg-slate-800/40 rounded-xl p-6 border border-pink-300/50">
+                        <div className="text-2xl font-bold text-white">{systemStatus?.status || 'Running'}</div>
                         <div className="text-gray-400 text-sm">System Status</div>
                     </div>
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    <div className="bg-slate-800/40 rounded-xl p-8 border border-slate-700/50">
+                    <div className="bg-slate-900/40 rounded-xl p-8 border border-slate-700/50">
                         <h2 className="text-2xl font-bold text-white mb-6">User Management</h2>
                         <div className="space-y-3">
                             <a
                                 href="/admin/users"
-                                className="block p-4 bg-pink-600 hover:bg-pink-700 rounded-lg transition-colors"
+                                className="block p-4 bg-slate-700 hover:bg-slate-600 rounded-lg transition-colors"
                             >
                                 <div className="flex items-center gap-3">
                                     <div className="text-2xl"></div>
                                     <div>
                                         <div className="font-bold text-white">Manage Users</div>
-                                        <div className="text-pink-200 text-sm">Create, edit, deactivate users</div>
+                                        <div className="text-gray-300 text-sm">Create, edit, deactivate users</div>
                                     </div>
                                 </div>
                             </a>
 
                             <a
                                 href="/admin/party-representatives"
-                                className="block p-4 bg-purple-600 hover:bg-purple-700 rounded-lg transition-colors"
+                                className="block p-4 bg-slate-700 hover:bg-slate-600 rounded-lg transition-colors"
                             >
                                 <div className="flex items-center gap-3">
                                     <div className="text-2xl"></div>
                                     <div>
                                         <div className="font-bold text-white">Party Representatives</div>
-                                        <div className="text-purple-200 text-sm">Manage party reps & assignments</div>
+                                        <div className="text-gray-300 text-sm">Manage party reps & assignments</div>
                                     </div>
                                 </div>
                             </a>
 
                             <a
                                 href="/admin/election-monitors"
-                                className="block p-4 bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors"
+                                className="block p-4 bg-slate-700 hover:bg-slate-600 rounded-lg transition-colors"
                             >
                                 <div className="flex items-center gap-3">
                                     <div className="text-2xl"></div>
                                     <div>
                                         <div className="font-bold text-white">Election Monitors</div>
-                                        <div className="text-indigo-200 text-sm">Manage monitors & accreditations</div>
+                                        <div className="text-gray-300 text-sm">Manage monitors & accreditations</div>
                                     </div>
                                 </div>
                             </a>
 
                             <a
                                 href="/admin/roles"
-                                className="block p-4 bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors"
+                                className="block p-4 bg-slate-700 hover:bg-slate-600 rounded-lg transition-colors"
                             >
                                 <div className="flex items-center gap-3">
                                     <div className="text-2xl"></div>
                                     <div>
                                         <div className="font-bold text-white">Roles & Permissions</div>
-                                        <div className="text-blue-300 text-sm">Manage role assignments</div>
+                                        <div className="text-slate-300 text-sm">Manage role assignments</div>
                                     </div>
                                 </div>
                             </a>
                         </div>
                     </div>
 
-                    <div className="bg-slate-800/40 rounded-xl p-8 border border-slate-700/50">
+                    <div className="bg-slate-900/40 rounded-xl p-8 border border-slate-800/50">
                         <h2 className="text-2xl font-bold text-white mb-6">Election Management</h2>
                         <div className="space-y-3">
                             <a
                                 href="/admin/elections"
-                                className="block p-4 bg-pink-600 hover:bg-pink-700 rounded-lg transition-colors"
+                                className="block p-4 bg-slate-600 hover:bg-slate-700 rounded-lg transition-colors"
                             >
                                 <div className="flex items-center gap-3">
                                     <div className="text-2xl"></div>
                                     <div>
                                         <div className="font-bold text-white">Manage Elections</div>
-                                        <div className="text-pink-200 text-sm">Create and configure elections</div>
+                                        <div className="text-gray-300 text-sm">Create and configure elections</div>
                                     </div>
                                 </div>
                             </a>
 
                             <a
                                 href="/admin/polling-stations"
-                                className="block p-4 bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors"
+                                className="block p-4 bg-slate-600 hover:bg-slate-700 rounded-lg transition-colors"
                             >
                                 <div className="flex items-center gap-3">
                                     <div className="text-2xl"></div>
                                     <div>
                                         <div className="font-bold text-white">Polling Stations</div>
-                                        <div className="text-blue-300 text-sm">Register and assign stations</div>
+                                        <div className="text-gray-300 text-sm">Register and assign stations</div>
                                     </div>
                                 </div>
                             </a>
 
                             <a
                                 href="/admin/parties"
-                                className="block p-4 bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors"
+                                className="block p-4 bg-slate-600 hover:bg-slate-700 rounded-lg transition-colors"
                             >
                                 <div className="flex items-center gap-3">
                                     <div className="text-2xl"></div>
                                     <div>
                                         <div className="font-bold text-white">Political Parties</div>
-                                        <div className="text-blue-300 text-sm">Register parties & candidates</div>
+                                        <div className="text-gray-300 text-sm">Register parties & candidates</div>
                                     </div>
                                 </div>
                             </a>
                         </div>
                     </div>
 
-                    <div className="bg-slate-800/40 rounded-xl p-8 border border-slate-700/50">
+                    <div className="bg-slate-900/40 rounded-xl p-8 border border-slate-800/50">
                         <h2 className="text-2xl font-bold text-white mb-6">System Settings</h2>
                         <div className="space-y-3">
                             <a
                                 href="/admin/audit-logs"
-                                className="block p-4 bg-pink-600 hover:bg-pink-700 rounded-lg transition-colors"
+                                className="block p-4 bg-slate-700 hover:bg-slate-600 rounded-lg transition-colors"
                             >
                                 <div className="flex items-center gap-3">
                                     <div className="text-2xl"></div>
@@ -166,12 +166,12 @@ export default function AdminDashboard({ auth, statistics, systemStatus }) {
                         </div>
                     </div>
 
-                    <div className="bg-slate-800/40 rounded-xl p-8 border border-slate-700/50">
+                    <div className="bg-slate-900/40 rounded-xl p-8 border border-slate-800/50">
                         <h2 className="text-2xl font-bold text-white mb-6">Monitoring</h2>
                         <div className="space-y-3">
                             <a
                                 href="/admin/system-health"
-                                className="block p-4 bg-slate-700 hover:bg-slate-600 rounded-lg transition-colors"
+                                className="block p-4 bg-slate-600 hover:bg-slate-700 rounded-lg transition-colors"
                             >
                                 <div className="flex items-center gap-3">
                                     <div className="text-2xl"></div>
@@ -184,7 +184,7 @@ export default function AdminDashboard({ auth, statistics, systemStatus }) {
 
                             <a
                                 href="/admin/backups"
-                                className="block p-4 bg-slate-700 hover:bg-slate-600 rounded-lg transition-colors"
+                                className="block p-4 bg-slate-600 hover:bg-slate-700 rounded-lg transition-colors"
                             >
                                 <div className="flex items-center gap-3">
                                     <div className="text-2xl"></div>

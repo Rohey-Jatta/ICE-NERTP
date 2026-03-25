@@ -10,7 +10,7 @@ export default function Results({ election, stats, candidates }) {
                         <h1 className="text-3xl font-bold text-white mb-4">No Results Available</h1>
                         <p className="text-pink-200 mb-6">Results will be published once voting concludes.</p>
                         <a href="/" className="inline-block px-6 py-3 bg-pink-600 text-white rounded-lg font-semibold hover:bg-pink-700 transition-colors">
-                            ← Back Home
+                            Back Home
                         </a>
                     </div>
                 </div>

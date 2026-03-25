@@ -105,7 +105,7 @@ export default function Login() {
                             disabled={processing}
                             className="w-full py-3 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 disabled:from-blue-400 disabled:to-blue-500 text-white font-semibold rounded-lg transition-all shadow-lg hover:shadow-xl disabled:cursor-not-allowed"
                         >
-                            {processing ? 'Signing in...' : 'Sign in →'}
+                            {processing ? 'Signing in...' : 'Sign in'}
                         </button>
                     </form>
 

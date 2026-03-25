@@ -28,7 +28,7 @@ export default function Users({ auth, users = [] }) {
                 <div className="flex justify-between items-center mb-6">
                     <h1 className="text-3xl font-bold text-white">User Management</h1>
                     <button type="button" onClick={handleAddUser} className="px-6 py-3 bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-lg cursor-pointer">
-                        + Add New User
+                        Add New User
                     </button>
                 </div>
 

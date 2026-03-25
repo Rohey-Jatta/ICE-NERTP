@@ -31,14 +31,49 @@ class TwoFactorController extends Controller
             return redirect()->route('login');
         }
 
-        // Send SMS if not already sent for this session
-        if (!session('2fa_sms_sent')) {
+        // If this is the first visit or the code previously expired, create a new code and send SMS.
+        $expiresAt = session('2fa_expires_at') ? now()->createFromTimestamp(session('2fa_expires_at')) : null;
+
+        if (!session('2fa_sms_sent') || !$expiresAt || now()->greaterThanOrEqualTo($expiresAt)) {
             $code = $this->twoFactorService->generateCode($user);
             $this->twoFactorService->sendCode($user, $code);
-            session(['2fa_sms_sent' => true]);
+
+            $expiresAt = now()->addMinutes(10);
+            session([
+                '2fa_sms_sent' => true,
+                '2fa_expires_at' => $expiresAt->timestamp,
+            ]);
         }
 
-        return Inertia::render('Auth/TwoFactor');
+        return Inertia::render('Auth/TwoFactor', [
+            'expiresAt' => session('2fa_expires_at'),
+            'status' => session('status'),
+        ]);
+    }
+
+    public function resend(Request $request)
+    {
+        if (!session('2fa_user_id')) {
+            return redirect()->route('login');
+        }
+
+        $userId = session('2fa_user_id');
+        $user = User::find($userId);
+
+        if (!$user) {
+            return redirect()->route('login');
+        }
+
+        $code = $this->twoFactorService->generateCode($user);
+        $this->twoFactorService->sendCode($user, $code);
+
+        $expiresAt = now()->addMinutes(10);
+        session([
+            '2fa_sms_sent' => true,
+            '2fa_expires_at' => $expiresAt->timestamp,
+        ]);
+
+        return back()->with('status', 'A new verification code has been sent to your phone.');
     }
 
     public function verify(Request $request)
@@ -57,13 +92,21 @@ class TwoFactorController extends Controller
             return back()->withErrors(['code' => 'User not found.']);
         }
 
+        // Check for expiry before code match
+        $expiresAt = session('2fa_expires_at') ? now()->createFromTimestamp(session('2fa_expires_at')) : null;
+
+        if (!$expiresAt || now()->greaterThan($expiresAt)) {
+            session()->forget(['2fa_user_id', '2fa_sms_sent', '2fa_expires_at']);
+            return back()->withErrors(['code' => 'Verification code has expired. Please request a new code.']);
+        }
+
         // Verify code
         if ($this->twoFactorService->verifyCode($user, $request->code)) {
             // Login user
             Auth::login($user);
             $request->session()->regenerate();
-            session()->forget(['2fa_user_id', '2fa_sms_sent']);
-            
+            session()->forget(['2fa_user_id', '2fa_sms_sent', '2fa_expires_at']);
+
             // Redirect based on role
             return $this->redirectByRole($user);
         }
@@ -75,7 +118,7 @@ class TwoFactorController extends Controller
     {
         // Get user's primary role
         $role = $user->roles->first();
-        
+
         if (!$role) {
             return redirect('/dashboard');
         }
