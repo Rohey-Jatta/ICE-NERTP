@@ -35,7 +35,7 @@ export default function ElectionMonitorCreate({ auth, users, pollingStations }) 
                         onClick={() => router.visit('/admin/election-monitors')}
                         className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg"
                     >
-                        ← Back to Monitors
+                        Back to Monitors
                     </button>
                 </div>
 

@@ -448,7 +448,8 @@ erDiagram
         string code
         string name
         int ward_id FK
-        point location
+        int latitude
+        int longitude
         int assigned_officer_id FK
     }
     
@@ -456,7 +457,9 @@ erDiagram
         int id PK
         int polling_station_id FK
         int candidate_id FK
+        int total registered votes
         int votes
+        int invalid votes
         int turnout
         timestamp submitted_at
         int submitted_by FK
@@ -490,6 +493,7 @@ erDiagram
         json new_values
         string ip_address
         timestamp created_at
+        timestamp updated_at
     }
     
     devices {

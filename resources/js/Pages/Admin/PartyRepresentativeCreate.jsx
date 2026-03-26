@@ -35,7 +35,7 @@ export default function PartyRepresentativeCreate({ auth, users, parties, pollin
                         onClick={() => router.visit('/admin/party-representatives')}
                         className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg"
                     >
-                        ← Back to Representatives
+                        Back to Representatives
                     </button>
                 </div>
 

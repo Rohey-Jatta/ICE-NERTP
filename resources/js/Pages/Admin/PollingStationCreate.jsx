@@ -22,7 +22,7 @@ export default function PollingStationCreate({ auth, wards = [] }) {
                         onClick={() => router.visit('/admin/polling-stations')}
                         className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg"
                     >
-                        ← Back to Polling Stations
+                        Back to Polling Stations
                     </button>
                 </div>
 

@@ -242,7 +242,7 @@ class TestDataSeeder extends Seeder
             ]);
         }
 
-        
+
         $this->command->table(
             ['Role', 'Email', 'Password', 'Phone'],
             [
@@ -257,6 +257,6 @@ class TestDataSeeder extends Seeder
             ]
         );
 
-        
+
     }
 }

@@ -46,12 +46,12 @@ export default function AdminAreaApprovalQueue({ auth, constituencyResults = [] 
 
                                 <div className="flex gap-3">
                                     <button onClick={() => handleCertify(constituency.id)} className="flex-1 px-6 py-3 bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-lg">
-                                        ✓ Certify at Admin Area Level
+                                       Certify at Admin Area Level
                                     </button>
-                                    <button onClick={() => handleReject(constituency.id)} className="flex-1 px-6 py-3 bg-red-600 hover:bg-red-700 text-white font-bold rounded-lg">
-                                        ✗ Reject & Return
+                                    <button onClick={() => handleReject(constituency.id)} className="flex-1 px-6 py-3 bg-red-500 hover:bg-red-700 text-white font-bold rounded-lg">
+                                        Reject & Return
                                     </button>
-                                    <button onClick={() => handleView(constituency.id)} className="px-6 py-3 bg-slate-700 hover:bg-slate-600 text-white font-bold rounded-lg">
+                                    <button onClick={() => handleView(constituency.id)} className="px-6 py-3 bg-teal-700 hover:bg-teal-600 text-white font-bold rounded-lg">
                                         View Full Details
                                     </button>
                                 </div>
