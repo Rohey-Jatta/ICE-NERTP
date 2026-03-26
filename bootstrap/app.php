@@ -2,6 +2,7 @@
 
 use App\Http\Middleware\EnsureDeviceBound;
 use App\Http\Middleware\EnsureGpsValid;
+use App\Http\Middleware\HandleInertiaRequests;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -14,10 +15,15 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        //Register Inertia middleware
+        $middleware->web(append: [
+            HandleInertiaRequests::class,
+        ]);
+
         // Register middleware aliases for use in routes
         $middleware->alias([
-            'role' => \Spatie\Permission\Middleware\RoleMiddleware::class,
-            'permission' => \Spatie\Permission\Middleware\PermissionMiddleware::class,
+            'role'         => \Spatie\Permission\Middleware\RoleMiddleware::class,
+            'permission'   => \Spatie\Permission\Middleware\PermissionMiddleware::class,
             'device.bound' => EnsureDeviceBound::class,
             'gps.validate' => EnsureGpsValid::class,
         ]);

@@ -1,22 +1,17 @@
+@import 'leaflet/dist/leaflet.css';
 @import 'tailwindcss/base';
 @import 'tailwindcss/components';
 @import 'tailwindcss/utilities';
 
-/* SLOW, NATURAL SPARKLE ANIMATION */
+/* ── Floating star/sparkle animation ───────────────────────────────── */
 @keyframes float {
     0% {
         transform: translateY(0) translateX(0);
         opacity: 0;
     }
-    5% {
-        opacity: 0.6;
-    }
-    50% {
-        opacity: 0.8;
-    }
-    95% {
-        opacity: 0.6;
-    }
+    5%   { opacity: 0.6; }
+    50%  { opacity: 0.8; }
+    95%  { opacity: 0.6; }
     100% {
         transform: translateY(-100vh) translateX(30px);
         opacity: 0;
@@ -27,7 +22,7 @@
     animation: float linear infinite;
 }
 
-/* Slower pulse for orbs */
+/* ── Slow background orb pulse ─────────────────────────────────────── */
 @keyframes slow-pulse {
     0%, 100% {
         opacity: 0.3;
