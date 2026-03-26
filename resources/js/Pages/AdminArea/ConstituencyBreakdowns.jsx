@@ -14,19 +14,19 @@ export default function ConstituencyBreakdowns({ auth, constituencies = [], stat
                 {/* Summary Cards */}
                 {Object.keys(stats).length > 0 && (
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-                        <div className="bg-slate-800/40 rounded-xl p-6 border border-slate-700/50">
+                        <div className="bg-slate-600/40 rounded-xl p-6 border border-slate-500/50">
                             <div className="text-gray-400 text-sm mb-2">Total Constituencies</div>
                             <div className="text-white font-bold text-3xl">{stats.total || 0}</div>
                         </div>
-                        <div className="bg-teal-600/20 border border-teal-500/50 rounded-xl p-6">
-                            <div className="text-teal-300 text-sm mb-2">Certified</div>
+                        <div className="bg-slate-600/20 border border-slate-500/50 rounded-xl p-6">
+                            <div className="text-slate-300 text-sm mb-2">Certified</div>
                             <div className="text-white font-bold text-3xl">{stats.certified || 0}</div>
                         </div>
-                        <div className="bg-amber-600/20 border border-amber-500/50 rounded-xl p-6">
-                            <div className="text-amber-300 text-sm mb-2">Pending</div>
+                        <div className="bg-slate-600/20 border border-slate-500/50 rounded-xl p-6">
+                            <div className="text-slate-300 text-sm mb-2">Pending</div>
                             <div className="text-white font-bold text-3xl">{stats.pending || 0}</div>
                         </div>
-                        <div className="bg-slate-800/40 rounded-xl p-6 border border-slate-700/50">
+                        <div className="bg-slate-600/40 rounded-xl p-6 border border-slate-500/50">
                             <div className="text-gray-400 text-sm mb-2">Total Votes</div>
                             <div className="text-white font-bold text-3xl">{stats.totalVotes?.toLocaleString() || 0}</div>
                         </div>
@@ -60,8 +60,8 @@ export default function ConstituencyBreakdowns({ auth, constituencies = [], stat
                                             <td className="py-4 text-center">
                                                 <span className={`px-3 py-1 rounded-full text-sm ${
                                                     c.status === 'Certified'
-                                                        ? 'bg-teal-500/20 text-teal-300'
-                                                        : 'bg-amber-500/20 text-amber-300'
+                                                        ? 'bg-slate-500/20 text-slate-300'
+                                                        : 'bg-slate-500/20 text-slate-300'
                                                 }`}>
                                                     {c.status}
                                                 </span>
@@ -69,7 +69,7 @@ export default function ConstituencyBreakdowns({ auth, constituencies = [], stat
                                             <td className="py-4 text-center">
                                                 <button
                                                     onClick={() => handleView(c.name)}
-                                                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm"
+                                                    className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-sm"
                                                 >
                                                     View Details
                                                 </button>

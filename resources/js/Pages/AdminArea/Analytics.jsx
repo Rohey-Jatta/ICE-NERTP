@@ -8,19 +8,19 @@ export default function AdminAreaAnalytics({ auth, stats = {}, constituencies = 
 
                 {/* Stats Grid */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-                    <div className="bg-gradient-to-br from-blue-600 to-blue-800 rounded-xl p-6 text-white">
+                    <div className="bg-gradient-to-br from-slate-500 to-slate-700 rounded-xl p-6 text-white">
                         <div className="text-sm opacity-90 mb-2">Total Constituencies</div>
                         <div className="text-4xl font-bold">{stats.totalConstituencies || 0}</div>
                     </div>
-                    <div className="bg-gradient-to-br from-teal-600 to-teal-800 rounded-xl p-6 text-white">
+                    <div className="bg-gradient-to-br from-slate-800 to-slate-600 rounded-xl p-6 text-white">
                         <div className="text-sm opacity-90 mb-2">Certified</div>
                         <div className="text-4xl font-bold">{stats.certified || 0}</div>
                     </div>
-                    <div className="bg-gradient-to-br from-purple-600 to-purple-800 rounded-xl p-6 text-white">
+                    <div className="bg-gradient-to-br from-slate-600 to-slate-800 rounded-xl p-6 text-white">
                         <div className="text-sm opacity-90 mb-2">Total Wards</div>
                         <div className="text-4xl font-bold">{stats.totalWards || 0}</div>
                     </div>
-                    <div className="bg-gradient-to-br from-pink-600 to-pink-800 rounded-xl p-6 text-white">
+                    <div className="bg-gradient-to-br from-slate-700 to-slate-500 rounded-xl p-6 text-white">
                         <div className="text-sm opacity-90 mb-2">Total Votes</div>
                         <div className="text-4xl font-bold">{stats.totalVotes?.toLocaleString() || 0}</div>
                     </div>
@@ -28,7 +28,7 @@ export default function AdminAreaAnalytics({ auth, stats = {}, constituencies = 
 
                 {/* Progress Chart */}
                 {constituencies.length > 0 && (
-                    <div className="bg-slate-800/40 rounded-xl p-6 border border-slate-700/50 mb-6">
+                    <div className="bg-slate-700/40 rounded-xl p-6 border border-slate-600/50 mb-6">
                         <h2 className="text-xl font-bold text-white mb-6">Certification Progress by Constituency</h2>
                         <div className="space-y-4">
                             {constituencies.map((constituency, i) => (
