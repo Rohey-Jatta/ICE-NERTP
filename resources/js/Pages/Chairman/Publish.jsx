@@ -26,7 +26,7 @@ export default function Publish({ auth, readinessCheck = {}, summary = {} }) {
                 </div>
 
                 {/* Publication Readiness Check */}
-                <div className="bg-slate-800/40 rounded-xl p-6 border border-slate-700/50 mb-6">
+                <div className="bg-slate-800/40 rounded-xl p-6 border border-pink-300/50 mb-6">
                     <h2 className="text-xl font-bold text-white mb-4">Publication Readiness</h2>
 
                     <div className="space-y-4">
@@ -72,7 +72,7 @@ export default function Publish({ auth, readinessCheck = {}, summary = {} }) {
 
                 {/* Certification Summary */}
                 {Object.keys(summary).length > 0 && (
-                    <div className="bg-slate-800/40 rounded-xl p-6 border border-slate-700/50 mb-6">
+                    <div className="bg-slate-800/40 rounded-xl p-6 border border-pink-300/50 mb-6">
                         <h2 className="text-xl font-bold text-white mb-4">Final Certification Summary</h2>
 
                         <div className="grid grid-cols-2 gap-4">
@@ -89,15 +89,15 @@ export default function Publish({ auth, readinessCheck = {}, summary = {} }) {
                 )}
 
                 {/* Confirmation Section */}
-                <div className="bg-slate-800/40 rounded-xl p-6 border border-slate-700/50 mb-6">
+                <div className="bg-slate-800/40 rounded-xl p-6 border border-pink-300/50 mb-6">
                     <h2 className="text-xl font-bold text-white mb-4">Confirmation Required</h2>
 
                     <p className="text-gray-300 mb-4">
                         To publish the final results, type the following phrase exactly:
                     </p>
 
-                    <div className="bg-amber-500/20 border border-amber-500/50 rounded-lg p-4 mb-4">
-                        <p className="text-amber-300 font-mono font-bold text-center">
+                    <div className="bg-red-500/20 border border-red-500/50 rounded-lg p-4 mb-4">
+                        <p className="text-red-300 font-mono font-bold text-center">
                             PUBLISH FINAL RESULTS
                         </p>
                     </div>
@@ -113,9 +113,9 @@ export default function Publish({ auth, readinessCheck = {}, summary = {} }) {
                     <button
                         onClick={handlePublish}
                         disabled={publishConfirm !== 'PUBLISH FINAL RESULTS' || processing}
-                        className="w-full px-8 py-4 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 disabled:from-gray-600 disabled:to-gray-700 text-white font-bold rounded-lg shadow-lg text-lg disabled:cursor-not-allowed"
+                        className="w-full px-8 py-4 bg-gradient-to-r from-green-500 to-green-700 hover:from-green-700 hover:to-green-500 disabled:from-red-500 disabled:to-red-600 text-white font-bold rounded-lg shadow-lg text-lg disabled:cursor-not-allowed"
                     >
-                        {processing ? 'Publishing...' : '🚀 PUBLISH FINAL RESULTS TO PUBLIC'}
+                        {processing ? 'Publishing...' : 'PUBLISH FINAL RESULTS TO PUBLIC'}
                     </button>
                 </div>
             </div>

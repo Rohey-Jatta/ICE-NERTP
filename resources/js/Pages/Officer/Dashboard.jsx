@@ -12,12 +12,10 @@ export default function OfficerDashboard({ auth, station, submissions }) {
                         <div className="text-2xl font-bold text-white">{station?.name || 'N/A'}</div>
                         <div className="text-gray-400 text-sm">Your Polling Station</div>
                     </div>
-
                     <div className="bg-slate-800/40 rounded-xl p-6 border border-pink-300/50">
                         <div className="text-2xl font-bold text-white">{station?.registered_voters || 0}</div>
                         <div className="text-gray-400 text-sm">Registered Voters</div>
                     </div>
-
                     <div className="bg-slate-800/40 rounded-xl p-6 border border-pink-300/50">
                         <div className="text-2xl font-bold text-white">{submissions?.length || 0}</div>
                         <div className="text-gray-400 text-sm">Submissions</div>
@@ -27,20 +25,14 @@ export default function OfficerDashboard({ auth, station, submissions }) {
                 <div className="bg-slate-800/40 rounded-xl p-8 border border-slate-700/50">
                     <h2 className="text-2xl font-bold text-white mb-6">Quick Actions</h2>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <a
-                            href="/officer/results/submit"
-                            className="p-6 bg-pink-600 hover:bg-pink-700 rounded-lg transition-colors">
-
+                        <Link href="/officer/results/submit" className="p-6 bg-pink-600 hover:bg-pink-700 rounded-lg transition-colors block">
                             <div className="text-xl font-bold text-white">Submit Results</div>
                             <div className="text-pink-200 text-sm">Enter vote counts</div>
-                        </a>
-
-                        <a
-                            href="/officer/submissions"
-                            className="p-6 bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors">
+                        </Link>
+                        <Link href="/officer/submissions" className="p-6 bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors block">
                             <div className="text-xl font-bold text-white">My Submissions</div>
                             <div className="text-blue-300 text-sm">View submitted results</div>
-                        </a>
+                        </Link>
                     </div>
                 </div>
             </div>

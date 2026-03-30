@@ -9,34 +9,30 @@ export default function ChairmanDashboard({ auth, pendingNational, statistics, r
                 <p className="text-gray-400 mb-8">National Election Oversight & Final Certification</p>
 
                 <div className="grid grid-cols-1 md:grid-cols-5 gap-6 mb-8">
-                    <div className="bg-amber-900/40 rounded-xl p-6 border border-amber-700/50">
+                    <div className="bg-slate-800/40 rounded-xl p-6 border border-slate-300/50">
                         <div className="text-4xl mb-2"></div>
-                        <div className="text-2xl font-bold text-amber-300">{pendingNational || 0}</div>
-                        <div className="text-gray-400 text-sm">Awaiting National Certification</div>
+                        <div className="text-2xl font-bold text-white flex-center">{pendingNational || 0}</div>
+                        <div className="text-pink-100 text-sm">Awaiting National Certification</div>
                     </div>
 
-                    <div className="bg-teal-900/40 rounded-xl p-6 border border-teal-700/50">
-                        <div className="text-4xl mb-2">✓</div>
-                        <div className="text-2xl font-bold text-teal-300">{statistics?.nationallyCertified || 0}</div>
-                        <div className="text-gray-400 text-sm">Nationally Certified</div>
+                    <div className="bg-slate-800/40 rounded-xl p-6 border border-slate-300/50">
+                        <div className="text-2xl font-bold text-white">{statistics?.nationallyCertified || 0}</div>
+                        <div className="text-pink-100 text-sm">Nationally Certified</div>
                     </div>
 
-                    <div className="bg-slate-700/40 rounded-xl p-6 border border-slate-600/50">
-                        <div className="text-4xl mb-2"></div>
+                    <div className="bg-slate-800/40 rounded-xl p-6 border border-slate-300/50">
                         <div className="text-2xl font-bold text-white">{statistics?.totalStations || 0}</div>
-                        <div className="text-gray-400 text-sm">Total Stations</div>
+                        <div className="text-pink-100 text-sm">Total Stations</div>
                     </div>
 
-                    <div className="bg-slate-700/40 rounded-xl p-6 border border-slate-600/50">
-                        <div className="text-4xl mb-2"></div>
+                    <div className="bg-slate-800/40 rounded-xl p-6 border border-slate-300/50">
                         <div className="text-2xl font-bold text-white">{statistics?.totalVoters?.toLocaleString() || 0}</div>
-                        <div className="text-gray-400 text-sm">Registered Voters</div>
+                        <div className="text-pink-100 text-sm">Registered Voters</div>
                     </div>
 
-                    <div className="bg-slate-700/40 rounded-xl p-6 border border-slate-600/50">
-                        <div className="text-4xl mb-2"></div>
+                    <div className="bg-slate-800/40 rounded-xl p-6 border border-slate-300/50">
                         <div className="text-2xl font-bold text-white">{statistics?.nationalProgress || 0}%</div>
-                        <div className="text-gray-400 text-sm">National Progress</div>
+                        <div className="text-pink-100 text-sm">National Progress</div>
                     </div>
                 </div>
 
@@ -46,13 +42,13 @@ export default function ChairmanDashboard({ auth, pendingNational, statistics, r
                         <div className="space-y-3">
                             <Link
                                 href="/chairman/national-queue"
-                                className="block p-4 bg-teal-700 hover:bg-teal-600 rounded-lg transition-colors"
+                                className="block p-4 bg-slate-700 hover:bg-slate-600 rounded-lg transition-colors"
                             >
                                 <div className="flex items-center gap-3">
                                     <div className="text-2xl"></div>
                                     <div>
                                         <div className="font-bold text-white">National Certification Queue</div>
-                                        <div className="text-teal-200 text-sm">{pendingNational} results awaiting final approval</div>
+                                        <div className="text-gray-300 text-sm">{pendingNational} results awaiting final approval</div>
                                     </div>
                                 </div>
                             </Link>
@@ -103,7 +99,7 @@ export default function ChairmanDashboard({ auth, pendingNational, statistics, r
                         <div className="space-y-3 max-h-80 overflow-y-auto">
                             {recentActivity?.length > 0 ? (
                                 recentActivity.map((activity, i) => (
-                                    <div key={i} className="p-3 bg-slate-900/50 rounded-lg border border-slate-700/30">
+                                    <div key={i} className="p-3 bg-slate-900/50 rounded-lg border border-slate-500/30">
                                         <div className="text-sm text-white">{activity.action}</div>
                                         <div className="text-xs text-gray-400 mt-1">{activity.time}</div>
                                     </div>

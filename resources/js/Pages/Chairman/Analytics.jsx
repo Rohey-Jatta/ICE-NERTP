@@ -8,23 +8,23 @@ export default function ChairmanAnalytics({ auth, nationalStats = {}, regionalBr
 
                 {/* National Summary */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
-                    <div className="bg-gradient-to-br from-blue-600 to-blue-800 rounded-xl p-6 text-white shadow-lg">
+                    <div className="bg-gradient-to-br from-slate-300 to-slate-800 rounded-xl p-6 text-gteal-800 shadow-lg">
                         <div className="text-sm opacity-90 mb-2">Total Polling Stations</div>
                         <div className="text-4xl font-bold">{nationalStats.totalStations?.toLocaleString() || 0}</div>
                     </div>
-                    <div className="bg-gradient-to-br from-teal-600 to-teal-800 rounded-xl p-6 text-white shadow-lg">
+                    <div className="bg-gradient-to-br from-slate-400 to-slate-800 rounded-xl p-6 text-gteal-700 shadow-lg">
                         <div className="text-sm opacity-90 mb-2">Total Registered Voters</div>
                         <div className="text-4xl font-bold">{nationalStats.registeredVoters?.toLocaleString() || 0}</div>
                     </div>
-                    <div className="bg-gradient-to-br from-green-600 to-green-800 rounded-xl p-6 text-white shadow-lg">
+                    <div className="bg-gradient-to-br from-slate-400 to-slate-800 rounded-xl p-6 text-gteal-800 shadow-lg">
                         <div className="text-sm opacity-90 mb-2">Total Votes Cast</div>
                         <div className="text-4xl font-bold">{nationalStats.votesCast?.toLocaleString() || 0}</div>
                     </div>
-                    <div className="bg-gradient-to-br from-purple-600 to-purple-800 rounded-xl p-6 text-white shadow-lg">
+                    <div className="bg-gradient-to-br from-slate-400 to-slate-800 rounded-xl p-6 text-gteal-800 shadow-lg">
                         <div className="text-sm opacity-90 mb-2">National Turnout</div>
                         <div className="text-4xl font-bold">{nationalStats.turnout || 0}%</div>
                     </div>
-                    <div className="bg-gradient-to-br from-pink-600 to-pink-800 rounded-xl p-6 text-white shadow-lg">
+                    <div className="bg-gradient-to-br from-slate-400 to-slate-800 rounded-xl p-6 text-gteal-800 shadow-lg">
                         <div className="text-sm opacity-90 mb-2">Nationally Certified</div>
                         <div className="text-4xl font-bold">{nationalStats.certifiedPercentage || 0}%</div>
                     </div>
@@ -46,8 +46,8 @@ export default function ChairmanAnalytics({ auth, nationalStats = {}, regionalBr
                                             <div
                                                 className={`h-3 rounded-full ${
                                                     region.progress === 100
-                                                        ? 'bg-gradient-to-r from-green-500 to-green-600'
-                                                        : 'bg-gradient-to-r from-amber-500 to-amber-600'
+                                                        ? 'bg-gradient-to-r from-teal-300 to-teal-600'
+                                                        : 'bg-gradient-to-r from-teal-600 to-ateal-300'
                                                 }`}
                                                 style={{ width: `${region.progress}%` }}
                                             />
@@ -69,12 +69,12 @@ export default function ChairmanAnalytics({ auth, nationalStats = {}, regionalBr
                                 <div key={i} className="bg-slate-900/50 p-4 rounded-lg">
                                     <div className="flex justify-between items-center mb-3">
                                         <span className="text-white font-bold text-lg">{party.name}</span>
-                                        <span className="text-teal-400 font-bold text-xl">{party.percentage}%</span>
+                                        <span className="text-slate-300 font-bold text-xl">{party.percentage}%</span>
                                     </div>
                                     <div className="text-gray-400 text-sm mb-2">{party.votes?.toLocaleString()} votes</div>
                                     <div className="bg-slate-700 rounded-full h-2">
                                         <div
-                                            className="bg-teal-500 h-2 rounded-full"
+                                            className="bg-slate-500 h-2 rounded-full"
                                             style={{ width: `${party.percentage}%` }}
                                         />
                                     </div>

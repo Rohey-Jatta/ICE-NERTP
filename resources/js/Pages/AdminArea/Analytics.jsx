@@ -8,11 +8,11 @@ export default function AdminAreaAnalytics({ auth, stats = {}, constituencies = 
 
                 {/* Stats Grid */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-                    <div className="bg-gradient-to-br from-slate-500 to-slate-700 rounded-xl p-6 text-white">
+                    <div className="bg-gradient-to-br from-slate-800 to-slate-600 rounded-xl p-6 text-white">
                         <div className="text-sm opacity-90 mb-2">Total Constituencies</div>
                         <div className="text-4xl font-bold">{stats.totalConstituencies || 0}</div>
                     </div>
-                    <div className="bg-gradient-to-br from-slate-800 to-slate-600 rounded-xl p-6 text-white">
+                    <div className="bg-gradient-to-br from-slate-600 to-slate-800 rounded-xl p-6 text-white">
                         <div className="text-sm opacity-90 mb-2">Certified</div>
                         <div className="text-4xl font-bold">{stats.certified || 0}</div>
                     </div>
@@ -20,7 +20,7 @@ export default function AdminAreaAnalytics({ auth, stats = {}, constituencies = 
                         <div className="text-sm opacity-90 mb-2">Total Wards</div>
                         <div className="text-4xl font-bold">{stats.totalWards || 0}</div>
                     </div>
-                    <div className="bg-gradient-to-br from-slate-700 to-slate-500 rounded-xl p-6 text-white">
+                    <div className="bg-gradient-to-br from-slate-600 to-slate-800 rounded-xl p-6 text-white">
                         <div className="text-sm opacity-90 mb-2">Total Votes</div>
                         <div className="text-4xl font-bold">{stats.totalVotes?.toLocaleString() || 0}</div>
                     </div>

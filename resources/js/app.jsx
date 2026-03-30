@@ -14,5 +14,10 @@ createInertiaApp({
         const root = createRoot(el);
         root.render(<App {...props} />);
     },
-    progress: false, // DISABLED - No progress bar
+ 
+    progress: {
+        color: '#ec4899',
+        showSpinner: flase,
+        delay: 0,
+    },
 });

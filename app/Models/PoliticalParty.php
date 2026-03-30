@@ -15,8 +15,20 @@ class PoliticalParty extends Model
         'election_id',
         'name',
         'abbreviation',
+        'slug',
+        'registration_number',
         'color',
         'logo_path',
+        'leader_name',
+        'leader_photo_path',
+        'symbol_path',
+        'motto',
+        'headquarters',
+        'website',
+        'contact_person',
+        'contact_phone',
+        'contact_email',
+        'is_active',
     ];
 
     public function election(): BelongsTo
