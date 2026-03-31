@@ -27,8 +27,8 @@ class RoleSeeder extends Seeder
         ];
 
         foreach ($roles as $roleName) {
-            Role::create(["name" => $roleName, "guard_name" => "web"]);
-            echo "  ✓ {$roleName}\n";
+            Role::updateOrCreate(["name" => $roleName, "guard_name" => "web"]);
+            echo "   {$roleName}\n";
         }
 
         echo "\n✅ Roles created!\n";

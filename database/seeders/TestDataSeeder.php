@@ -98,40 +98,44 @@ class TestDataSeeder extends Seeder
             $role = $userData['role'];
             unset($userData['role']);
 
-            $user = User::create($userData);
+            $user = User::updateOrCreate($userData);
             $user->assignRole($role);
 
             $this->command->info("✓ Created user: {$user->name} ({$user->email}) - Role: {$role}");
         }
 
+        // Get the admin user for created_by field
+        $admin = User::where('email', 'admina@iec.gm')->first();
+
         // Create test election
-        $election = Election::create([
+        $election = Election::updateOrCreate([
             'name' => '2026 Presidential Election',
             'type' => 'presidential',
-            'start_date' => now()->addDays(30),
-            'end_date' => now()->addDays(31),
+            'start_date' => now()->addMonth(),
+            'end_date' => now()->addMonth()->addDay(),
             'status' => 'active',
+            'created_by' => $admin->id,
             'allow_provisional_public_display' => true,
         ]);
 
         $this->command->info("✓ Created election: {$election->name}");
 
         // Create administrative hierarchy
-        $adminArea = AdministrativeHierarchy::create([
+        $adminArea = AdministrativeHierarchy::updateOrCreate([
             'election_id' => $election->id,
             'level' => 'admin_area',
             'name' => 'Banjul Administrative Area',
             'parent_id' => null,
         ]);
 
-        $constituency = AdministrativeHierarchy::create([
+        $constituency = AdministrativeHierarchy::updateOrCreate([
             'election_id' => $election->id,
             'level' => 'constituency',
             'name' => 'Banjul North Constituency',
             'parent_id' => $adminArea->id,
         ]);
 
-        $ward = AdministrativeHierarchy::create([
+        $ward = AdministrativeHierarchy::updateOrCreate([
             'election_id' => $election->id,
             'level' => 'ward',
             'name' => 'Campama Ward',
@@ -177,7 +181,7 @@ class TestDataSeeder extends Seeder
         ];
 
         foreach ($stations as $stationData) {
-            PollingStation::create($stationData);
+            PollingStation::updateOrCreate($stationData);
         }
 
         $this->command->info("✓ Created " . count($stations) . " polling stations");
