@@ -2,7 +2,7 @@ import AppLayout from '@/Layouts/AppLayout';
 import { useForm, router } from '@inertiajs/react';
 import { useState } from 'react';
 
-export default function UserCreate({ auth }) {
+export default function UserCreate({ auth, pollingStations = [], wards = [], constituencies = [], adminAreas = [] }) {
     const { data, setData, post, processing, errors } = useForm({
         name: '',
         email: '',
@@ -31,63 +31,117 @@ export default function UserCreate({ auth }) {
             case 'polling-officer':
                 return (
                     <div>
-                        <label className="block text-gray-300 mb-2 font-semibold">Assign to Polling Station (Optional)</label>
-                        <select
-                            value={data.polling_station_id}
-                            onChange={(e) => setData('polling_station_id', e.target.value)}
-                            className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white"
-                        >
-                            <option value="">Select Polling Station</option>
-                            {/* Polling stations would be passed as props */}
-                        </select>
-                        <p className="text-gray-400 text-sm mt-1">You can assign polling stations later from the user management page</p>
+                        <label className="block text-gray-300 mb-2 font-semibold">
+                            Assign to Polling Station
+                            <span className="text-gray-500 font-normal text-xs ml-2">(Optional)</span>
+                        </label>
+                        {pollingStations.length === 0 ? (
+                            <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg">
+                                <p className="text-amber-300 text-sm">
+                                    No polling stations found. <a href="/admin/polling-stations/create" className="underline text-teal-400">Create one first</a>.
+                                </p>
+                            </div>
+                        ) : (
+                            <select
+                                value={data.polling_station_id}
+                                onChange={(e) => setData('polling_station_id', e.target.value)}
+                                className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white"
+                            >
+                                <option value="">— No station assigned yet —</option>
+                                {pollingStations.map((station) => (
+                                    <option key={station.id} value={station.id}>
+                                        {station.code} — {station.name}
+                                    </option>
+                                ))}
+                            </select>
+                        )}
+                        {errors.polling_station_id && (
+                            <p className="text-red-400 text-sm mt-1">{errors.polling_station_id}</p>
+                        )}
                     </div>
                 );
+
             case 'ward-approver':
                 return (
                     <div>
-                        <label className="block text-gray-300 mb-2 font-semibold">Assign to Ward (Optional)</label>
-                        <select
-                            value={data.ward_id}
-                            onChange={(e) => setData('ward_id', e.target.value)}
-                            className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white"
-                        >
-                            <option value="">Select Ward</option>
-                            {/* Wards would be passed as props */}
-                        </select>
-                        <p className="text-gray-400 text-sm mt-1">You can assign wards later from the user management page</p>
+                        <label className="block text-gray-300 mb-2 font-semibold">
+                            Assign to Ward
+                            <span className="text-gray-500 font-normal text-xs ml-2">(Optional)</span>
+                        </label>
+                        {wards.length === 0 ? (
+                            <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg">
+                                <p className="text-amber-300 text-sm">No wards found. Configure the administrative hierarchy first.</p>
+                            </div>
+                        ) : (
+                            <select
+                                value={data.ward_id}
+                                onChange={(e) => setData('ward_id', e.target.value)}
+                                className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white"
+                            >
+                                <option value="">— No ward assigned yet —</option>
+                                {wards.map((ward) => (
+                                    <option key={ward.id} value={ward.id}>{ward.name}</option>
+                                ))}
+                            </select>
+                        )}
+                        {errors.ward_id && <p className="text-red-400 text-sm mt-1">{errors.ward_id}</p>}
                     </div>
                 );
+
             case 'constituency-approver':
                 return (
                     <div>
-                        <label className="block text-gray-300 mb-2 font-semibold">Assign to Constituency (Optional)</label>
-                        <select
-                            value={data.constituency_id}
-                            onChange={(e) => setData('constituency_id', e.target.value)}
-                            className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white"
-                        >
-                            <option value="">Select Constituency</option>
-                            {/* Constituencies would be passed as props */}
-                        </select>
-                        <p className="text-gray-400 text-sm mt-1">You can assign constituencies later from the user management page</p>
+                        <label className="block text-gray-300 mb-2 font-semibold">
+                            Assign to Constituency
+                            <span className="text-gray-500 font-normal text-xs ml-2">(Optional)</span>
+                        </label>
+                        {constituencies.length === 0 ? (
+                            <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg">
+                                <p className="text-amber-300 text-sm">No constituencies found. Configure the administrative hierarchy first.</p>
+                            </div>
+                        ) : (
+                            <select
+                                value={data.constituency_id}
+                                onChange={(e) => setData('constituency_id', e.target.value)}
+                                className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white"
+                            >
+                                <option value="">— No constituency assigned yet —</option>
+                                {constituencies.map((c) => (
+                                    <option key={c.id} value={c.id}>{c.name}</option>
+                                ))}
+                            </select>
+                        )}
+                        {errors.constituency_id && <p className="text-red-400 text-sm mt-1">{errors.constituency_id}</p>}
                     </div>
                 );
+
             case 'admin-area-approver':
                 return (
                     <div>
-                        <label className="block text-gray-300 mb-2 font-semibold">Assign to Admin Area (Optional)</label>
-                        <select
-                            value={data.admin_area_id}
-                            onChange={(e) => setData('admin_area_id', e.target.value)}
-                            className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white"
-                        >
-                            <option value="">Select Admin Area</option>
-                            {/* Admin areas would be passed as props */}
-                        </select>
-                        <p className="text-gray-400 text-sm mt-1">You can assign admin areas later from the user management page</p>
+                        <label className="block text-gray-300 mb-2 font-semibold">
+                            Assign to Admin Area
+                            <span className="text-gray-500 font-normal text-xs ml-2">(Optional)</span>
+                        </label>
+                        {adminAreas.length === 0 ? (
+                            <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg">
+                                <p className="text-amber-300 text-sm">No admin areas found. Configure the administrative hierarchy first.</p>
+                            </div>
+                        ) : (
+                            <select
+                                value={data.admin_area_id}
+                                onChange={(e) => setData('admin_area_id', e.target.value)}
+                                className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white"
+                            >
+                                <option value="">— No admin area assigned yet —</option>
+                                {adminAreas.map((area) => (
+                                    <option key={area.id} value={area.id}>{area.name}</option>
+                                ))}
+                            </select>
+                        )}
+                        {errors.admin_area_id && <p className="text-red-400 text-sm mt-1">{errors.admin_area_id}</p>}
                     </div>
                 );
+
             default:
                 return null;
         }
@@ -116,6 +170,7 @@ export default function UserCreate({ auth }) {
                                 onChange={(e) => setData('name', e.target.value)}
                                 className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white"
                                 placeholder="Full Name"
+                                required
                             />
                             {errors.name && <p className="text-red-400 text-sm mt-1">{errors.name}</p>}
                         </div>
@@ -128,6 +183,7 @@ export default function UserCreate({ auth }) {
                                 onChange={(e) => setData('email', e.target.value)}
                                 className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white"
                                 placeholder="user@iec.gm"
+                                required
                             />
                             {errors.email && <p className="text-red-400 text-sm mt-1">{errors.email}</p>}
                         </div>
@@ -140,6 +196,7 @@ export default function UserCreate({ auth }) {
                                 onChange={(e) => setData('password', e.target.value)}
                                 className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white"
                                 placeholder="••••••••"
+                                required
                             />
                             {errors.password && <p className="text-red-400 text-sm mt-1">{errors.password}</p>}
                         </div>
@@ -168,7 +225,7 @@ export default function UserCreate({ auth }) {
                             <button
                                 type="submit"
                                 disabled={processing}
-                                className="flex-1 px-6 py-3 bg-teal-600 hover:bg-teal-700 disabled:bg-teal-600 text-white font-bold rounded-lg"
+                                className="flex-1 px-6 py-3 bg-teal-600 hover:bg-teal-700 disabled:opacity-50 text-white font-bold rounded-lg"
                             >
                                 {processing ? 'Creating...' : 'Create User'}
                             </button>

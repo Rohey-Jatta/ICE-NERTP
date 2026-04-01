@@ -3,6 +3,7 @@ import { Link, router } from '@inertiajs/react';
 
 export default function PartyRepresentatives({ auth, representatives = [] }) {
     const handleAddRepresentative = () => router.visit('/admin/party-representatives/create');
+    const handleEdit = (id) => router.visit(`/admin/party-representatives/${id}/edit`);
 
     return (
         <AppLayout user={auth?.user}>
@@ -52,7 +53,10 @@ export default function PartyRepresentatives({ auth, representatives = [] }) {
                                                 </span>
                                             </td>
                                             <td className="py-4 text-center">
-                                                <button className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm">
+                                                <button
+                                                    onClick={() => handleEdit(rep.id)}
+                                                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm cursor-pointer"
+                                                >
                                                     Edit
                                                 </button>
                                             </td>
@@ -61,7 +65,7 @@ export default function PartyRepresentatives({ auth, representatives = [] }) {
                                 </tbody>
                             </table>
 
-                            {/* Pagination — guard against null URLs */}
+                            {/* Pagination */}
                             {representatives.links && (
                                 <div className="mt-6 flex justify-center">
                                     <div className="flex space-x-1">

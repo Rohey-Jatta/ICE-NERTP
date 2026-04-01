@@ -42,9 +42,16 @@ Route::middleware(['auth', 'role:iec-administrator'])
         ]);
     })->name('users');
 
-    Route::get('/users/create', fn() => Inertia::render('Admin/UserCreate', [
-        'auth' => ['user' => Auth::user()],
-    ]))->name('users.create');
+    // FIXED: Pass actual polling stations, wards, constituencies, admin areas
+    Route::get('/users/create', function () {
+        return Inertia::render('Admin/UserCreate', [
+            'auth'            => ['user' => Auth::user()],
+            'pollingStations' => PollingStation::select('id', 'name', 'code')->orderBy('code')->get(),
+            'wards'           => AdministrativeHierarchy::where('level', 'ward')->select('id', 'name')->orderBy('name')->get(),
+            'constituencies'  => AdministrativeHierarchy::where('level', 'constituency')->select('id', 'name')->orderBy('name')->get(),
+            'adminAreas'      => AdministrativeHierarchy::where('level', 'admin_area')->select('id', 'name')->orderBy('name')->get(),
+        ]);
+    })->name('users.create');
 
     Route::post('/users', function (Request $request) {
         $request->validate([
@@ -61,6 +68,28 @@ Route::middleware(['auth', 'role:iec-administrator'])
                 'status'   => 'active',
             ]);
             $user->assignRole($request->role);
+
+            // Assign polling station if provided
+            if ($request->role === 'polling-officer' && $request->polling_station_id) {
+                PollingStation::where('id', $request->polling_station_id)
+                    ->update(['assigned_officer_id' => $user->id]);
+            }
+
+            // Assign ward/constituency/admin area if provided
+            if (in_array($request->role, ['ward-approver', 'constituency-approver', 'admin-area-approver'])) {
+                $fieldMap = [
+                    'ward-approver'          => ['field' => 'ward_id',           'level' => 'ward'],
+                    'constituency-approver'  => ['field' => 'constituency_id',   'level' => 'constituency'],
+                    'admin-area-approver'    => ['field' => 'admin_area_id',      'level' => 'admin_area'],
+                ];
+                $cfg   = $fieldMap[$request->role];
+                $value = $request->input($cfg['field']);
+                if ($value) {
+                    AdministrativeHierarchy::where('id', $value)
+                        ->update(['assigned_approver_id' => $user->id]);
+                }
+            }
+
             AuditLog::record(action: 'user.created', event: 'created', module: 'UserManagement', auditable: $user);
             return redirect()->route('admin.users')->with('success', 'User created successfully!');
         } catch (\Exception $e) {
@@ -73,7 +102,7 @@ Route::middleware(['auth', 'role:iec-administrator'])
             'auth'            => ['user' => Auth::user()],
             'user'            => $user->load('roles'),
             'roles'           => ['polling-officer','ward-approver','constituency-approver','admin-area-approver','iec-chairman','iec-administrator','party-representative','election-monitor'],
-            'pollingStations' => PollingStation::select('id', 'name', 'code')->get(),
+            'pollingStations' => PollingStation::select('id', 'name', 'code')->orderBy('code')->get(),
             'wards'           => AdministrativeHierarchy::where('level', 'ward')->select('id', 'name')->get(),
             'constituencies'  => AdministrativeHierarchy::where('level', 'constituency')->select('id', 'name')->get(),
             'adminAreas'      => AdministrativeHierarchy::where('level', 'admin_area')->select('id', 'name')->get(),
@@ -125,6 +154,51 @@ Route::middleware(['auth', 'role:iec-administrator'])
             'pollingStations' => PollingStation::select('id', 'name', 'code')->get(),
         ]);
     })->name('party-representatives.create');
+
+    // ADDED: Edit route for party representatives
+    Route::get('/party-representatives/{id}/edit', function ($id) {
+        $rep = \App\Models\PartyRepresentative::with(['user', 'politicalParty', 'pollingStations'])->findOrFail($id);
+        return Inertia::render('Admin/PartyRepresentativeEdit', [
+            'auth'            => ['user' => Auth::user()],
+            'representative'  => $rep,
+            'parties'         => PoliticalParty::select('id', 'name')->get(),
+            'pollingStations' => PollingStation::select('id', 'name', 'code')->get(),
+        ]);
+    })->name('party-representatives.edit');
+
+    Route::put('/party-representatives/{id}', function (Request $request, $id) {
+        $rep = \App\Models\PartyRepresentative::findOrFail($id);
+        $request->validate([
+            'political_party_id'    => 'required|exists:political_parties,id',
+            'designation'           => 'nullable|string|max:255',
+            'polling_station_ids'   => 'required|array|min:1',
+            'polling_station_ids.*' => 'exists:polling_stations,id',
+            'is_active'             => 'boolean',
+        ]);
+        try {
+            $rep->update([
+                'political_party_id' => $request->political_party_id,
+                'designation'        => $request->designation,
+                'is_active'          => $request->boolean('is_active', true),
+            ]);
+            // Sync polling station assignments
+            DB::table('party_representative_polling_station')
+                ->where('party_representative_id', $rep->id)
+                ->delete();
+            foreach ($request->polling_station_ids as $sid) {
+                DB::table('party_representative_polling_station')->insert([
+                    'party_representative_id' => $rep->id,
+                    'polling_station_id'      => $sid,
+                    'assigned_at'             => now(),
+                    'assigned_by'             => Auth::id(),
+                ]);
+            }
+            AuditLog::record(action: 'party_representative.updated', event: 'updated', module: 'UserManagement', auditable: $rep);
+            return redirect()->route('admin.party-representatives')->with('success', 'Party representative updated!');
+        } catch (\Exception $e) {
+            return back()->withErrors(['error' => 'Failed: ' . $e->getMessage()]);
+        }
+    })->name('party-representatives.update');
 
     Route::post('/party-representatives', function (Request $request) {
         $request->validate([
@@ -430,7 +504,7 @@ Route::middleware(['auth', 'role:iec-administrator'])
 
     // ── Audit Logs ────────────────────────────────────────────────────────────
     Route::get('/audit-logs', function (Request $request) {
-        $query = AuditLog::with('user');
+        $query = \App\Models\AuditLog::with('user');
         if ($request->filled('user'))      $query->whereHas('user', fn($q) => $q->where('name', 'like', '%'.$request->user.'%')->orWhere('email', 'like', '%'.$request->user.'%'));
         if ($request->filled('action'))    $query->where('action', 'like', '%'.$request->action.'%');
         if ($request->filled('date_from')) $query->whereDate('created_at', '>=', $request->date_from);
