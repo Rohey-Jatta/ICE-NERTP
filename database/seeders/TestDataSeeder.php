@@ -12,255 +12,278 @@ use App\Models\PoliticalParty;
 use App\Models\Result;
 use App\Models\ResultCandidateVote;
 use Illuminate\Support\Facades\Hash;
-use Spatie\Permission\Models\Role;
+use Illuminate\Support\Facades\DB;
 
 class TestDataSeeder extends Seeder
 {
     public function run(): void
     {
-        // Create test users for ALL 8 ROLES
-        $users = [
+        // ── Step 1: Create all users ──────────────────────────────────────────
+        $userData = [
             [
-                'name' => 'System Administrator',
-                'email' => 'admina@iec.gm',
-                'phone' => '+2203329739',
-                'password' => Hash::make('password123'),
+                'name'        => 'System Administrator',
+                'email'       => 'admina@iec.gm',
+                'phone'       => '+2203329739',
+                'password'    => Hash::make('password123'),
                 'employee_id' => 'IEC-ADMIN-002',
-                'status' => 'active',
-                'role' => 'iec-administrator',
+                'status'      => 'active',
+                'role'        => 'iec-administrator',
             ],
             [
-                'name' => 'Test Polling Officer',
-                'email' => 'officer@iec.gm',
-                'phone' => '+2203329739',
-                'password' => Hash::make('password123'),
+                'name'        => 'Test Polling Officer',
+                'email'       => 'officer@iec.gm',
+                'phone'       => '+2203329740',
+                'password'    => Hash::make('password123'),
                 'employee_id' => 'TEST-POL',
-                'status' => 'active',
-                'role' => 'polling-officer',
+                'status'      => 'active',
+                'role'        => 'polling-officer',
             ],
             [
-                'name' => 'Ward Approver',
-                'email' => 'ward@iec.gm',
-                'phone' => '+2203329739',
-                'password' => Hash::make('password123'),
+                'name'        => 'Ward Approver',
+                'email'       => 'ward@iec.gm',
+                'phone'       => '+2203329741',
+                'password'    => Hash::make('password123'),
                 'employee_id' => 'WARD-APP-001',
-                'status' => 'active',
-                'role' => 'ward-approver',
+                'status'      => 'active',
+                'role'        => 'ward-approver',
             ],
             [
-                'name' => 'Constituency Approver',
-                'email' => 'constituency@iec.gm',
-                'phone' => '+2203329739',
-                'password' => Hash::make('password123'),
+                'name'        => 'Constituency Approver',
+                'email'       => 'constituency@iec.gm',
+                'phone'       => '+2203329742',
+                'password'    => Hash::make('password123'),
                 'employee_id' => 'CONST-APP-001',
-                'status' => 'active',
-                'role' => 'constituency-approver',
+                'status'      => 'active',
+                'role'        => 'constituency-approver',
             ],
             [
-                'name' => 'Admin Area Approver',
-                'email' => 'adminarea@iec.gm',
-                'phone' => '+2203329739',
-                'password' => Hash::make('password123'),
+                'name'        => 'Admin Area Approver',
+                'email'       => 'adminarea@iec.gm',
+                'phone'       => '+2203329743',
+                'password'    => Hash::make('password123'),
                 'employee_id' => 'ADMIN-APP-001',
-                'status' => 'active',
-                'role' => 'admin-area-approver',
+                'status'      => 'active',
+                'role'        => 'admin-area-approver',
             ],
             [
-                'name' => 'IEC Chairman',
-                'email' => 'chairman@iec.gm',
-                'phone' => '+2203329739',
-                'password' => Hash::make('password123'),
+                'name'        => 'IEC Chairman',
+                'email'       => 'chairman@iec.gm',
+                'phone'       => '+2203329744',
+                'password'    => Hash::make('password123'),
                 'employee_id' => 'IEC-CHAIR-001',
-                'status' => 'active',
-                'role' => 'iec-chairman',
+                'status'      => 'active',
+                'role'        => 'iec-chairman',
             ],
             [
-                'name' => 'Party Representative',
-                'email' => 'party@iec.gm',
-                'phone' => '+2203329739',
-                'password' => Hash::make('password123'),
+                'name'        => 'Party Representative',
+                'email'       => 'party@iec.gm',
+                'phone'       => '+2203329745',
+                'password'    => Hash::make('password123'),
                 'employee_id' => 'PARTY-REP-001',
-                'status' => 'active',
-                'role' => 'party-representative',
+                'status'      => 'active',
+                'role'        => 'party-representative',
             ],
             [
-                'name' => 'Election Monitor',
-                'email' => 'monitor@iec.gm',
-                'phone' => '+2203329739',
-                'password' => Hash::make('password123'),
+                'name'        => 'Election Monitor',
+                'email'       => 'monitor@iec.gm',
+                'phone'       => '+2203329746',
+                'password'    => Hash::make('password123'),
                 'employee_id' => 'MON-001',
-                'status' => 'active',
-                'role' => 'election-monitor',
+                'status'      => 'active',
+                'role'        => 'election-monitor',
             ],
         ];
 
-        foreach ($users as $userData) {
-            $role = $userData['role'];
-            unset($userData['role']);
-
-            $user = User::updateOrCreate($userData);
-            $user->assignRole($role);
-
+        foreach ($userData as $item) {
+            $role = $item['role'];
+            unset($item['role']);
+            $user = User::updateOrCreate(['email' => $item['email']], $item);
+            // Sync roles cleanly (avoid duplicate role errors on re-seed)
+            $user->syncRoles([$role]);
             $this->command->info("✓ Created user: {$user->name} ({$user->email}) - Role: {$role}");
         }
 
-        // Get the admin user for created_by field
-        $admin = User::where('email', 'admina@iec.gm')->first();
+        $admin          = User::where('email', 'admina@iec.gm')->firstOrFail();
+        $pollingOfficer = User::where('email', 'officer@iec.gm')->firstOrFail();
+        $wardApprover   = User::where('email', 'ward@iec.gm')->firstOrFail();
+        $constApprover  = User::where('email', 'constituency@iec.gm')->firstOrFail();
+        $areaApprover   = User::where('email', 'adminarea@iec.gm')->firstOrFail();
 
-        // Create test election
-        $election = Election::updateOrCreate([
-            'name' => '2026 Presidential Election',
-            'type' => 'presidential',
-            'start_date' => now()->addMonth(),
-            'end_date' => now()->addMonth()->addDay(),
-            'status' => 'active',
-            'created_by' => $admin->id,
-            'allow_provisional_public_display' => true,
-        ]);
-
-        $this->command->info("✓ Created election: {$election->name}");
-
-        // Create administrative hierarchy
-        $adminArea = AdministrativeHierarchy::updateOrCreate([
-            'election_id' => $election->id,
-            'level' => 'admin_area',
-            'name' => 'Banjul Administrative Area',
-            'parent_id' => null,
-        ]);
-
-        $constituency = AdministrativeHierarchy::updateOrCreate([
-            'election_id' => $election->id,
-            'level' => 'constituency',
-            'name' => 'Banjul North Constituency',
-            'parent_id' => $adminArea->id,
-        ]);
-
-        $ward = AdministrativeHierarchy::updateOrCreate([
-            'election_id' => $election->id,
-            'level' => 'ward',
-            'name' => 'Campama Ward',
-            'parent_id' => $constituency->id,
-        ]);
-
-        $this->command->info("✓ Created hierarchy: Admin Area → Constituency → Ward");
-
-        // Create polling stations
-        $pollingOfficer = User::where('email', 'officer@iec.gm')->first();
-
-        $stations = [
+        // ── Step 2: Create election FIRST (parties & stations depend on it) ───
+        $election = Election::updateOrCreate(
+            ['name' => '2026 Presidential Election'],
             [
-                'code' => 'BNL-001',
-                'name' => 'Campama Primary School',
-                'ward_id' => $ward->id,
-                'election_id' => $election->id,
-                'latitude' => 13.4549,
-                'longitude' => -16.5790,
-                'registered_voters' => 450,
-                'assigned_officer_id' => $pollingOfficer->id,
-            ],
-            [
-                'code' => 'BNL-002',
-                'name' => 'Mosque Road Polling Station',
-                'ward_id' => $ward->id,
-                'election_id' => $election->id,
-                'latitude' => 13.4560,
-                'longitude' => -16.5800,
-                'registered_voters' => 380,
-                'assigned_officer_id' => null,
-            ],
-            [
-                'code' => 'BNL-003',
-                'name' => 'Market Street Center',
-                'ward_id' => $ward->id,
-                'election_id' => $election->id,
-                'latitude' => 13.4570,
-                'longitude' => -16.5810,
-                'registered_voters' => 520,
-                'assigned_officer_id' => null,
-            ],
-        ];
+                'type'                           => 'presidential',
+                'start_date'                     => now()->addMonth(),
+                'end_date'                       => now()->addMonth()->addDay(),
+                'status'                         => 'active',
+                'created_by'                     => $admin->id,
+                'allow_provisional_public_display'=> true,
+                'slug'                           => '2026-presidential-election',
+            ]
+        );
+        $this->command->info("✓ Created election: {$election->name} (ID: {$election->id})");
 
-        foreach ($stations as $stationData) {
-            PollingStation::updateOrCreate($stationData);
-        }
+        // ── Step 3: Create administrative hierarchy ───────────────────────────
+        $adminArea = AdministrativeHierarchy::updateOrCreate(
+            ['election_id' => $election->id, 'level' => 'admin_area', 'name' => 'Banjul Administrative Area'],
+            ['parent_id' => null, 'assigned_approver_id' => $areaApprover->id]
+        );
 
-        $this->command->info("✓ Created " . count($stations) . " polling stations");
+        $constituency = AdministrativeHierarchy::updateOrCreate(
+            ['election_id' => $election->id, 'level' => 'constituency', 'name' => 'Banjul North Constituency'],
+            ['parent_id' => $adminArea->id, 'assigned_approver_id' => $constApprover->id]
+        );
 
-        // Create political parties
-        $parties = [
-            ['name' => 'United Democratic Party', 'abbreviation' => 'UDP', 'color' => '#1e40af'],
-            ['name' => 'National People\'s Party', 'abbreviation' => 'NPP', 'color' => '#059669'],
-            ['name' => 'Gambia Democratic Congress', 'abbreviation' => 'GDC', 'color' => '#dc2626'],
-            ['name' => 'People\'s Democratic Organisation', 'abbreviation' => 'PDOIS', 'color' => '#ea580c'],
+        $ward = AdministrativeHierarchy::updateOrCreate(
+            ['election_id' => $election->id, 'level' => 'ward', 'name' => 'Campama Ward'],
+            ['parent_id' => $constituency->id, 'assigned_approver_id' => $wardApprover->id]
+        );
+
+        $this->command->info("✓ Created hierarchy: Admin Area (ID:{$adminArea->id}) → Constituency (ID:{$constituency->id}) → Ward (ID:{$ward->id})");
+
+        // ── Step 4: Create political parties (MUST have election_id) ─────────
+        $partiesData = [
+            ['name' => 'United Democratic Party',       'abbreviation' => 'UDP',   'color' => '#1e40af'],
+            ['name' => "National People's Party",       'abbreviation' => 'NPP',   'color' => '#059669'],
+            ['name' => 'Gambia Democratic Congress',    'abbreviation' => 'GDC',   'color' => '#dc2626'],
+            ["name" => "People's Democratic Organisation", 'abbreviation' => 'PDOIS', 'color' => '#ea580c'],
         ];
 
         $createdParties = [];
-        foreach ($parties as $partyData) {
-            $party = PoliticalParty::create($partyData);
+        foreach ($partiesData as $partyData) {
+            $party = PoliticalParty::updateOrCreate(
+                ['election_id' => $election->id, 'abbreviation' => $partyData['abbreviation']],
+                [
+                    'name'         => $partyData['name'],
+                    'color'        => $partyData['color'],
+                    'slug'         => \Illuminate\Support\Str::slug($partyData['name']),
+                    'election_id'  => $election->id,  // CRITICAL: always pass election_id
+                ]
+            );
             $createdParties[] = $party;
         }
+        $this->command->info("✓ Created " . count($createdParties) . " political parties");
 
-        $this->command->info("✓ Created " . count($parties) . " political parties");
-
-        // Create candidates
-        $candidateNames = [
-            'Adama Barrow',
-            'Ousainou Darboe',
-            'Mama Kandeh',
-            'Halifa Sallah',
+        // ── Step 5: Create polling stations ───────────────────────────────────
+        $stationsData = [
+            [
+                'code'                => 'BNL-001',
+                'name'                => 'Campama Primary School',
+                'ward_id'             => $ward->id,
+                'election_id'         => $election->id,
+                'latitude'            => 13.4549,
+                'longitude'           => -16.5790,
+                'registered_voters'   => 450,
+                'assigned_officer_id' => $pollingOfficer->id,
+                'is_active'           => true,
+            ],
+            [
+                'code'              => 'BNL-002',
+                'name'              => 'Mosque Road Polling Station',
+                'ward_id'           => $ward->id,
+                'election_id'       => $election->id,
+                'latitude'          => 13.4560,
+                'longitude'         => -16.5800,
+                'registered_voters' => 380,
+                'is_active'         => true,
+            ],
+            [
+                'code'              => 'BNL-003',
+                'name'              => 'Market Street Center',
+                'ward_id'           => $ward->id,
+                'election_id'       => $election->id,
+                'latitude'          => 13.4570,
+                'longitude'         => -16.5810,
+                'registered_voters' => 520,
+                'is_active'         => true,
+            ],
         ];
 
-        foreach ($createdParties as $index => $party) {
-            Candidate::create([
-                'election_id' => $election->id,
-                'political_party_id' => $party->id,
-                'name' => $candidateNames[$index],
-                'position' => 'Presidential Candidate',
-            ]);
+        $stations = [];
+        foreach ($stationsData as $stationData) {
+            $stations[] = PollingStation::updateOrCreate(
+                ['code' => $stationData['code']],
+                $stationData
+            );
         }
+        $this->command->info("✓ Created " . count($stations) . " polling stations");
 
-        $this->command->info("✓ Created " . count($candidateNames) . " candidates");
+        // ── Step 6: Create candidates (one per party) ─────────────────────────
+        $candidateNames = [
+            'UDP'   => 'Adama Barrow',
+            'NPP'   => 'Ousainou Darboe',
+            'GDC'   => 'Mama Kandeh',
+            'PDOIS' => 'Halifa Sallah',
+        ];
 
-        // Create sample results
-        $station = PollingStation::first();
-        $candidates = Candidate::where('election_id', $election->id)->get();
-
-        $result = Result::create([
-            'election_id' => $election->id,
-            'polling_station_id' => $station->id,
-            'total_votes_cast' => 420,
-            'valid_votes' => 410,
-            'rejected_votes' => 10,
-            'certification_status' => 'submitted',
-            'submitted_by' => $pollingOfficer->id,
-            'submitted_at' => now(),
-        ]);
-
-        // Add vote breakdown
-        $votes = [150, 120, 90, 50]; // Total = 410
-        foreach ($candidates as $index => $candidate) {
-            ResultCandidateVote::create([
-                'result_id' => $result->id,
-                'candidate_id' => $candidate->id,
-                'votes' => $votes[$index],
-            ]);
+        $createdCandidates = [];
+        foreach ($createdParties as $party) {
+            $candidate = Candidate::updateOrCreate(
+                ['election_id' => $election->id, 'political_party_id' => $party->id],
+                [
+                    'name'               => $candidateNames[$party->abbreviation] ?? $party->name . ' Candidate',
+                    'ballot_number'      => (string)(array_search($party, $createdParties) + 1),
+                    'is_independent'     => false,
+                    'is_active'          => true,
+                ]
+            );
+            $createdCandidates[] = $candidate;
         }
+        $this->command->info("✓ Created " . count($createdCandidates) . " candidates");
 
+        // ── Step 7: Create a sample submitted result ──────────────────────────
+        $firstStation = $stations[0];
 
-        $this->command->table(
-            ['Role', 'Email', 'Password', 'Phone'],
+        $result = Result::updateOrCreate(
+            ['polling_station_id' => $firstStation->id, 'election_id' => $election->id],
             [
-                ['IEC Administrator', 'admin@iec.gm', 'password123', '+2205872319'],
-                ['Polling Officer', 'officer@iec.gm', 'password123', '+2205872320'],
-                ['Ward Approver', 'ward@iec.gm', 'password123', '+2205872321'],
-                ['Constituency Approver', 'constituency@iec.gm', 'password123', '+2205872322'],
-                ['Admin Area Approver', 'adminarea@iec.gm', 'password123', '+2205872323'],
-                ['IEC Chairman', 'chairman@iec.gm', 'password123', '+2205872324'],
-                ['Party Representative', 'party@iec.gm', 'password123', '+2205872325'],
-                ['Election Monitor', 'monitor@iec.gm', 'password123', '+2205872326'],
+                'submission_uuid'         => \Illuminate\Support\Str::uuid(),
+                'user_id'                 => $pollingOfficer->id,
+                'total_registered_voters' => 450,
+                'total_votes_cast'        => 420,
+                'valid_votes'             => 410,
+                'rejected_votes'          => 10,
+                'disputed_votes'          => 0,
+                'certification_status'    => 'submitted',
+                'submitted_by'            => $pollingOfficer->id,
+                'submitted_at'            => now(),
+                'gps_validated'           => false,
             ]
         );
 
+        // Add vote breakdown — 4 candidates, total = 410
+        $voteDistribution = [150, 120, 90, 50];
+        foreach ($createdCandidates as $i => $candidate) {
+            ResultCandidateVote::updateOrCreate(
+                ['result_id' => $result->id, 'candidate_id' => $candidate->id],
+                [
+                    'election_id' => $election->id,
+                    'votes'       => $voteDistribution[$i] ?? 0,
+                ]
+            );
+        }
+        $this->command->info("sample result with candidate vote breakdown");
 
+        // ── Summary table ─────────────────────────────────────────────────────
+        $this->command->newLine();
+        $this->command->info('═══════════════════════════════════════════════════════');
+        $this->command->info('                  TEST CREDENTIALS                     ');
+        $this->command->info('═══════════════════════════════════════════════════════');
+        $this->command->table(
+            ['Role', 'Email', 'Password'],
+            [
+                ['IEC Administrator',    'admina@iec.gm',        'password123'],
+                ['Polling Officer',      'officer@iec.gm',       'password123'],
+                ['Ward Approver',        'ward@iec.gm',          'password123'],
+                ['Constituency Approver','constituency@iec.gm',  'password123'],
+                ['Admin Area Approver',  'adminarea@iec.gm',     'password123'],
+                ['IEC Chairman',         'chairman@iec.gm',      'password123'],
+                ['Party Representative', 'party@iec.gm',         'password123'],
+                ['Election Monitor',     'monitor@iec.gm',       'password123'],
+            ]
+        );
+        $this->command->info('All passwords: password123');
+        $this->command->info('2FA codes are logged to storage/logs/laravel.log');
     }
 }

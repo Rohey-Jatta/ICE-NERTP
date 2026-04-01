@@ -22,6 +22,7 @@ return new class extends Migration
             $table->string('contact_email')->nullable();
             $table->boolean('is_active')->default(true);
             $table->timestamps();
+            $table->softDeletes();
             $table->index('election_id');
             $table->unique(['election_id', 'abbreviation']);
         });
