@@ -338,12 +338,49 @@ Route::middleware(['auth', 'role:iec-administrator'])
         return Inertia::render('Admin/Parties', [
             'auth'    => ['user' => Auth::user()],
             'parties' => PoliticalParty::all(),
+            'flash'   => session()->only(['success', 'error']),
         ]);
     })->name('parties');
 
     Route::get('/parties/create', fn() => Inertia::render('Admin/PartyCreate', [
         'auth' => ['user' => Auth::user()],
     ]))->name('parties.create');
+
+    Route::get('/parties/{id}/edit', function ($id) {
+        $party = PoliticalParty::findOrFail($id);
+        return Inertia::render('Admin/PartyEdit', [
+            'auth'  => ['user' => Auth::user()],
+            'party' => $party,
+        ]);
+    })->name('parties.edit');
+
+    Route::put('/parties/{id}', function (Request $request, $id) {
+        $party = PoliticalParty::findOrFail($id);
+        $request->validate([
+            'name'         => 'required|string|max:255',
+            'abbreviation' => 'required|string|max:10',
+            'color'        => 'nullable|string|max:7',
+            'leader_name'  => 'nullable|string|max:255',
+            'motto'        => 'nullable|string|max:500',
+            'headquarters' => 'nullable|string|max:255',
+            'website'      => 'nullable|url|max:255',
+        ]);
+        try {
+            $party->update([
+                'name'         => $request->name,
+                'abbreviation' => strtoupper($request->abbreviation),
+                'slug'         => Str::slug($request->name),
+                'color'        => $request->color ?? '#3b82f6',
+                'leader_name'  => $request->leader_name,
+                'motto'        => $request->motto,
+                'headquarters' => $request->headquarters,
+                'website'      => $request->website,
+            ]);
+            return redirect()->route('admin.parties')->with('success', 'Party updated successfully!');
+        } catch (\Exception $e) {
+            return back()->withErrors(['error' => 'Failed: ' . $e->getMessage()]);
+        }
+    })->name('parties.update');
 
     Route::post('/parties', function (Request $request) {
         $request->validate([

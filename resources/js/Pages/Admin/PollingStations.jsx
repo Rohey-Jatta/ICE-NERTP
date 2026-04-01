@@ -1,5 +1,5 @@
 import AppLayout from '@/Layouts/AppLayout';
-import { router } from '@inertiajs/react';
+import { Link, router } from '@inertiajs/react';
 
 export default function PollingStations({ auth, stations = [] }) {
     const handleRegister = () => router.visit('/admin/polling-stations/create');
@@ -8,11 +8,16 @@ export default function PollingStations({ auth, stations = [] }) {
     return (
         <AppLayout user={auth?.user}>
             <div className="container mx-auto px-4 py-8">
-                <div className="flex justify-between items-center mb-6">
-                    <h1 className="text-3xl font-bold text-white">Polling Station Management</h1>
-                    <button onClick={handleRegister} className="px-6 py-3 bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-lg">
-                        + Register Station
-                    </button>
+                <div className="mb-6">
+                    <Link href="/admin/dashboard" className="text-gray-400 hover:text-white text-sm mb-2 inline-block">
+                        ← Back to Dashboard
+                    </Link>
+                    <div className="flex justify-between items-center">
+                        <h1 className="text-3xl font-bold text-white">Polling Station Management</h1>
+                        <button onClick={handleRegister} className="px-6 py-3 bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-lg">
+                            + Register Station
+                        </button>
+                    </div>
                 </div>
 
                 <div className="bg-slate-800/40 rounded-xl p-6 border border-slate-700/50">
@@ -36,7 +41,10 @@ export default function PollingStations({ auth, stations = [] }) {
                                             <td className="py-4 text-white">{station.ward}</td>
                                             <td className="py-4 text-right text-white">{station.voters}</td>
                                             <td className="py-4 text-center">
-                                                <button onClick={() => handleEdit(station.id)} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm">
+                                                <button
+                                                    onClick={() => handleEdit(station.id)}
+                                                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm"
+                                                >
                                                     Edit
                                                 </button>
                                             </td>
@@ -47,7 +55,13 @@ export default function PollingStations({ auth, stations = [] }) {
                         </div>
                     ) : (
                         <div className="text-center py-12">
-                            <p className="text-gray-400">Polling stations will be loaded from database</p>
+                            <p className="text-gray-400 mb-4">No polling stations registered yet.</p>
+                            <button
+                                onClick={handleRegister}
+                                className="px-6 py-3 bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-lg"
+                            >
+                                Register First Station
+                            </button>
                         </div>
                     )}
                 </div>

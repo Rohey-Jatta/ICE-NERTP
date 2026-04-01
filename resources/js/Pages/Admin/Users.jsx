@@ -66,22 +66,30 @@ export default function Users({ auth, users = [] }) {
                                 </tbody>
                             </table>
 
-                            {/* Pagination */}
+                            {/* Pagination — guard against null URLs */}
                             {users.links && (
                                 <div className="mt-6 flex justify-center">
                                     <div className="flex space-x-1">
-                                        {users.links.map((link, index) => (
-                                            <Link
-                                                key={index}
-                                                href={link.url}
-                                                className={`px-3 py-2 text-sm rounded-lg ${
-                                                    link.active
-                                                        ? 'bg-teal-600 text-white'
-                                                        : 'bg-slate-700 text-gray-300 hover:bg-slate-600'
-                                                }`}
-                                                dangerouslySetInnerHTML={{ __html: link.label }}
-                                            />
-                                        ))}
+                                        {users.links.map((link, index) =>
+                                            link.url ? (
+                                                <Link
+                                                    key={index}
+                                                    href={link.url}
+                                                    className={`px-3 py-2 text-sm rounded-lg ${
+                                                        link.active
+                                                            ? 'bg-teal-600 text-white'
+                                                            : 'bg-slate-700 text-gray-300 hover:bg-slate-600'
+                                                    }`}
+                                                    dangerouslySetInnerHTML={{ __html: link.label }}
+                                                />
+                                            ) : (
+                                                <span
+                                                    key={index}
+                                                    className="px-3 py-2 text-sm rounded-lg bg-slate-800 text-gray-600 cursor-not-allowed"
+                                                    dangerouslySetInnerHTML={{ __html: link.label }}
+                                                />
+                                            )
+                                        )}
                                     </div>
                                 </div>
                             )}

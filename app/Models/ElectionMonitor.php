@@ -25,7 +25,6 @@ class ElectionMonitor extends Model
         'is_active' => 'boolean',
     ];
 
-    // Relationships
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
@@ -38,12 +37,7 @@ class ElectionMonitor extends Model
 
     public function pollingStations(): BelongsToMany
     {
-        return $this->belongsToMany(PollingStation::class, 'election_monitor_polling_station')
-                    ->withTimestamps();
+        // Pivot table has no created_at/updated_at — do NOT call withTimestamps()
+        return $this->belongsToMany(PollingStation::class, 'election_monitor_polling_station');
     }
-
-    // public function observations(): HasMany
-    // {
-    //     return $this->hasMany(MonitorObservation::class);
-    // }
 }

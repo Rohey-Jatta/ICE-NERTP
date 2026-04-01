@@ -39,7 +39,7 @@ export default function ElectionMonitors({ auth, monitors = [] }) {
                                                 </div>
                                             </td>
                                             <td className="py-4 text-white">{monitor.organization || 'N/A'}</td>
-                                            <td className="py-4 text-white capitalize">{monitor.type.replace('_', ' ')}</td>
+                                            <td className="py-4 text-white capitalize">{monitor.type?.replace('_', ' ')}</td>
                                             <td className="py-4 text-white font-mono text-sm">{monitor.accreditation_number}</td>
                                             <td className="py-4 text-center text-white">{monitor.polling_stations?.length || 0}</td>
                                             <td className="py-4 text-center">
@@ -61,22 +61,30 @@ export default function ElectionMonitors({ auth, monitors = [] }) {
                                 </tbody>
                             </table>
 
-                            {/* Pagination */}
+                            {/* Pagination — guard against null URLs */}
                             {monitors.links && (
                                 <div className="mt-6 flex justify-center">
                                     <div className="flex space-x-1">
-                                        {monitors.links.map((link, index) => (
-                                            <Link
-                                                key={index}
-                                                href={link.url}
-                                                className={`px-3 py-2 text-sm rounded-lg ${
-                                                    link.active
-                                                        ? 'bg-teal-600 text-white'
-                                                        : 'bg-slate-700 text-gray-300 hover:bg-slate-600'
-                                                }`}
-                                                dangerouslySetInnerHTML={{ __html: link.label }}
-                                            />
-                                        ))}
+                                        {monitors.links.map((link, index) =>
+                                            link.url ? (
+                                                <Link
+                                                    key={index}
+                                                    href={link.url}
+                                                    className={`px-3 py-2 text-sm rounded-lg ${
+                                                        link.active
+                                                            ? 'bg-teal-600 text-white'
+                                                            : 'bg-slate-700 text-gray-300 hover:bg-slate-600'
+                                                    }`}
+                                                    dangerouslySetInnerHTML={{ __html: link.label }}
+                                                />
+                                            ) : (
+                                                <span
+                                                    key={index}
+                                                    className="px-3 py-2 text-sm rounded-lg bg-slate-800 text-gray-600 cursor-not-allowed"
+                                                    dangerouslySetInnerHTML={{ __html: link.label }}
+                                                />
+                                            )
+                                        )}
                                     </div>
                                 </div>
                             )}

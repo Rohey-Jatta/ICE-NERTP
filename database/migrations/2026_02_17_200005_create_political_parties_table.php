@@ -17,6 +17,13 @@ return new class extends Migration
             $table->string('registration_number')->nullable();
             $table->string('color', 7)->nullable();
             $table->string('logo_path')->nullable();
+            // Extra fields (previously in a misplaced migration that never ran)
+            $table->string('leader_name')->nullable();
+            $table->string('leader_photo_path')->nullable();
+            $table->string('symbol_path')->nullable();
+            $table->text('motto')->nullable();
+            $table->string('headquarters')->nullable();
+            $table->string('website')->nullable();
             $table->string('contact_person')->nullable();
             $table->string('contact_phone', 20)->nullable();
             $table->string('contact_email')->nullable();

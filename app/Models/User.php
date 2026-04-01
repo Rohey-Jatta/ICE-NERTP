@@ -38,6 +38,7 @@ class User extends Authenticatable
     }
 
     // Relationships
+
     public function devices()
     {
         return $this->hasMany(Device::class);
@@ -56,5 +57,13 @@ class User extends Authenticatable
     public function electionMonitor()
     {
         return $this->hasOne(ElectionMonitor::class);
+    }
+
+    /**
+     * The polling station this user is assigned to as an officer.
+     */
+    public function assignedStation()
+    {
+        return $this->hasOne(PollingStation::class, 'assigned_officer_id');
     }
 }
