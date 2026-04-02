@@ -346,6 +346,44 @@ Route::middleware(['auth', 'role:iec-administrator'])
         }
     })->name('elections.store');
 
+    Route::put('/elections/{election}', function (Request $request, Election $election) {
+        $request->validate([
+            'name'   => 'required|string|max:255',
+            'type'   => 'required|string|in:presidential,parliamentary,local,referendum',
+            'date'   => 'required|date',
+            'status' => 'required|in:draft,configured,active,results_pending,certifying,certified,archived',
+        ]);
+        try {
+            $typeMap = ['local' => 'local_government', 'referendum' => 'by_election'];
+            $election->update([
+                'name'       => $request->name,
+                'type'       => $typeMap[$request->type] ?? $request->type,
+                'start_date' => $request->date,
+                'end_date'   => $request->date,
+                'status'     => $request->status,
+            ]);
+            AuditLog::record(action: 'election.updated', event: 'updated', module: 'ElectionManagement', auditable: $election);
+            return redirect()->route('admin.elections')->with('success', 'Election updated successfully!');
+        } catch (\Exception $e) {
+            Log::error('Election update failed', ['error' => $e->getMessage()]);
+            return back()->withErrors(['error' => 'Failed to update election: ' . $e->getMessage()]);
+        }
+    })->name('elections.update');
+
+    Route::patch('/elections/{election}/toggle-status', function (Election $election) {
+        $newStatus = $election->status === 'archived' ? 'active' : 'archived';
+        $election->update(['status' => $newStatus]);
+        AuditLog::record(
+            action: "election.{$newStatus}",
+            event: 'updated',
+            module: 'ElectionManagement',
+            auditable: $election,
+            extra: ['outcome' => 'success', 'new_status' => $newStatus]
+        );
+        $verb = $newStatus === 'active' ? 'activated' : 'deactivated';
+        return redirect()->route('admin.elections')->with('success', "Election {$verb} successfully!");
+    })->name('elections.toggle-status');
+
     // ── Polling Stations ──────────────────────────────────────────────────────
     Route::get('/polling-stations', function () {
         $stations = PollingStation::with('ward')->get()->map(fn($s) => [
@@ -460,7 +498,6 @@ Route::middleware(['auth', 'role:iec-administrator'])
         $request->validate([
             'name'         => 'required|string|max:255',
             'abbreviation' => 'required|string|max:10',
-            'color'        => 'nullable|string|max:7',
             'leader_name'  => 'nullable|string|max:255',
             'leader_photo' => 'nullable|image|max:5120',
             'symbol'       => 'nullable|image|max:5120',
@@ -478,12 +515,22 @@ Route::middleware(['auth', 'role:iec-administrator'])
             if ($request->hasFile('symbol')) {
                 $symbolPath = $request->file('symbol')->store('party-photos/symbols', 'public');
             }
+
+
+            $colorParts = array_filter([
+                $request->input('color_0'),
+                $request->input('color_1'),
+                $request->input('color_2'),
+            ]);
+
+            $colorString = implode(',', array_values($colorParts)) ?: '#3b82f6';
+
             PoliticalParty::create([
                 'election_id'       => $election?->id ?? 1,
                 'name'              => $request->name,
                 'abbreviation'      => strtoupper($request->abbreviation),
                 'slug'              => Str::slug($request->name),
-                'color'             => $request->color ?? '#3b82f6',
+                'color'             => $colorString,
                 'leader_name'       => $request->leader_name,
                 'leader_photo_path' => $leaderPhotoPath,
                 'symbol_path'       => $symbolPath,

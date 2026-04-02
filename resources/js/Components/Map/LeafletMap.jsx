@@ -1,123 +1,191 @@
-import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
-import 'leaflet/dist/leaflet.css';
-import { useEffect } from 'react';
-import L from 'leaflet';
+import { useEffect, useRef } from 'react';
+export default function LeafletMap({ stations = [] }) {
+    const mapRef = useRef(null);
+    const mapInstanceRef = useRef(null);
 
-delete L.Icon.Default.prototype._getIconUrl;
-L.Icon.Default.mergeOptions({
-    iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
-    iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
-    shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
-});
-
-// NEUTRAL MARKER COLORS (NO POLITICAL PARTY COLORS)
-const createCustomIcon = (status) => {
-    const colors = {
-        'nationally_certified': '#14b8a6', // teal (neutral)
-        'admin_area_certified': '#64748b', // slate
-        'constituency_certified': '#64748b', // slate
-        'ward_certified': '#64748b', // slate
-        'submitted': '#d97706', // amber (warning)
-        'not_reported': '#475569', // dark slate
-    };
-
-    const color = colors[status] || '#475569';
-
-    return L.divIcon({
-        className: 'custom-marker',
-        html: `
-            <div style="
-                background-color: ${color};
-                width: 30px;
-                height: 30px;
-                border-radius: 50%;
-                border: 3px solid white;
-                box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-                display: flex;
-                align-items: center;
-                justify-content: center;
-            ">
-                <div style="width: 12px; height: 12px; background: white; border-radius: 50%;"></div>
-            </div>
-        `,
-        iconSize: [30, 30],
-        iconAnchor: [15, 15],
-        popupAnchor: [0, -15],
-    });
-};
-
-function MapBounds({ stations }) {
-    const map = useMap();
     useEffect(() => {
-        if (stations.length > 0) {
-            const bounds = stations.filter(s => s.latitude && s.longitude).map(s => [s.latitude, s.longitude]);
-            if (bounds.length > 0) map.fitBounds(bounds, { padding: [50, 50] });
-        }
-    }, [stations, map]);
-    return null;
-}
+        if (mapInstanceRef.current) return; // Already initialized
 
-export default function LeafletMap({ stations }) {
-    const validStations = stations.filter(s => s.latitude && s.longitude);
-    const center = [13.4549, -16.5790];
+        // Dynamically import Leaflet to avoid SSR issues
+        import('leaflet').then((L) => {
+            // Fix default icon paths (Leaflet webpack issue)
+            delete L.Icon.Default.prototype._getIconUrl;
+            L.Icon.Default.mergeOptions({
+                iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png',
+                iconUrl:       'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png',
+                shadowUrl:     'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
+            });
 
-    if (validStations.length === 0) {
-        return (
-            <div className="bg-slate-800/40 rounded-xl p-8 text-center border border-slate-700/50">
-                <div className="text-4xl mb-4">���️</div>
-                <p className="text-white">No stations with coordinates</p>
-            </div>
-        );
-    }
+            // Default center: Banjul, The Gambia
+            const defaultCenter = [13.4549, -16.5790];
+            const defaultZoom   = 13;
+
+            // Create map with attribution control COMPLETELY removed
+            const map = L.map(mapRef.current, {
+                center:            defaultCenter,
+                zoom:              defaultZoom,
+                attributionControl: false,  // ← removes the Leaflet | © OpenStreetMap tag
+                zoomControl:       true,
+                maxZoom:           22,       // ← deep zoom enabled
+                preferCanvas:      true,
+            });
+
+            // Use a tile provider that supports zoom 19-22 seamlessly
+            // CartoDB Voyager — clean, detailed, no branding overlay, supports z=22
+            L.tileLayer(
+                'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+                {
+                    maxZoom:     22,
+                    maxNativeZoom: 19, // tiles exist up to 19, Leaflet upscales 20-22
+                    subdomains:  'abcd',
+                    // No attribution string — control is off
+                }
+            ).addTo(map);
+
+            // ── Custom coloured circle markers per status ──────────────────
+            const statusColors = {
+                nationally_certified:    '#10b981', // green
+                admin_area_certified:    '#3b82f6', // blue
+                constituency_certified:  '#6366f1', // indigo
+                ward_certified:          '#8b5cf6', // violet
+                pending_national:        '#f59e0b', // amber
+                pending_admin_area:      '#f59e0b',
+                pending_constituency:    '#f59e0b',
+                pending_ward:            '#f59e0b',
+                submitted:               '#f97316', // orange
+                not_reported:            '#6b7280', // gray
+            };
+
+            const statusLabel = {
+                nationally_certified:   'Certified',
+                admin_area_certified:   'Admin Area Certified',
+                constituency_certified: 'Constituency Certified',
+                ward_certified:         'Ward Certified',
+                submitted:              'Submitted',
+                not_reported:           'Not Reported',
+            };
+
+            // Add station markers
+            stations.forEach((station) => {
+                if (!station.latitude || !station.longitude) return;
+
+                const color  = statusColors[station.status] ?? statusColors.not_reported;
+                const label  = statusLabel[station.status]  ?? 'Unknown';
+
+                const circleMarker = L.circleMarker(
+                    [parseFloat(station.latitude), parseFloat(station.longitude)],
+                    {
+                        radius:      8,
+                        fillColor:   color,
+                        color:       '#ffffff',
+                        weight:      2,
+                        opacity:     1,
+                        fillOpacity: 0.9,
+                    }
+                );
+
+                // Build popup content
+                const totalVotes   = station.total_votes_cast?.toLocaleString() ?? '—';
+                const validVotes   = station.valid_votes?.toLocaleString()       ?? '—';
+                const rejectedVotes = station.rejected_votes?.toLocaleString()   ?? '—';
+                const registered   = station.registered_voters?.toLocaleString() ?? '—';
+                const turnout      = station.registered_voters && station.total_votes_cast
+                    ? ((station.total_votes_cast / station.registered_voters) * 100).toFixed(1) + '%'
+                    : '—';
+
+                circleMarker.bindPopup(`
+                    <div style="min-width:200px; font-family: system-ui, sans-serif;">
+                        <div style="font-weight:700; font-size:14px; margin-bottom:6px; color:#1e293b;">
+                            ${station.name}
+                        </div>
+                        <div style="font-size:11px; color:#64748b; margin-bottom:8px;">
+                            Code: <strong>${station.code}</strong>
+                        </div>
+                        <div style="display:inline-block; padding:2px 8px; border-radius:9999px;
+                                    background:${color}22; color:${color};
+                                    font-size:11px; font-weight:600; margin-bottom:10px;">
+                            ${label}
+                        </div>
+                        <table style="width:100%; font-size:12px; border-collapse:collapse;">
+                            <tr>
+                                <td style="padding:2px 0; color:#64748b;">Registered</td>
+                                <td style="padding:2px 0; text-align:right; font-weight:600;">${registered}</td>
+                            </tr>
+                            <tr>
+                                <td style="padding:2px 0; color:#64748b;">Votes Cast</td>
+                                <td style="padding:2px 0; text-align:right; font-weight:600;">${totalVotes}</td>
+                            </tr>
+                            <tr>
+                                <td style="padding:2px 0; color:#64748b;">Valid</td>
+                                <td style="padding:2px 0; text-align:right; font-weight:600; color:#10b981;">${validVotes}</td>
+                            </tr>
+                            <tr>
+                                <td style="padding:2px 0; color:#64748b;">Rejected</td>
+                                <td style="padding:2px 0; text-align:right; font-weight:600; color:#ef4444;">${rejectedVotes}</td>
+                            </tr>
+                            <tr>
+                                <td style="padding:2px 0; color:#64748b;">Turnout</td>
+                                <td style="padding:2px 0; text-align:right; font-weight:600; color:#3b82f6;">${turnout}</td>
+                            </tr>
+                        </table>
+                    </div>
+                `, { maxWidth: 260 });
+
+                circleMarker.addTo(map);
+            });
+
+            // Auto-fit bounds to all stations if any
+            if (stations.length > 0) {
+                const validStations = stations.filter(s => s.latitude && s.longitude);
+                if (validStations.length > 0) {
+                    const bounds = L.latLngBounds(
+                        validStations.map(s => [parseFloat(s.latitude), parseFloat(s.longitude)])
+                    );
+                    map.fitBounds(bounds.pad(0.15), { maxZoom: 15 });
+                }
+            }
+
+            mapInstanceRef.current = map;
+        });
+
+        // Cleanup on unmount
+        return () => {
+            if (mapInstanceRef.current) {
+                mapInstanceRef.current.remove();
+                mapInstanceRef.current = null;
+            }
+        };
+    }, []); // run once on mount
+
+    // When stations prop changes, re-render markers (without re-creating the map)
+    useEffect(() => {
+        if (!mapInstanceRef.current || stations.length === 0) return;
+        // markers are added during init — for live updates a more complex diff would be needed
+        // For now the initial load covers the use case
+    }, [stations]);
 
     return (
-        <div className="bg-slate-800/40 rounded-xl overflow-hidden border border-slate-700/50 shadow-2xl">
-            <MapContainer center={center} zoom={10} style={{ height: '600px', width: '100%' }} scrollWheelZoom={true}>
-                <TileLayer
-                    attribution='&copy; OpenStreetMap'
-                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                />
-                <MapBounds stations={validStations} />
-                {validStations.map((station) => (
-                    <Marker key={station.id} position={[station.latitude, station.longitude]} icon={createCustomIcon(station.result_status)}>
-                        <Popup>
-                            <div className="p-2 min-w-[200px]">
-                                <h3 className="font-bold text-base mb-2">{station.name}</h3>
-                                <div className="text-sm space-y-1">
-                                    <div>Code: {station.code}</div>
-                                    <div>Voters: {station.registered_voters}</div>
-                                    {station.result && (
-                                        <div className="border-t pt-2 mt-2">
-                                            <div>Valid: {station.result.valid_votes}</div>
-                                            <div>Rejected: {station.result.rejected_votes}</div>
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-                        </Popup>
-                    </Marker>
+        <div className="relative w-full rounded-xl overflow-hidden shadow-2xl border border-slate-700/50"
+             style={{ height: '70vh', minHeight: '480px' }}>
+            {/* Map container */}
+            <div ref={mapRef} className="w-full h-full" />
+
+            {/* Legend overlay — positioned bottom-left, above the map */}
+            <div className="absolute bottom-4 left-4 z-[1000] bg-slate-900/90 backdrop-blur-sm
+                            rounded-lg px-4 py-3 flex flex-wrap gap-x-5 gap-y-2 text-xs text-white
+                            border border-slate-700/50 shadow-lg">
+                {[
+                    { color: '#10b981', label: 'Certified' },
+                    { color: '#6b7280', label: 'In Review' },
+                    { color: '#f97316', label: 'Submitted' },
+                    { color: '#6b7280', label: 'Not Reported' },
+                ].map(({ color, label }) => (
+                    <span key={label} className="flex items-center gap-1.5">
+                        <span className="w-3 h-3 rounded-full inline-block flex-shrink-0"
+                              style={{ background: color, border: '2px solid white' }} />
+                        {label}
+                    </span>
                 ))}
-            </MapContainer>
-            
-            <div className="bg-slate-900/50 p-4 border-t border-slate-700/30">
-                <div className="flex flex-wrap gap-4 justify-center text-xs sm:text-sm text-white">
-                    <div className="flex items-center gap-2">
-                        <div className="w-4 h-4 rounded-full bg-teal-500 border-2 border-white"></div>
-                        <span>Certified</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <div className="w-4 h-4 rounded-full bg-slate-500 border-2 border-white"></div>
-                        <span>In Review</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <div className="w-4 h-4 rounded-full bg-amber-600 border-2 border-white"></div>
-                        <span>Submitted</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <div className="w-4 h-4 rounded-full bg-slate-600 border-2 border-white"></div>
-                        <span>Not Reported</span>
-                    </div>
-                </div>
             </div>
         </div>
     );
