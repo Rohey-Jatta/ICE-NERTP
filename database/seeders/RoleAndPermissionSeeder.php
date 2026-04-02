@@ -11,7 +11,7 @@ class RoleAndPermissionSeeder extends Seeder
 {
     private array $permissions = [
         'submit-result', 'view-own-result', 'edit-pending-result', 'upload-photo', 'view-own-polling-station',
-        'view-ward-results', 'approve-ward-result', 'reject-ward-result', 'view-ward-queue', 'add-certification-comment', 'view-ward-analytics',
+        'view-ward-results', 'approve-ward-result', 'reject-ward-result', 'reject-ward-result-with-reservation', 'view-ward-queue', 'add-certification-comment', 'view-ward-analytics',
         'view-constituency-results', 'approve-constituency-result', 'reject-constituency-result', 'view-constituency-queue', 'view-ward-breakdowns', 'generate-constituency-report', 'view-constituency-analytics',
         'view-admin-area-results', 'approve-admin-area-result', 'reject-admin-area-result', 'view-admin-area-queue', 'view-constituency-breakdowns', 'access-analytics', 'generate-admin-area-report',
         'national-certification', 'view-all-results', 'override-rejection', 'final-approval', 'access-full-analytics', 'publish-results', 'view-national-queue', 'generate-national-report',
@@ -22,7 +22,7 @@ class RoleAndPermissionSeeder extends Seeder
 
     private array $roles = [
         'polling-officer'       => ['submit-result', 'view-own-result', 'edit-pending-result', 'upload-photo', 'view-own-polling-station'],
-        'ward-approver'         => ['view-ward-results', 'approve-ward-result', 'reject-ward-result', 'view-ward-queue', 'add-certification-comment', 'view-ward-analytics'],
+        'ward-approver'         => ['view-ward-results', 'approve-ward-result', 'reject-ward-result', 'reject-ward-result-with-reservation', 'view-ward-queue', 'add-certification-comment', 'view-ward-analytics'],
         'constituency-approver' => ['view-constituency-results', 'approve-constituency-result', 'reject-constituency-result', 'view-constituency-queue', 'view-ward-breakdowns', 'generate-constituency-report', 'view-constituency-analytics'],
         'admin-area-approver'   => ['view-admin-area-results', 'approve-admin-area-result', 'reject-admin-area-result', 'view-admin-area-queue', 'view-constituency-breakdowns', 'access-analytics', 'generate-admin-area-report'],
         'iec-chairman'          => ['national-certification', 'view-all-results', 'override-rejection', 'final-approval', 'access-full-analytics', 'publish-results', 'view-national-queue', 'generate-national-report', 'view-ward-results', 'view-constituency-results', 'view-admin-area-results'],
