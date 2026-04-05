@@ -6,11 +6,31 @@ export default function AppLayout({ user, children }) {
     const [isLoggingOut, setIsLoggingOut] = useState(false);
     const isAuthenticated = !!user;
 
-    const handleLogout = () => {
+    const handleLogout = (e) => {
+        // Prevent any default behaviour and stop event bubbling
+        if (e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+
+        if (isLoggingOut) return;
         setIsLoggingOut(true);
-        router.post('/logout', {}, {
-            onFinish: () => setIsLoggingOut(false),
-        });
+        setMobileMenuOpen(false);
+
+        // Pull CSRF token directly from the meta tag as a fallback guarantee
+        const csrfToken = document.head
+            .querySelector('meta[name="csrf-token"]')
+            ?.getAttribute('content');
+
+        router.post(
+            '/logout',
+            {},
+            {
+                headers: csrfToken ? { 'X-CSRF-TOKEN': csrfToken } : {},
+                onFinish: () => setIsLoggingOut(false),
+                onError:  () => setIsLoggingOut(false),
+            }
+        );
     };
 
     return (
@@ -58,9 +78,10 @@ export default function AppLayout({ user, children }) {
                             </Link>
                             {isAuthenticated ? (
                                 <button
+                                    type="button"
                                     onClick={handleLogout}
                                     disabled={isLoggingOut}
-                                    className="px-6 py-2 bg-pink-600 rounded-lg font-semibold disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                                    className="px-6 py-2 bg-pink-600 hover:bg-pink-700 rounded-lg font-semibold disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 transition-colors"
                                 >
                                     {isLoggingOut && (
                                         <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
@@ -73,17 +94,19 @@ export default function AppLayout({ user, children }) {
                             ) : (
                                 <Link
                                     href="/auth/login"
-                                    className="px-6 py-2 bg-gradient-to-r from-pink-600 to-pink-700 rounded-lg font-semibold"
+                                    className="px-6 py-2 bg-gradient-to-r from-pink-600 to-pink-700 rounded-lg font-semibold hover:from-pink-700 hover:to-pink-800 transition-all"
                                 >
                                     Staff Login
                                 </Link>
                             )}
                         </nav>
 
-                        {/* Mobile toggle */}
+                        {/* Mobile hamburger toggle */}
                         <button
+                            type="button"
                             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                            className="md:hidden text-white p-2"
+                            className="md:hidden text-white p-2 rounded-lg hover:bg-white/10 transition-colors"
+                            aria-label="Toggle menu"
                         >
                             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 {mobileMenuOpen
@@ -97,18 +120,47 @@ export default function AppLayout({ user, children }) {
                     {/* Mobile menu */}
                     {mobileMenuOpen && (
                         <nav className="md:hidden mt-4 pb-4 border-t border-slate-700/50 pt-4 space-y-3">
-                            <Link href="/" className="block text-white py-2" onClick={() => setMobileMenuOpen(false)}>Home</Link>
-                            <Link href="/results" className="block text-white py-2" onClick={() => setMobileMenuOpen(false)}>Results</Link>
+                            <Link
+                                href="/"
+                                className="block text-white py-2 px-3 rounded-lg hover:bg-white/10 transition-colors"
+                                onClick={() => setMobileMenuOpen(false)}
+                            >
+                                Home
+                            </Link>
+                            <Link
+                                href="/results"
+                                className="block text-white py-2 px-3 rounded-lg hover:bg-white/10 transition-colors"
+                                onClick={() => setMobileMenuOpen(false)}
+                            >
+                                Results
+                            </Link>
                             {isAuthenticated ? (
+                                /*
+                                 * Use a plain <button> — NOT an <a> or <Link>.
+                                 * This guarantees no navigation happens before
+                                 * the POST completes, preventing a race that
+                                 * causes the 419 on slow mobile connections.
+                                 */
                                 <button
+                                    type="button"
                                     onClick={handleLogout}
                                     disabled={isLoggingOut}
-                                    className="w-full text-center px-6 py-3 bg-red-600 text-white rounded-lg disabled:opacity-50"
+                                    className="w-full text-left px-3 py-3 bg-pink-600 hover:bg-pink-700 text-white rounded-lg font-semibold disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 transition-colors"
                                 >
+                                    {isLoggingOut && (
+                                        <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                                        </svg>
+                                    )}
                                     {isLoggingOut ? 'Logging out…' : 'Logout'}
                                 </button>
                             ) : (
-                                <Link href="/auth/login" className="block text-center px-6 py-3 bg-pink-600 text-white rounded-lg">
+                                <Link
+                                    href="/auth/login"
+                                    className="block text-center px-6 py-3 bg-pink-600 hover:bg-pink-700 text-white rounded-lg font-semibold transition-colors"
+                                    onClick={() => setMobileMenuOpen(false)}
+                                >
                                     Staff Login
                                 </Link>
                             )}
