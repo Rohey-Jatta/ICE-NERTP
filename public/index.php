@@ -1,6 +1,6 @@
 <?php
 
-set_time_limit(300); // Increase to 300 seconds
+set_time_limit(5); // Increase to 300 seconds
 
 use Illuminate\Foundation\Application;
 use Illuminate\Http\Request;

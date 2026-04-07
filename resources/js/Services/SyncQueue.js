@@ -16,19 +16,17 @@ class SyncQueue {
     }
 
     init() {
-        // Listen for online/offline events
+        // Listen for online/offline events, but never block navigation or UI
         window.addEventListener('online', () => this.handleOnline());
         window.addEventListener('offline', () => this.handleOffline());
 
-        // Register service worker sync if available
+        // Register service worker sync if available (background only)
         if ('serviceWorker' in navigator && 'sync' in ServiceWorkerRegistration.prototype) {
             this.registerBackgroundSync();
         }
 
-        // Immediate sync check if online
-        if (navigator.onLine) {
-            this.syncPendingSubmissions();
-        }
+        // Never block navigation or UI on sync; all syncs are background-only
+        // Do not trigger syncPendingSubmissions on init; only on explicit background events
     }
 
     async registerBackgroundSync() {
@@ -42,7 +40,8 @@ class SyncQueue {
     }
 
     handleOnline() {
-        console.log('Connection restored - syncing pending submissions');
+        console.log('Connection restored - syncing pending submissions (background only)');
+        // Only trigger background sync, never block UI
         this.syncPendingSubmissions();
     }
 
@@ -59,8 +58,9 @@ class SyncQueue {
             const pending = await offlineSync.getPendingSubmissions();
             console.log(`Found ${pending.length} pending submissions`);
 
+            // Sync in background, never block UI or navigation
             for (const submission of pending) {
-                await this.syncSubmission(submission);
+                this.syncSubmission(submission).catch(() => {});
             }
 
             // Clean up synced submissions older than 7 days

@@ -16,4 +16,28 @@ export default defineConfig({
             '@': resolve(__dirname, 'resources/js'),
         },
     },
+    build: {
+        // Increase chunk size warning limit — the app is large
+        chunkSizeWarningLimit: 2000,
+        rollupOptions: {
+            output: {
+                // Split vendor code from app code for better caching
+                manualChunks: {
+                    'react-vendor': ['react', 'react-dom'],
+                    'inertia-vendor': ['@inertiajs/react'],
+                    'chart-vendor': ['chart.js', 'react-chartjs-2', 'recharts'],
+                    'map-vendor': ['leaflet', 'react-leaflet'],
+                },
+            },
+        },
+    },
+    // Faster dev server
+    server: {
+        hmr: {
+            overlay: false, // Don't show error overlay — it causes re-renders
+        },
+    },
+    optimizeDeps: {
+        include: ['react', 'react-dom', '@inertiajs/react', 'axios'],
+    },
 });

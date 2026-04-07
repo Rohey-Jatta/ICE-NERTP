@@ -3,37 +3,169 @@
 @import 'tailwindcss/components';
 @import 'tailwindcss/utilities';
 
-/* ── Floating star/sparkle animation ───────────────────────────────── */
-@keyframes float {
+/* ─── Layout Shell ───────────────────────────────────────────────────────── */
+
+.iec-layout {
+    min-height: 100vh;
+    background: #0f172a;
+    position: relative;
+    overflow-x: hidden;
+}
+
+/* Pure CSS background — replaces 50-particle JS loop */
+.iec-bg {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+
+    /* Deep navy gradient */
+    background:
+        radial-gradient(ellipse 80% 60% at 20% 30%, rgba(20, 184, 166, 0.08) 0%, transparent 60%),
+        radial-gradient(ellipse 60% 50% at 80% 70%, rgba(59, 130, 246, 0.06) 0%, transparent 60%),
+        linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+}
+
+/* Subtle animated glow orbs — CSS only, no JS */
+.iec-bg::before,
+.iec-bg::after {
+    content: '';
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(80px);
+    animation: orb-pulse 8s ease-in-out infinite;
+}
+
+.iec-bg::before {
+    width: 600px;
+    height: 400px;
+    top: 10%;
+    left: 5%;
+    background: rgba(20, 184, 166, 0.06);
+}
+
+.iec-bg::after {
+    width: 500px;
+    height: 350px;
+    bottom: 10%;
+    right: 5%;
+    background: rgba(59, 130, 246, 0.05);
+    animation-delay: 4s;
+}
+
+@keyframes orb-pulse {
+    0%, 100% { opacity: 0.4; transform: scale(1); }
+    50%       { opacity: 0.7; transform: scale(1.15); }
+}
+
+/* ─── Header ─────────────────────────────────────────────────────────────── */
+
+.iec-header {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 50;
+    background: rgba(28, 49, 71, 0.95);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-bottom: 1px solid rgba(100, 116, 139, 0.3);
+    box-shadow: 0 1px 20px rgba(0, 0, 0, 0.3);
+}
+
+/* ─── Main content ───────────────────────────────────────────────────────── */
+
+.iec-main {
+    position: relative;
+    z-index: 10;
+    padding-top: 5rem; /* offset for fixed header */
+    min-height: calc(100vh - 80px);
+}
+
+/* ─── Footer ─────────────────────────────────────────────────────────────── */
+
+.iec-footer {
+    position: relative;
+    z-index: 10;
+    background: rgba(28, 49, 71, 0.95);
+    border-top: 1px solid rgba(100, 116, 139, 0.3);
+    padding: 2rem 0;
+    margin-top: 5rem;
+}
+
+/* ─── Instant navigation — remove all transition delays on links ─────────── */
+
+/* Inertia replaces page content synchronously — no transition needed */
+* {
+    /* Don't animate layout shifts between pages */
+    scroll-behavior: auto !important;
+}
+
+/* Only keep hover transitions on interactive elements */
+a, button {
+    transition: color 0.15s, background-color 0.15s, border-color 0.15s, opacity 0.15s;
+}
+
+/* ─── Login page floating particles (CSS-only, no JS) ───────────────────── */
+
+@keyframes float-up {
     0% {
-        transform: translateY(0) translateX(0);
+        transform: translateY(100vh) translateX(0);
         opacity: 0;
     }
-    5%   { opacity: 0.6; }
-    50%  { opacity: 0.8; }
-    95%  { opacity: 0.6; }
+    5%   { opacity: 0.5; }
+    95%  { opacity: 0.3; }
     100% {
-        transform: translateY(-100vh) translateX(30px);
+        transform: translateY(-10vh) translateX(20px);
         opacity: 0;
     }
 }
 
-.animate-float {
-    animation: float linear infinite;
+/* Used on login/2FA pages via .particle class */
+.particle {
+    position: absolute;
+    width: 2px;
+    height: 2px;
+    background: #94a3b8;
+    border-radius: 50%;
+    animation: float-up linear infinite;
 }
 
-/* ── Slow background orb pulse ─────────────────────────────────────── */
+/* Generate 20 particles with staggered delays using CSS only */
+.particle:nth-child(1)  { left: 5%;  animation-duration: 45s; animation-delay:  0s; }
+.particle:nth-child(2)  { left: 10%; animation-duration: 38s; animation-delay:  3s; }
+.particle:nth-child(3)  { left: 18%; animation-duration: 52s; animation-delay:  7s; }
+.particle:nth-child(4)  { left: 25%; animation-duration: 41s; animation-delay:  1s; }
+.particle:nth-child(5)  { left: 33%; animation-duration: 48s; animation-delay:  5s; }
+.particle:nth-child(6)  { left: 40%; animation-duration: 35s; animation-delay:  9s; }
+.particle:nth-child(7)  { left: 47%; animation-duration: 55s; animation-delay:  2s; }
+.particle:nth-child(8)  { left: 54%; animation-duration: 43s; animation-delay:  6s; }
+.particle:nth-child(9)  { left: 61%; animation-duration: 39s; animation-delay:  4s; }
+.particle:nth-child(10) { left: 68%; animation-duration: 50s; animation-delay:  8s; }
+.particle:nth-child(11) { left: 74%; animation-duration: 46s; animation-delay:  0s; }
+.particle:nth-child(12) { left: 80%; animation-duration: 37s; animation-delay:  3s; }
+.particle:nth-child(13) { left: 86%; animation-duration: 53s; animation-delay:  7s; }
+.particle:nth-child(14) { left: 92%; animation-duration: 42s; animation-delay:  1s; }
+.particle:nth-child(15) { left: 97%; animation-duration: 47s; animation-delay:  5s; }
+
+/* ─── Slow-pulse (used on login orb) ────────────────────────────────────── */
+
 @keyframes slow-pulse {
-    0%, 100% {
-        opacity: 0.3;
-        transform: scale(1);
-    }
-    50% {
-        opacity: 0.5;
-        transform: scale(1.1);
-    }
+    0%, 100% { opacity: 0.3; transform: scale(1); }
+    50%       { opacity: 0.5; transform: scale(1.1); }
 }
 
 .animate-slow-pulse {
     animation: slow-pulse 8s ease-in-out infinite;
+}
+
+/* ─── Page content fade-in (instant feel, no layout shift) ──────────────── */
+
+.iec-main > * {
+    animation: page-in 0.15s ease-out;
+}
+
+@keyframes page-in {
+    from { opacity: 0; transform: translateY(4px); }
+    to   { opacity: 1; transform: translateY(0); }
 }

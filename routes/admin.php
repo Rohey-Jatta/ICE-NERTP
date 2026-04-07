@@ -42,7 +42,6 @@ Route::middleware(['auth', 'role:iec-administrator'])
         ]);
     })->name('users');
 
-    // FIXED: Pass actual polling stations, wards, constituencies, admin areas
     Route::get('/users/create', function () {
         return Inertia::render('Admin/UserCreate', [
             'auth'            => ['user' => Auth::user()],
@@ -57,6 +56,7 @@ Route::middleware(['auth', 'role:iec-administrator'])
         $request->validate([
             'name'     => 'required|string|max:255',
             'email'    => 'required|email|unique:users,email',
+            'phone'    => 'required|string|max:20',
             'password' => 'required|string|min:8',
             'role'     => 'required|string',
         ]);
@@ -64,23 +64,22 @@ Route::middleware(['auth', 'role:iec-administrator'])
             $user = User::create([
                 'name'     => $request->name,
                 'email'    => $request->email,
+                'phone'    => $request->phone,
                 'password' => bcrypt($request->password),
                 'status'   => 'active',
             ]);
             $user->assignRole($request->role);
 
-            // Assign polling station if provided
             if ($request->role === 'polling-officer' && $request->polling_station_id) {
                 PollingStation::where('id', $request->polling_station_id)
                     ->update(['assigned_officer_id' => $user->id]);
             }
 
-            // Assign ward/constituency/admin area if provided
             if (in_array($request->role, ['ward-approver', 'constituency-approver', 'admin-area-approver'])) {
                 $fieldMap = [
-                    'ward-approver'          => ['field' => 'ward_id',           'level' => 'ward'],
-                    'constituency-approver'  => ['field' => 'constituency_id',   'level' => 'constituency'],
-                    'admin-area-approver'    => ['field' => 'admin_area_id',      'level' => 'admin_area'],
+                    'ward-approver'         => ['field' => 'ward_id',         'level' => 'ward'],
+                    'constituency-approver' => ['field' => 'constituency_id', 'level' => 'constituency'],
+                    'admin-area-approver'   => ['field' => 'admin_area_id',   'level' => 'admin_area'],
                 ];
                 $cfg   = $fieldMap[$request->role];
                 $value = $request->input($cfg['field']);
@@ -114,12 +113,19 @@ Route::middleware(['auth', 'role:iec-administrator'])
         $request->validate([
             'name'   => 'required|string|max:255',
             'email'  => 'required|email|unique:users,email,'.$user->id,
+            'phone'  => 'required|string|max:20',
             'status' => 'required|in:active,inactive,suspended',
             'role'   => 'required|string',
         ]);
         try {
-            $user->update(['name' => $request->name, 'email' => $request->email, 'status' => $request->status]);
+            $user->update([
+                'name'   => $request->name,
+                'email'  => $request->email,
+                'phone'  => $request->phone,
+                'status' => $request->status,
+            ]);
             $user->syncRoles([$request->role]);
+
             if ($request->role === 'polling-officer' && $request->polling_station_id) {
                 PollingStation::where('assigned_officer_id', $user->id)->update(['assigned_officer_id' => null]);
                 PollingStation::where('id', $request->polling_station_id)->update(['assigned_officer_id' => $user->id]);
@@ -155,7 +161,6 @@ Route::middleware(['auth', 'role:iec-administrator'])
         ]);
     })->name('party-representatives.create');
 
-    // ADDED: Edit route for party representatives
     Route::get('/party-representatives/{id}/edit', function ($id) {
         $rep = \App\Models\PartyRepresentative::with(['user', 'politicalParty', 'pollingStations'])->findOrFail($id);
         return Inertia::render('Admin/PartyRepresentativeEdit', [
@@ -181,10 +186,8 @@ Route::middleware(['auth', 'role:iec-administrator'])
                 'designation'        => $request->designation,
                 'is_active'          => $request->boolean('is_active', true),
             ]);
-            // Sync polling station assignments
             DB::table('party_representative_polling_station')
-                ->where('party_representative_id', $rep->id)
-                ->delete();
+                ->where('party_representative_id', $rep->id)->delete();
             foreach ($request->polling_station_ids as $sid) {
                 DB::table('party_representative_polling_station')->insert([
                     'party_representative_id' => $rep->id,
@@ -245,8 +248,7 @@ Route::middleware(['auth', 'role:iec-administrator'])
             'auth'            => ['user' => Auth::user()],
             'users'           => User::role('election-monitor')
                 ->whereDoesntHave('electionMonitor')
-                ->select('id', 'name', 'email')
-                ->get(),
+                ->select('id', 'name', 'email')->get(),
             'pollingStations' => PollingStation::select('id', 'name', 'code')->get(),
         ]);
     })->name('election-monitors.create');
@@ -276,9 +278,7 @@ Route::middleware(['auth', 'role:iec-administrator'])
                 ]);
             }
             $user = User::find($request->user_id);
-            if (!$user->hasRole('election-monitor')) {
-                $user->assignRole('election-monitor');
-            }
+            if (!$user->hasRole('election-monitor')) $user->assignRole('election-monitor');
             return redirect()->route('admin.election-monitors')->with('success', 'Election monitor created!');
         } catch (\Exception $e) {
             return back()->withErrors(['error' => 'Failed: '.$e->getMessage()]);
@@ -365,7 +365,6 @@ Route::middleware(['auth', 'role:iec-administrator'])
             AuditLog::record(action: 'election.updated', event: 'updated', module: 'ElectionManagement', auditable: $election);
             return redirect()->route('admin.elections')->with('success', 'Election updated successfully!');
         } catch (\Exception $e) {
-            Log::error('Election update failed', ['error' => $e->getMessage()]);
             return back()->withErrors(['error' => 'Failed to update election: ' . $e->getMessage()]);
         }
     })->name('elections.update');
@@ -373,13 +372,8 @@ Route::middleware(['auth', 'role:iec-administrator'])
     Route::patch('/elections/{election}/toggle-status', function (Election $election) {
         $newStatus = $election->status === 'archived' ? 'active' : 'archived';
         $election->update(['status' => $newStatus]);
-        AuditLog::record(
-            action: "election.{$newStatus}",
-            event: 'updated',
-            module: 'ElectionManagement',
-            auditable: $election,
-            extra: ['outcome' => 'success', 'new_status' => $newStatus]
-        );
+        AuditLog::record(action: "election.{$newStatus}", event: 'updated', module: 'ElectionManagement', auditable: $election,
+            extra: ['outcome' => 'success', 'new_status' => $newStatus]);
         $verb = $newStatus === 'active' ? 'activated' : 'deactivated';
         return redirect()->route('admin.elections')->with('success', "Election {$verb} successfully!");
     })->name('elections.toggle-status');
@@ -405,8 +399,7 @@ Route::middleware(['auth', 'role:iec-administrator'])
             'wards'    => AdministrativeHierarchy::where('level', 'ward')->get(['id', 'name']),
             'officers' => User::role('polling-officer')
                 ->whereDoesntHave('assignedStation')
-                ->select('id', 'name', 'email')
-                ->get(),
+                ->select('id', 'name', 'email')->get(),
             'election' => Election::where('status', 'active')->first(['id', 'name']),
         ]);
     })->name('polling-stations.create');
@@ -445,6 +438,56 @@ Route::middleware(['auth', 'role:iec-administrator'])
         }
     })->name('polling-stations.store');
 
+    // ── Polling Station Edit (was missing — caused 404) ───────────────────────
+    Route::get('/polling-stations/{id}/edit', function ($id) {
+        $station = PollingStation::with(['ward', 'assignedOfficer'])->findOrFail($id);
+        return Inertia::render('Admin/PollingStationEdit', [
+            'auth'     => ['user' => Auth::user()],
+            'station'  => $station,
+            'wards'    => AdministrativeHierarchy::where('level', 'ward')->get(['id', 'name']),
+            'officers' => User::role('polling-officer')->select('id', 'name', 'email')->get(),
+            'election' => Election::where('status', 'active')->first(['id', 'name']),
+        ]);
+    })->name('polling-stations.edit');
+
+    Route::put('/polling-stations/{id}', function (Request $request, $id) {
+        $station = PollingStation::findOrFail($id);
+        $request->validate([
+            'code'                => 'required|string|unique:polling_stations,code,'.$id,
+            'name'                => 'required|string|max:255',
+            'address'             => 'nullable|string',
+            'ward_id'             => 'required|integer|exists:administrative_hierarchy,id',
+            'latitude'            => 'required|numeric|between:-90,90',
+            'longitude'           => 'required|numeric|between:-180,180',
+            'registered_voters'   => 'required|integer|min:0',
+            'assigned_officer_id' => 'nullable|exists:users,id',
+            'is_active'           => 'boolean',
+            'is_test_station'     => 'boolean',
+        ]);
+        try {
+            // Unassign old officer if changing
+            if ($station->assigned_officer_id && $station->assigned_officer_id != $request->assigned_officer_id) {
+                // old officer no longer has this station
+            }
+            $station->update([
+                'code'                => strtoupper($request->code),
+                'name'                => $request->name,
+                'address'             => $request->address,
+                'ward_id'             => $request->ward_id,
+                'latitude'            => $request->latitude,
+                'longitude'           => $request->longitude,
+                'registered_voters'   => $request->registered_voters,
+                'assigned_officer_id' => $request->assigned_officer_id ?: null,
+                'is_active'           => $request->boolean('is_active', true),
+                'is_test_station'     => $request->boolean('is_test_station', false),
+            ]);
+            AuditLog::record(action: 'polling_station.updated', event: 'updated', module: 'PollingStation', auditable: $station);
+            return redirect()->route('admin.polling-stations')->with('success', 'Polling station updated!');
+        } catch (\Exception $e) {
+            return back()->withErrors(['error' => 'Failed: '.$e->getMessage()]);
+        }
+    })->name('polling-stations.update');
+
     // ── Parties ───────────────────────────────────────────────────────────────
     Route::get('/parties', function () {
         return Inertia::render('Admin/Parties', [
@@ -459,40 +502,72 @@ Route::middleware(['auth', 'role:iec-administrator'])
     ]))->name('parties.create');
 
     Route::get('/parties/{id}/edit', function ($id) {
-        $party = PoliticalParty::findOrFail($id);
         return Inertia::render('Admin/PartyEdit', [
             'auth'  => ['user' => Auth::user()],
-            'party' => $party,
+            'party' => PoliticalParty::findOrFail($id),
         ]);
     })->name('parties.edit');
 
-    Route::put('/parties/{id}', function (Request $request, $id) {
+    // ── Party Update via POST (avoids Inertia put()+forceFormData file upload bug) ──
+    Route::post('/parties/{id}/update', function (Request $request, $id) {
         $party = PoliticalParty::findOrFail($id);
+
         $request->validate([
             'name'         => 'required|string|max:255',
             'abbreviation' => 'required|string|max:10',
-            'color'        => 'nullable|string|max:7',
             'leader_name'  => 'nullable|string|max:255',
+            'leader_photo' => 'nullable|image|max:5120',
+            'symbol'       => 'nullable|image|max:5120',
             'motto'        => 'nullable|string|max:500',
             'headquarters' => 'nullable|string|max:255',
             'website'      => 'nullable|url|max:255',
         ]);
+
         try {
+            // Parse colors from indexed fields (color_0, color_1, color_2)
+            // OR from JSON array if sent that way
+            $colorParts = [];
+            if ($request->has('colors') && is_array($request->colors)) {
+                $colorParts = array_filter($request->colors);
+            } else {
+                $colorParts = array_filter([
+                    $request->input('color_0'),
+                    $request->input('color_1'),
+                    $request->input('color_2'),
+                ]);
+            }
+            $colorString = implode(',', array_values($colorParts)) ?: ($party->color ?? '#3b82f6');
+
+            $leaderPhotoPath = $party->leader_photo_path;
+            if ($request->hasFile('leader_photo')) {
+                $leaderPhotoPath = $request->file('leader_photo')->store('party-photos/leaders', 'public');
+            }
+
+            $symbolPath = $party->symbol_path;
+            if ($request->hasFile('symbol')) {
+                $symbolPath = $request->file('symbol')->store('party-photos/symbols', 'public');
+            }
+
+            // Update IN PLACE — never creates a new record
             $party->update([
-                'name'         => $request->name,
-                'abbreviation' => strtoupper($request->abbreviation),
-                'slug'         => Str::slug($request->name),
-                'color'        => $request->color ?? '#3b82f6',
-                'leader_name'  => $request->leader_name,
-                'motto'        => $request->motto,
-                'headquarters' => $request->headquarters,
-                'website'      => $request->website,
+                'name'              => $request->name,
+                'abbreviation'      => strtoupper($request->abbreviation),
+                'slug'              => Str::slug($request->name),
+                'color'             => $colorString,
+                'leader_name'       => $request->leader_name,
+                'leader_photo_path' => $leaderPhotoPath,
+                'symbol_path'       => $symbolPath,
+                'motto'             => $request->motto,
+                'headquarters'      => $request->headquarters,
+                'website'           => $request->website,
             ]);
+
+            AuditLog::record(action: 'party.updated', event: 'updated', module: 'PartyManagement', auditable: $party);
             return redirect()->route('admin.parties')->with('success', 'Party updated successfully!');
         } catch (\Exception $e) {
             return back()->withErrors(['error' => 'Failed: ' . $e->getMessage()]);
         }
-    })->name('parties.update');
+    })->name('parties.update-post');
 
     Route::post('/parties', function (Request $request) {
         $request->validate([
@@ -516,13 +591,11 @@ Route::middleware(['auth', 'role:iec-administrator'])
                 $symbolPath = $request->file('symbol')->store('party-photos/symbols', 'public');
             }
 
-
             $colorParts = array_filter([
                 $request->input('color_0'),
                 $request->input('color_1'),
                 $request->input('color_2'),
             ]);
-
             $colorString = implode(',', array_values($colorParts)) ?: '#3b82f6';
 
             PoliticalParty::create([
@@ -548,6 +621,266 @@ Route::middleware(['auth', 'role:iec-administrator'])
         'auth'    => ['user' => Auth::user()],
         'parties' => PoliticalParty::all(),
     ]))->name('parties.candidates');
+
+    // ── Administrative Hierarchy ──────────────────────────────────────────────
+
+    // Admin Areas
+    Route::get('/hierarchy/admin-areas', function () {
+        $adminAreas = AdministrativeHierarchy::where('level', 'admin_area')
+            ->with('election')->withCount('children')->orderBy('name')->get()
+            ->map(fn($a) => [
+                'id'             => $a->id,
+                'code'           => $a->code,
+                'name'           => $a->name,
+                'election_name'  => $a->election->name ?? '—',
+                'children_count' => $a->children_count,
+            ]);
+        return Inertia::render('Admin/Hierarchy/AdminAreas', [
+            'auth'       => ['user' => Auth::user()],
+            'adminAreas' => $adminAreas,
+            'flash'      => session()->only(['success', 'error']),
+        ]);
+    })->name('hierarchy.admin-areas');
+
+    Route::get('/hierarchy/admin-areas/create', function () {
+        return Inertia::render('Admin/Hierarchy/AdminAreaCreate', [
+            'auth'      => ['user' => Auth::user()],
+            'elections' => Election::whereIn('status', ['active', 'draft', 'configured'])
+                ->orderByDesc('created_at')->get(['id', 'name']),
+        ]);
+    })->name('hierarchy.admin-areas.create');
+
+    Route::post('/hierarchy/admin-areas', function (Request $request) {
+        $request->validate([
+            'election_id' => 'required|exists:elections,id',
+            'code'        => 'required|string|max:20',
+            'name'        => 'required|string|max:255',
+        ]);
+        try {
+            AdministrativeHierarchy::create([
+                'election_id' => $request->election_id,
+                'level'       => 'admin_area',
+                'parent_id'   => null,
+                'code'        => strtoupper($request->code),
+                'name'        => $request->name,
+            ]);
+            return redirect()->route('admin.hierarchy.admin-areas')->with('success', 'Admin Area registered successfully!');
+        } catch (\Exception $e) {
+            return back()->withErrors(['error' => 'Failed: ' . $e->getMessage()]);
+        }
+    })->name('hierarchy.admin-areas.store');
+
+    Route::get('/hierarchy/admin-areas/{id}/edit', function ($id) {
+        return Inertia::render('Admin/Hierarchy/AdminAreaCreate', [
+            'auth'      => ['user' => Auth::user()],
+            'elections' => Election::whereIn('status', ['active', 'draft', 'configured'])
+                ->orderByDesc('created_at')->get(['id', 'name']),
+            'adminArea' => AdministrativeHierarchy::findOrFail($id),
+        ]);
+    })->name('hierarchy.admin-areas.edit');
+
+    Route::put('/hierarchy/admin-areas/{id}', function (Request $request, $id) {
+        $request->validate([
+            'election_id' => 'required|exists:elections,id',
+            'code'        => 'required|string|max:20',
+            'name'        => 'required|string|max:255',
+        ]);
+        AdministrativeHierarchy::findOrFail($id)->update([
+            'election_id' => $request->election_id,
+            'code'        => strtoupper($request->code),
+            'name'        => $request->name,
+        ]);
+        return redirect()->route('admin.hierarchy.admin-areas')->with('success', 'Admin Area updated successfully!');
+    })->name('hierarchy.admin-areas.update');
+
+    Route::delete('/hierarchy/admin-areas/{id}', function ($id) {
+        try {
+            $area = AdministrativeHierarchy::findOrFail($id);
+            // Prevent deletion if it has children
+            if ($area->children()->count() > 0) {
+                return back()->withErrors(['error' => 'Cannot delete: this admin area has constituencies. Delete them first.']);
+            }
+            $area->delete();
+            return redirect()->route('admin.hierarchy.admin-areas')->with('success', 'Admin Area deleted.');
+        } catch (\Exception $e) {
+            return back()->withErrors(['error' => 'Failed: ' . $e->getMessage()]);
+        }
+    })->name('hierarchy.admin-areas.destroy');
+
+    // Constituencies
+    Route::get('/hierarchy/constituencies', function () {
+        $constituencies = AdministrativeHierarchy::where('level', 'constituency')
+            ->with('parent')->withCount('children')->orderBy('name')->get()
+            ->map(fn($c) => [
+                'id'             => $c->id,
+                'code'           => $c->code,
+                'name'           => $c->name,
+                'parent_name'    => $c->parent->name ?? '—',
+                'children_count' => $c->children_count,
+            ]);
+        return Inertia::render('Admin/Hierarchy/Constituencies', [
+            'auth'           => ['user' => Auth::user()],
+            'constituencies' => $constituencies,
+            'flash'          => session()->only(['success', 'error']),
+        ]);
+    })->name('hierarchy.constituencies');
+
+    Route::get('/hierarchy/constituencies/create', function () {
+        return Inertia::render('Admin/Hierarchy/ConstituencyCreate', [
+            'auth'       => ['user' => Auth::user()],
+            'adminAreas' => AdministrativeHierarchy::where('level', 'admin_area')->orderBy('name')->get(['id', 'name']),
+        ]);
+    })->name('hierarchy.constituencies.create');
+
+    Route::post('/hierarchy/constituencies', function (Request $request) {
+        $request->validate([
+            'parent_id' => 'required|exists:administrative_hierarchy,id',
+            'code'      => 'required|string|max:20',
+            'name'      => 'required|string|max:255',
+        ]);
+        try {
+            $parent = AdministrativeHierarchy::findOrFail($request->parent_id);
+            AdministrativeHierarchy::create([
+                'election_id' => $parent->election_id,
+                'level'       => 'constituency',
+                'parent_id'   => $request->parent_id,
+                'code'        => strtoupper($request->code),
+                'name'        => $request->name,
+            ]);
+            return redirect()->route('admin.hierarchy.constituencies')->with('success', 'Constituency registered successfully!');
+        } catch (\Exception $e) {
+            return back()->withErrors(['error' => 'Failed: ' . $e->getMessage()]);
+        }
+    })->name('hierarchy.constituencies.store');
+
+    Route::get('/hierarchy/constituencies/{id}/edit', function ($id) {
+        return Inertia::render('Admin/Hierarchy/ConstituencyCreate', [
+            'auth'           => ['user' => Auth::user()],
+            'adminAreas'     => AdministrativeHierarchy::where('level', 'admin_area')->orderBy('name')->get(['id', 'name']),
+            'constituency'   => AdministrativeHierarchy::findOrFail($id),
+        ]);
+    })->name('hierarchy.constituencies.edit');
+
+    Route::put('/hierarchy/constituencies/{id}', function (Request $request, $id) {
+        $request->validate([
+            'parent_id' => 'required|exists:administrative_hierarchy,id',
+            'code'      => 'required|string|max:20',
+            'name'      => 'required|string|max:255',
+        ]);
+        $parent = AdministrativeHierarchy::findOrFail($request->parent_id);
+        AdministrativeHierarchy::findOrFail($id)->update([
+            'parent_id'   => $request->parent_id,
+            'election_id' => $parent->election_id,
+            'code'        => strtoupper($request->code),
+            'name'        => $request->name,
+        ]);
+        return redirect()->route('admin.hierarchy.constituencies')->with('success', 'Constituency updated successfully!');
+    })->name('hierarchy.constituencies.update');
+
+    Route::delete('/hierarchy/constituencies/{id}', function ($id) {
+        try {
+            $c = AdministrativeHierarchy::findOrFail($id);
+            if ($c->children()->count() > 0) {
+                return back()->withErrors(['error' => 'Cannot delete: this constituency has wards. Delete them first.']);
+            }
+            $c->delete();
+            return redirect()->route('admin.hierarchy.constituencies')->with('success', 'Constituency deleted.');
+        } catch (\Exception $e) {
+            return back()->withErrors(['error' => 'Failed: ' . $e->getMessage()]);
+        }
+    })->name('hierarchy.constituencies.destroy');
+
+    // Wards
+    Route::get('/hierarchy/wards', function () {
+        $wards = AdministrativeHierarchy::where('level', 'ward')
+            ->with(['parent', 'parent.parent'])
+            ->withCount(['pollingStations as stations_count'])
+            ->orderBy('name')->get()
+            ->map(fn($w) => [
+                'id'               => $w->id,
+                'code'             => $w->code,
+                'name'             => $w->name,
+                'parent_name'      => $w->parent->name ?? '—',
+                'grandparent_name' => $w->parent?->parent->name ?? '—',
+                'stations_count'   => $w->stations_count,
+            ]);
+        return Inertia::render('Admin/Hierarchy/Wards', [
+            'auth'  => ['user' => Auth::user()],
+            'wards' => $wards,
+            'flash' => session()->only(['success', 'error']),
+        ]);
+    })->name('hierarchy.wards');
+
+    Route::get('/hierarchy/wards/create', function () {
+        $constituencies = AdministrativeHierarchy::where('level', 'constituency')
+            ->with('parent')->orderBy('name')->get()
+            ->map(fn($c) => ['id' => $c->id, 'name' => $c->name, 'parent_name' => $c->parent->name ?? null]);
+        return Inertia::render('Admin/Hierarchy/WardCreate', [
+            'auth'           => ['user' => Auth::user()],
+            'constituencies' => $constituencies,
+        ]);
+    })->name('hierarchy.wards.create');
+
+    Route::post('/hierarchy/wards', function (Request $request) {
+        $request->validate([
+            'parent_id' => 'required|exists:administrative_hierarchy,id',
+            'code'      => 'required|string|max:20',
+            'name'      => 'required|string|max:255',
+        ]);
+        try {
+            $parent = AdministrativeHierarchy::findOrFail($request->parent_id);
+            AdministrativeHierarchy::create([
+                'election_id' => $parent->election_id,
+                'level'       => 'ward',
+                'parent_id'   => $request->parent_id,
+                'code'        => strtoupper($request->code),
+                'name'        => $request->name,
+            ]);
+            return redirect()->route('admin.hierarchy.wards')->with('success', 'Ward registered successfully!');
+        } catch (\Exception $e) {
+            return back()->withErrors(['error' => 'Failed: ' . $e->getMessage()]);
+        }
+    })->name('hierarchy.wards.store');
+
+    Route::get('/hierarchy/wards/{id}/edit', function ($id) {
+        $constituencies = AdministrativeHierarchy::where('level', 'constituency')
+            ->with('parent')->orderBy('name')->get()
+            ->map(fn($c) => ['id' => $c->id, 'name' => $c->name, 'parent_name' => $c->parent->name ?? null]);
+        return Inertia::render('Admin/Hierarchy/WardCreate', [
+            'auth'           => ['user' => Auth::user()],
+            'constituencies' => $constituencies,
+            'ward'           => AdministrativeHierarchy::findOrFail($id),
+        ]);
+    })->name('hierarchy.wards.edit');
+
+    Route::put('/hierarchy/wards/{id}', function (Request $request, $id) {
+        $request->validate([
+            'parent_id' => 'required|exists:administrative_hierarchy,id',
+            'code'      => 'required|string|max:20',
+            'name'      => 'required|string|max:255',
+        ]);
+        $parent = AdministrativeHierarchy::findOrFail($request->parent_id);
+        AdministrativeHierarchy::findOrFail($id)->update([
+            'parent_id'   => $request->parent_id,
+            'election_id' => $parent->election_id,
+            'code'        => strtoupper($request->code),
+            'name'        => $request->name,
+        ]);
+        return redirect()->route('admin.hierarchy.wards')->with('success', 'Ward updated successfully!');
+    })->name('hierarchy.wards.update');
+
+    Route::delete('/hierarchy/wards/{id}', function ($id) {
+        try {
+            $ward = AdministrativeHierarchy::findOrFail($id);
+            if (PollingStation::where('ward_id', $id)->exists()) {
+                return back()->withErrors(['error' => 'Cannot delete: this ward has polling stations. Remove them first.']);
+            }
+            $ward->delete();
+            return redirect()->route('admin.hierarchy.wards')->with('success', 'Ward deleted.');
+        } catch (\Exception $e) {
+            return back()->withErrors(['error' => 'Failed: ' . $e->getMessage()]);
+        }
+    })->name('hierarchy.wards.destroy');
 
     // ── Audit Logs ────────────────────────────────────────────────────────────
     Route::get('/audit-logs', function (Request $request) {
@@ -598,111 +931,43 @@ Route::middleware(['auth', 'role:iec-administrator'])
 
     Route::get('/system-health/data', function () {
         $data = [];
-
-        try {
-            DB::connection()->getPdo();
-            $data['database'] = ['status' => 'online', 'driver' => DB::connection()->getDriverName()];
-        } catch (\Exception $e) {
-            $data['database'] = ['status' => 'offline', 'driver' => 'unknown', 'error' => $e->getMessage()];
-        }
-
-        try {
-            Cache::put('healthcheck', 1, 5);
-            Cache::get('healthcheck');
-            $data['cache'] = ['status' => 'online', 'driver' => config('cache.default')];
-        } catch (\Exception $e) {
-            $data['cache'] = ['status' => 'offline', 'driver' => config('cache.default'), 'error' => $e->getMessage()];
-        }
-
-        try {
-            $data['queue'] = [
-                'status'  => 'running',
-                'pending' => DB::table('jobs')->count(),
-                'failed'  => DB::table('failed_jobs')->count(),
-            ];
-        } catch (\Exception $e) {
-            $data['queue'] = ['status' => 'unknown', 'pending' => 0, 'failed' => 0];
-        }
-
-        try {
-            $total = disk_total_space(storage_path());
-            $free  = disk_free_space(storage_path());
-            $used  = $total - $free;
-            $data['disk'] = [
-                'total'           => round($total / 1073741824, 2) . ' GB',
-                'free'            => round($free  / 1073741824, 2) . ' GB',
-                'used'            => round($used  / 1073741824, 2) . ' GB',
-                'used_percentage' => round(($used / $total) * 100, 1) . '%',
-            ];
-        } catch (\Exception $e) {
-            $data['disk'] = null;
-        }
-
-        $data['memory'] = [
-            'php_memory_used'  => round(memory_get_usage(true)      / 1048576, 2) . ' MB',
-            'php_memory_peak'  => round(memory_get_peak_usage(true) / 1048576, 2) . ' MB',
-            'php_memory_limit' => ini_get('memory_limit'),
-        ];
-
-        $data['app'] = [
-            'environment'     => app()->environment(),
-            'debug'           => config('app.debug'),
-            'php_version'     => PHP_VERSION,
-            'laravel_version' => app()->version(),
-        ];
-
+        try { DB::connection()->getPdo(); $data['database'] = ['status' => 'online', 'driver' => DB::connection()->getDriverName()]; }
+        catch (\Exception $e) { $data['database'] = ['status' => 'offline', 'driver' => 'unknown', 'error' => $e->getMessage()]; }
+        try { Cache::put('healthcheck', 1, 5); Cache::get('healthcheck'); $data['cache'] = ['status' => 'online', 'driver' => config('cache.default')]; }
+        catch (\Exception $e) { $data['cache'] = ['status' => 'offline', 'driver' => config('cache.default'), 'error' => $e->getMessage()]; }
+        try { $data['queue'] = ['status' => 'running', 'pending' => DB::table('jobs')->count(), 'failed' => DB::table('failed_jobs')->count()]; }
+        catch (\Exception $e) { $data['queue'] = ['status' => 'unknown', 'pending' => 0, 'failed' => 0]; }
+        try { $total = disk_total_space(storage_path()); $free = disk_free_space(storage_path()); $used = $total - $free;
+            $data['disk'] = ['total' => round($total/1073741824, 2).' GB', 'free' => round($free/1073741824, 2).' GB', 'used' => round($used/1073741824, 2).' GB', 'used_percentage' => round(($used/$total)*100, 1).'%']; }
+        catch (\Exception $e) { $data['disk'] = null; }
+        $data['memory'] = ['php_memory_used' => round(memory_get_usage(true)/1048576, 2).' MB', 'php_memory_peak' => round(memory_get_peak_usage(true)/1048576, 2).' MB', 'php_memory_limit' => ini_get('memory_limit')];
+        $data['app'] = ['environment' => app()->environment(), 'debug' => config('app.debug'), 'php_version' => PHP_VERSION, 'laravel_version' => app()->version()];
         $logPath = storage_path('logs/laravel.log');
-        try {
-            $data['logs'] = [
-                'exists'        => file_exists($logPath),
-                'size'          => file_exists($logPath) ? round(filesize($logPath) / 1048576, 2) . ' MB' : '0 MB',
-                'recent_errors' => file_exists($logPath)
-                    ? substr_count(file_get_contents($logPath), '[' . now()->format('Y-m-d') . ']')
-                    : 0,
-            ];
-        } catch (\Exception $e) {
-            $data['logs'] = ['exists' => false, 'size' => '0 MB', 'recent_errors' => 0];
-        }
-
+        try { $data['logs'] = ['exists' => file_exists($logPath), 'size' => file_exists($logPath) ? round(filesize($logPath)/1048576, 2).' MB' : '0 MB', 'recent_errors' => file_exists($logPath) ? substr_count(file_get_contents($logPath), '['.now()->format('Y-m-d').']') : 0]; }
+        catch (\Exception $e) { $data['logs'] = ['exists' => false, 'size' => '0 MB', 'recent_errors' => 0]; }
         return response()->json($data);
     })->name('system-health.data');
 
     // ── Backups ───────────────────────────────────────────────────────────────
-    Route::get('/backups', fn() => Inertia::render('Admin/Backups', [
-        'auth' => ['user' => Auth::user()],
-    ]))->name('backups');
+    Route::get('/backups', fn() => Inertia::render('Admin/Backups', ['auth' => ['user' => Auth::user()]]))->name('backups');
 
     Route::get('/backups/list', function () {
         $backupDir = storage_path('app/backups');
-        if (!is_dir($backupDir)) {
-            return response()->json([]);
-        }
+        if (!is_dir($backupDir)) return response()->json([]);
         $files   = glob($backupDir . '/*.zip') ?: [];
-        $backups = collect($files)->map(fn($file) => [
-            'name' => basename($file),
-            'path' => basename($file),
-            'size' => round(filesize($file) / 1048576, 2) . ' MB',
-            'date' => date('Y-m-d H:i:s', filemtime($file)),
-        ])->sortByDesc('date')->values()->toArray();
+        $backups = collect($files)->map(fn($file) => ['name' => basename($file), 'path' => basename($file), 'size' => round(filesize($file)/1048576, 2).' MB', 'date' => date('Y-m-d H:i:s', filemtime($file))])->sortByDesc('date')->values()->toArray();
         return response()->json($backups);
     })->name('backups.list');
 
     Route::post('/backups/create', function () {
-        try {
-            Artisan::call('backup:run --only-db');
-            return response()->json(['success' => true, 'message' => 'Backup created successfully!']);
-        } catch (\Exception $e) {
-            Log::error('Backup failed', ['error' => $e->getMessage()]);
-            return response()->json(['success' => false, 'message' => 'Backup failed: '.$e->getMessage()], 500);
-        }
+        try { Artisan::call('backup:run --only-db'); return response()->json(['success' => true, 'message' => 'Backup created successfully!']); }
+        catch (\Exception $e) { return response()->json(['success' => false, 'message' => 'Backup failed: '.$e->getMessage()], 500); }
     })->name('backups.create');
 
     Route::get('/backups/download', function (Request $request) {
         $filename = basename($request->query('file', ''));
         $path     = storage_path('app/backups/' . $filename);
-        if (!$filename || !file_exists($path)) {
-            abort(404, 'Backup file not found.');
-        }
+        if (!$filename || !file_exists($path)) abort(404, 'Backup file not found.');
         return response()->download($path);
     })->name('backups.download');
 });

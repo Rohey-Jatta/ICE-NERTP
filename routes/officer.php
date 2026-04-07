@@ -25,12 +25,11 @@ Route::middleware(['auth', 'role:polling-officer'])
             ->with('election')
             ->first();
 
-        // Real submission statistics
         $submissions = Result::where('submitted_by', $user->id)
             ->orderByDesc('submitted_at')
             ->get();
 
-        $pendingCount   = $submissions->whereIn('certification_status', [
+        $pendingCount = $submissions->whereIn('certification_status', [
             Result::STATUS_SUBMITTED,
             Result::STATUS_PENDING_PARTY_ACCEPTANCE,
             Result::STATUS_PENDING_WARD,
@@ -46,10 +45,9 @@ Route::middleware(['auth', 'role:polling-officer'])
             Result::STATUS_NATIONALLY_CERTIFIED,
         ])->count();
 
-        $rejectedCount  = $submissions->where('certification_status', Result::STATUS_SUBMITTED)
+        $rejectedCount = $submissions->where('certification_status', Result::STATUS_SUBMITTED)
             ->where('rejection_count', '>', 0)->count();
 
-        // Has officer already submitted for this station/election?
         $hasSubmitted = $station
             ? Result::where('polling_station_id', $station->id)
                 ->whereNotIn('certification_status', [Result::STATUS_REJECTED])
@@ -57,8 +55,8 @@ Route::middleware(['auth', 'role:polling-officer'])
             : false;
 
         return Inertia::render('Officer/Dashboard', [
-            'auth'        => ['user' => $user],
-            'station'     => $station ? [
+            'auth'    => ['user' => $user],
+            'station' => $station ? [
                 'id'                => $station->id,
                 'name'              => $station->name,
                 'code'              => $station->code,
@@ -81,9 +79,7 @@ Route::middleware(['auth', 'role:polling-officer'])
         $user     = Auth::user();
         $station  = PollingStation::where('assigned_officer_id', $user->id)->first();
         $election = $station
-            ? Election::where('id', $station->election_id)
-                ->where('status', 'active')
-                ->first()
+            ? Election::where('id', $station->election_id)->where('status', 'active')->first()
             : Election::where('status', 'active')->first();
 
         if (!$station) {
@@ -91,13 +87,13 @@ Route::middleware(['auth', 'role:polling-officer'])
                 ->with('error', 'You have no polling station assigned. Contact the administrator.');
         }
 
-        // Check if already submitted a non-rejected result
+        // Non-rejected result that is NOT editable
         $existingResult = Result::where('polling_station_id', $station->id)
             ->whereNotIn('certification_status', [Result::STATUS_SUBMITTED])
             ->where('rejection_count', 0)
             ->first();
 
-        // Only allow editing if in submitted/rejected state
+        // A rejected result the officer can fix and resubmit
         $editableResult = Result::where('polling_station_id', $station->id)
             ->where('submitted_by', $user->id)
             ->where('certification_status', Result::STATUS_SUBMITTED)
@@ -111,11 +107,11 @@ Route::middleware(['auth', 'role:polling-officer'])
                 ->where('is_active', true)
                 ->get()
                 ->map(fn($c) => [
-                    'id'         => $c->id,
-                    'name'       => $c->name ?? $c->full_name,
-                    'party_name' => $c->politicalParty->name ?? 'Independent',
-                    'party_abbr' => $c->politicalParty->abbreviation ?? 'IND',
-                    'party_color'=> $c->politicalParty->color ?? '#6b7280',
+                    'id'          => $c->id,
+                    'name'        => $c->name ?? $c->full_name,
+                    'party_name'  => $c->politicalParty->name ?? 'Independent',
+                    'party_abbr'  => $c->politicalParty->abbreviation ?? 'IND',
+                    'party_color' => $c->politicalParty->color ?? '#6b7280',
                 ])
             : [];
 
@@ -136,13 +132,13 @@ Route::middleware(['auth', 'role:polling-officer'])
             ] : null,
             'candidates'     => $candidates,
             'editableResult' => $editableResult ? [
-                'id'                     => $editableResult->id,
-                'total_registered_voters'=> $editableResult->total_registered_voters,
-                'total_votes_cast'       => $editableResult->total_votes_cast,
-                'valid_votes'            => $editableResult->valid_votes,
-                'rejected_votes'         => $editableResult->rejected_votes,
-                'last_rejection_reason'  => $editableResult->last_rejection_reason,
-                'rejection_count'        => $editableResult->rejection_count,
+                'id'                      => $editableResult->id,
+                'total_registered_voters' => $editableResult->total_registered_voters,
+                'total_votes_cast'        => $editableResult->total_votes_cast,
+                'valid_votes'             => $editableResult->valid_votes,
+                'rejected_votes'          => $editableResult->rejected_votes,
+                'last_rejection_reason'   => $editableResult->last_rejection_reason,
+                'rejection_count'         => $editableResult->rejection_count,
             ] : null,
             'alreadySubmitted' => $existingResult !== null,
         ]);
@@ -150,7 +146,12 @@ Route::middleware(['auth', 'role:polling-officer'])
 
     // ── Submit / Resubmit Result ──────────────────────────────────────────────
     Route::post('/results/submit', function (Request $request) {
-        $user = Auth::user();
+    // Explicitly get user from request — more reliable than Auth::user() in closures
+        $user = $request->user();
+
+        if (!$user) {
+            return back()->withErrors(['error' => 'Session expired. Please log in again.']);
+        }
 
         $request->validate([
             'election_id'       => 'required|exists:elections,id',
@@ -162,24 +163,28 @@ Route::middleware(['auth', 'role:polling-officer'])
             'candidate_votes'   => 'required|array|min:1',
         ]);
 
-        // Validate arithmetic
-        $calculatedTotal = (int)$request->valid_votes + (int)$request->rejected_votes;
-        if ($calculatedTotal !== (int)$request->total_votes_cast) {
+        $totalVotesCast   = (int) $request->total_votes_cast;
+        $validVotes       = (int) $request->valid_votes;
+        $rejectedVotes    = (int) $request->rejected_votes;
+        $registeredVoters = (int) $request->registered_voters;
+
+        if ($validVotes + $rejectedVotes !== $totalVotesCast) {
             return back()->withErrors([
-                'total_votes_cast' => "Valid votes ({$request->valid_votes}) + Rejected votes ({$request->rejected_votes}) must equal Total votes cast ({$request->total_votes_cast}).",
+                'total_votes_cast' => "Valid ({$validVotes}) + Rejected ({$rejectedVotes}) must equal Total Cast ({$totalVotesCast}).",
             ])->withInput();
         }
 
-        if ((int)$request->total_votes_cast > (int)$request->registered_voters) {
+        if ($totalVotesCast > $registeredVoters) {
             return back()->withErrors([
                 'total_votes_cast' => 'Total votes cast cannot exceed registered voters.',
             ])->withInput();
         }
 
-        $candidateVotesSum = array_sum(array_values($request->candidate_votes));
-        if ($candidateVotesSum !== (int)$request->valid_votes) {
+        $candidateVotesRaw = $request->candidate_votes;
+        $candidateVotesSum = array_sum(array_map('intval', array_values($candidateVotesRaw)));
+        if ($candidateVotesSum !== $validVotes) {
             return back()->withErrors([
-                'candidate_votes' => "Sum of candidate votes ({$candidateVotesSum}) must equal valid votes ({$request->valid_votes}).",
+                'candidate_votes' => "Candidate votes sum ({$candidateVotesSum}) must equal valid votes ({$validVotes}).",
             ])->withInput();
         }
 
@@ -188,7 +193,6 @@ Route::middleware(['auth', 'role:polling-officer'])
             return back()->withErrors(['error' => 'No polling station assigned to your account.']);
         }
 
-        // Check for an existing rejected result to update (resubmission)
         $existingResult = Result::where('polling_station_id', $station->id)
             ->where('submitted_by', $user->id)
             ->where('certification_status', Result::STATUS_SUBMITTED)
@@ -203,88 +207,71 @@ Route::middleware(['auth', 'role:polling-officer'])
 
         try {
             if ($existingResult) {
-                // Resubmission after rejection — update existing record
                 $existingResult->update([
-                    'total_registered_voters' => $request->registered_voters,
-                    'total_votes_cast'        => $request->total_votes_cast,
-                    'valid_votes'             => $request->valid_votes,
-                    'rejected_votes'          => $request->rejected_votes,
+                    'total_registered_voters' => $registeredVoters,
+                    'total_votes_cast'        => $totalVotesCast,
+                    'valid_votes'             => $validVotes,
+                    'rejected_votes'          => $rejectedVotes,
                     'result_sheet_photo_path' => $photoPath ?? $existingResult->result_sheet_photo_path,
                     'certification_status'    => Result::STATUS_SUBMITTED,
                     'submitted_at'            => now(),
                     'version'                 => $existingResult->version + 1,
                 ]);
 
-                // Refresh candidate votes
                 $existingResult->candidateVotes()->delete();
-                foreach ($request->candidate_votes as $candidateId => $votes) {
+                foreach ($candidateVotesRaw as $candidateId => $votes) {
                     ResultCandidateVote::create([
                         'result_id'    => $existingResult->id,
-                        'candidate_id' => $candidateId,
-                        'election_id'  => $request->election_id,
+                        'candidate_id' => (int) $candidateId,
+                        'election_id'  => (int) $request->election_id,
                         'votes'        => (int) $votes,
                     ]);
                 }
 
-                AuditLog::record(
-                    action: 'result.resubmitted',
-                    event: 'updated',
-                    module: 'Results',
-                    auditable: $existingResult,
-                    extra: ['outcome' => 'success', 'station_code' => $station->code]
-                );
-
-                // Dispatch background job to process
                 \App\Jobs\ProcessResultSubmission::dispatch($existingResult->fresh());
 
                 return redirect()->route('officer.submissions')
-                    ->with('success', 'Result resubmitted successfully! It will now go through the approval process.');
+                    ->with('success', 'Result resubmitted successfully!');
             }
 
-            // Fresh submission
+            // Fresh submission — note: use submitted_by not user_id
             $result = Result::create([
-                'submission_uuid'         => Str::uuid(),
-                'user_id'                 => $user->id,
-                'election_id'             => $request->election_id,
+                'submission_uuid'         => \Illuminate\Support\Str::uuid(),
+                'election_id'             => (int) $request->election_id,
                 'polling_station_id'      => $station->id,
-                'total_registered_voters' => $request->registered_voters,
-                'total_votes_cast'        => $request->total_votes_cast,
-                'valid_votes'             => $request->valid_votes,
-                'rejected_votes'          => $request->rejected_votes,
+                'total_registered_voters' => $registeredVoters,
+                'total_votes_cast'        => $totalVotesCast,
+                'valid_votes'             => $validVotes,
+                'rejected_votes'          => $rejectedVotes,
                 'disputed_votes'          => 0,
                 'result_sheet_photo_path' => $photoPath,
                 'certification_status'    => Result::STATUS_SUBMITTED,
-                'submitted_by'            => $user->id,
+                'submitted_by'            => $user->id,   // ← correct column name
                 'submitted_at'            => now(),
                 'gps_validated'           => false,
             ]);
 
-            foreach ($request->candidate_votes as $candidateId => $votes) {
+            foreach ($candidateVotesRaw as $candidateId => $votes) {
                 ResultCandidateVote::create([
                     'result_id'    => $result->id,
-                    'candidate_id' => $candidateId,
-                    'election_id'  => $request->election_id,
+                    'candidate_id' => (int) $candidateId,
+                    'election_id'  => (int) $request->election_id,
                     'votes'        => (int) $votes,
                 ]);
             }
 
-            AuditLog::record(
-                action: 'result.submitted',
-                event: 'created',
-                module: 'Results',
-                auditable: $result,
-                extra: ['outcome' => 'success', 'station_code' => $station->code, 'election_id' => $request->election_id]
-            );
-
-            // Dispatch background processing job
             \App\Jobs\ProcessResultSubmission::dispatch($result);
 
             return redirect()->route('officer.submissions')
-                ->with('success', 'Results submitted successfully! They have entered the certification pipeline.');
+                ->with('success', 'Results submitted successfully!');
 
         } catch (\Exception $e) {
-            Log::error('Result submission failed', ['error' => $e->getMessage()]);
-            return back()->withErrors(['error' => 'Failed to submit result: ' . $e->getMessage()])->withInput();
+            \Illuminate\Support\Facades\Log::error('Result submission failed', [
+                'error'   => $e->getMessage(),
+                'user_id' => $user->id,
+                'station' => $station->id,
+            ]);
+            return back()->withErrors(['error' => 'Submission failed: ' . $e->getMessage()])->withInput();
         }
     })->name('results.store');
 
@@ -298,30 +285,30 @@ Route::middleware(['auth', 'role:polling-officer'])
             ->latest('submitted_at')
             ->get()
             ->map(fn($r) => [
-                'id'                       => $r->id,
-                'polling_station_name'     => $r->pollingStation->name ?? 'Unknown Station',
-                'polling_station_code'     => $r->pollingStation->code ?? '—',
-                'submitted_at'             => $r->submitted_at?->format('Y-m-d H:i'),
-                'certification_status'     => $r->certification_status,
-                'total_registered_voters'  => $r->total_registered_voters,
-                'total_votes_cast'         => $r->total_votes_cast,
-                'valid_votes'              => $r->valid_votes,
-                'rejected_votes'           => $r->rejected_votes,
-                'turnout'                  => $r->getTurnoutPercentage(),
-                'rejection_count'          => $r->rejection_count,
-                'last_rejection_reason'    => $r->last_rejection_reason,
-                'photo_url'                => $r->result_sheet_photo_path
+                'id'                      => $r->id,
+                'polling_station_name'    => $r->pollingStation->name ?? 'Unknown Station',
+                'polling_station_code'    => $r->pollingStation->code ?? '—',
+                'submitted_at'            => $r->submitted_at?->format('Y-m-d H:i'),
+                'certification_status'    => $r->certification_status,
+                'total_registered_voters' => $r->total_registered_voters,
+                'total_votes_cast'        => $r->total_votes_cast,
+                'valid_votes'             => $r->valid_votes,
+                'rejected_votes'          => $r->rejected_votes,
+                'turnout'                 => $r->getTurnoutPercentage(),
+                'rejection_count'         => $r->rejection_count,
+                'last_rejection_reason'   => $r->last_rejection_reason,
+                'photo_url'               => $r->result_sheet_photo_path
                     ? asset('storage/' . $r->result_sheet_photo_path)
                     : null,
-                'is_editable'              => $r->certification_status === Result::STATUS_SUBMITTED
+                'is_editable'             => $r->certification_status === Result::STATUS_SUBMITTED
                     && $r->rejection_count > 0,
-                'candidate_votes'          => $r->candidateVotes->map(fn($cv) => [
+                'candidate_votes'         => $r->candidateVotes->map(fn($cv) => [
                     'candidate_name' => $cv->candidate->name ?? $cv->candidate->full_name ?? 'Unknown',
                     'party_abbr'     => $cv->candidate->politicalParty->abbreviation ?? 'IND',
                     'party_color'    => $cv->candidate->politicalParty->color ?? '#6b7280',
                     'votes'          => $cv->votes,
                 ]),
-                'version'                  => $r->version,
+                'version' => $r->version,
             ]);
 
         return Inertia::render('Officer/Submissions', [

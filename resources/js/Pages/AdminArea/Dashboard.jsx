@@ -70,24 +70,7 @@ export default function AdminAreaDashboard({ auth, adminArea, pendingResults, st
                     </div>
                 </div>
 
-                {/* Progress bar */}
-                {((statistics?.approved || 0) + (pendingResults || 0)) > 0 && (
-                    <div className="bg-slate-800/40 rounded-xl p-6 border border-slate-700/50 mb-8">
-                        <div className="flex justify-between items-center mb-3">
-                            <span className="text-gray-300 font-semibold">Admin-Area Certification Progress</span>
-                            <span className="text-white font-bold">{progress}%</span>
-                        </div>
-                        <div className="w-full bg-slate-700 rounded-full h-4">
-                            <div
-                                className="bg-gradient-to-r from-teal-500 to-teal-400 h-4 rounded-full transition-all duration-700"
-                                style={{ width: `${progress}%` }}
-                            />
-                        </div>
-                        <p className="text-gray-500 text-xs mt-2">
-                            {statistics?.approved || 0} results certified at admin-area level
-                        </p>
-                    </div>
-                )}
+                {/* Progress bar removed for instant navigation/offline UX */}
 
                 {/* Quick Actions */}
                 <div className="bg-slate-800/40 rounded-xl p-6 border border-slate-700/50">

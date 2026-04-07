@@ -71,6 +71,53 @@ export default function AdminDashboard({ auth, statistics, systemStatus }) {
                         </div>
                     </div>
 
+                    {/* Administrative Hierarchy */}
+                    <div className="bg-slate-900/40 rounded-xl p-8 border border-slate-700/50">
+                        <h2 className="text-2xl font-bold text-white mb-2">Administrative Hierarchy</h2>
+                        <p className="text-gray-500 text-xs mb-5">
+                            Structure: Administrative Area → Constituency → Ward → Polling Station
+                        </p>
+                        <div className="space-y-3">
+                            {[
+                                {
+                                    href: '/admin/hierarchy/admin-areas',
+                                    title: 'Administrative Areas',
+                                    desc: 'Top-level administrative regions',
+                                    badge: 'Level 1',
+                                    color: 'bg-purple-600/20 text-purple-300 border-purple-500/30',
+                                },
+                                {
+                                    href: '/admin/hierarchy/constituencies',
+                                    title: 'Constituencies',
+                                    desc: 'Subdivisions within an Administrative Area',
+                                    badge: 'Level 2',
+                                    color: 'bg-blue-600/20 text-blue-300 border-blue-500/30',
+                                },
+                                {
+                                    href: '/admin/hierarchy/wards',
+                                    title: 'Wards',
+                                    desc: 'Subdivisions within a Constituency',
+                                    badge: 'Level 3',
+                                    color: 'bg-teal-600/20 text-teal-300 border-teal-500/30',
+                                },
+                            ].map((item) => (
+                                <Link
+                                    key={item.href}
+                                    href={item.href}
+                                    className="flex items-center gap-3 p-4 bg-slate-700 hover:bg-slate-600 rounded-lg transition-colors"
+                                >
+                                    <div className="flex-1">
+                                        <div className="font-bold text-white">{item.title}</div>
+                                        <div className="text-gray-300 text-sm">{item.desc}</div>
+                                    </div>
+                                    <span className={`px-2 py-1 text-xs font-semibold rounded-full border ${item.color}`}>
+                                        {item.badge}
+                                    </span>
+                                </Link>
+                            ))}
+                        </div>
+                    </div>
+
                     {/* System Settings */}
                     <div className="bg-slate-900/40 rounded-xl p-8 border border-slate-800/50">
                         <h2 className="text-2xl font-bold text-white mb-6">System Settings</h2>
@@ -89,11 +136,8 @@ export default function AdminDashboard({ auth, statistics, systemStatus }) {
                                 </Link>
                             ))}
                         </div>
-                    </div>
 
-                    {/* Monitoring */}
-                    <div className="bg-slate-900/40 rounded-xl p-8 border border-slate-800/50">
-                        <h2 className="text-2xl font-bold text-white mb-6">Monitoring</h2>
+                        <h2 className="text-2xl font-bold text-white mt-6 mb-6">Monitoring</h2>
                         <div className="space-y-3">
                             {[
                                 { href: '/admin/system-health', title: 'System Health', desc: 'Monitor real-time performance' },

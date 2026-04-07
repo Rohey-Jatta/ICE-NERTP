@@ -1,8 +1,8 @@
 /**
  * Service Worker - Offline-first PWA support.
- * 
+ *
  * From architecture: public/service-worker.js
- * 
+ *
  * Features:
  * - Cache static assets for offline use
  * - Background sync for pending submissions
@@ -20,21 +20,21 @@ const ASSETS_TO_CACHE = [
 // Install event - cache static assets
 self.addEventListener('install', (event) => {
     console.log('Service Worker installing...');
-    
+
     event.waitUntil(
         caches.open(CACHE_NAME).then((cache) => {
             console.log('Caching static assets');
             return cache.addAll(ASSETS_TO_CACHE);
         })
     );
-    
+
     self.skipWaiting();
 });
 
 // Activate event - clean up old caches
 self.addEventListener('activate', (event) => {
     console.log('Service Worker activating...');
-    
+
     event.waitUntil(
         caches.keys().then((cacheNames) => {
             return Promise.all(
@@ -47,7 +47,7 @@ self.addEventListener('activate', (event) => {
             );
         })
     );
-    
+
     self.clients.claim();
 });
 
@@ -55,21 +55,21 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
     const { request } = event;
     const url = new URL(request.url);
-    
+
     // Skip non-GET requests
     if (request.method !== 'GET') {
         return;
     }
-    
+
     // API requests - network first, no cache
     if (url.pathname.startsWith('/api/')) {
         event.respondWith(
             fetch(request).catch(() => {
                 return new Response(
-                    JSON.stringify({ 
-                        error: 'You are offline. Please try again when connected.' 
+                    JSON.stringify({
+                        error: 'Please try again.'
                     }),
-                    { 
+                    {
                         status: 503,
                         headers: { 'Content-Type': 'application/json' }
                     }
@@ -78,26 +78,26 @@ self.addEventListener('fetch', (event) => {
         );
         return;
     }
-    
+
     // Static assets - cache first, fallback to network
     event.respondWith(
         caches.match(request).then((cachedResponse) => {
             if (cachedResponse) {
                 return cachedResponse;
             }
-            
+
             return fetch(request).then((response) => {
                 // Don't cache non-successful responses
                 if (!response || response.status !== 200 || response.type === 'error') {
                     return response;
                 }
-                
+
                 // Clone response and cache it
                 const responseToCache = response.clone();
                 caches.open(CACHE_NAME).then((cache) => {
                     cache.put(request, responseToCache);
                 });
-                
+
                 return response;
             });
         })

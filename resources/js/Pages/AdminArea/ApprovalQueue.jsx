@@ -172,9 +172,6 @@ export default function AdminAreaApprovalQueue({ auth, adminArea, results = [], 
                 {/* Results */}
                 {results.length === 0 ? (
                     <div className="bg-slate-800/40 rounded-xl p-12 border border-slate-700/50 text-center">
-                        <div className="text-5xl mb-4">
-                            {filter === 'pending' ? '⏳' : filter === 'approved' ? '✅' : filter === 'rejected' ? '↩' : '📋'}
-                        </div>
                         <p className="text-gray-300 text-lg">
                             {filter === 'pending' ? 'No results pending admin-area certification' :
                              filter === 'approved' ? 'No admin-area certified results yet' :
@@ -247,30 +244,7 @@ export default function AdminAreaApprovalQueue({ auth, adminArea, results = [], 
                                         </div>
                                     </div>
 
-                                    {/* Candidate bars */}
-                                    {result.candidate_votes?.length > 0 && (
-                                        <div className="px-5 pb-4">
-                                            <div className="text-xs text-gray-500 mb-2 uppercase tracking-wide">Candidate Results</div>
-                                            <div className="space-y-2">
-                                                {result.candidate_votes.map((cv, idx) => {
-                                                    const pct = result.valid_votes > 0
-                                                        ? ((cv.votes / result.valid_votes) * 100).toFixed(1) : 0;
-                                                    return (
-                                                        <div key={idx} className="flex items-center gap-3">
-                                                            <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: cv.party_color }} />
-                                                            <span className="text-gray-300 text-sm w-36 truncate">{cv.candidate}</span>
-                                                            <span className="text-xs text-gray-500 w-10">{cv.party}</span>
-                                                            <div className="flex-1 bg-slate-700 rounded-full h-2">
-                                                                <div className="h-2 rounded-full" style={{ width: `${pct}%`, backgroundColor: cv.party_color }} />
-                                                            </div>
-                                                            <span className="text-white text-sm font-semibold w-16 text-right">{cv.votes?.toLocaleString()}</span>
-                                                            <span className="text-gray-400 text-xs w-12 text-right">{pct}%</span>
-                                                        </div>
-                                                    );
-                                                })}
-                                            </div>
-                                        </div>
-                                    )}
+                                    {/* Candidate bars removed for instant navigation/offline UX */}
 
                                     {/* Party acceptances */}
                                     {result.party_acceptances?.length > 0 && (

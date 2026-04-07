@@ -2,46 +2,28 @@ import { useForm } from '@inertiajs/react';
 
 export default function Login() {
     const { data, setData, post, processing, errors } = useForm({
-        email: '',
+        email:    '',
         password: '',
     });
 
     const handleSubmit = (e) => {
         e.preventDefault();
-
-        // Simple post - no callbacks, let Inertia handle redirect
-        post('/auth/login', {
-            preserveScroll: false,
-            preserveState: false,
-        });
+        post('/auth/login', { preserveScroll: false, preserveState: false });
     };
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-[#1a1a2e] via-[#16213e] to-[#0f3460] flex items-center justify-center p-4 relative overflow-hidden">
+        <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden"
+             style={{ background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)' }}>
 
-            <div className="fixed inset-0 overflow-hidden pointer-events-none">
-                <div className="absolute inset-0 opacity-40">
-                    {[...Array(60)].map((_, i) => (
-                        <div
-                            key={i}
-                            className="absolute bg-slate-400 rounded-full animate-float"
-                            style={{
-                                width: `${Math.random() * 3 + 1}px`,
-                                height: `${Math.random() * 3 + 1}px`,
-                                left: `${Math.random() * 100}%`,
-                                top: `${Math.random() * 100}%`,
-                                animationDelay: `${Math.random() * 20}s`,
-                                animationDuration: `${Math.random() * 40 + 40}s`,
-                            }}
-                        />
-                    ))}
-                </div>
-
-                <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-teal-500/10 rounded-full blur-3xl animate-slow-pulse" />
-                <div
-                    className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl animate-slow-pulse"
-                    style={{ animationDelay: '4s' }}
-                />
+            {/* CSS-only particles — no JS Math.random() */}
+            <div className="fixed inset-0 pointer-events-none overflow-hidden" aria-hidden="true">
+                {Array.from({ length: 15 }).map((_, i) => (
+                    <div key={i} className="particle" />
+                ))}
+                <div className="absolute inset-0"
+                     style={{ background: 'radial-gradient(ellipse 60% 40% at 25% 35%, rgba(20,184,166,0.08) 0%, transparent 60%)' }} />
+                <div className="absolute inset-0"
+                     style={{ background: 'radial-gradient(ellipse 50% 40% at 75% 65%, rgba(59,130,246,0.06) 0%, transparent 60%)' }} />
             </div>
 
             <div className="max-w-md w-full relative z-10">
@@ -58,7 +40,6 @@ export default function Login() {
                 <div className="bg-white/95 backdrop-blur-sm rounded-xl shadow-2xl p-8">
                     <h2 className="text-2xl font-bold text-gray-800 mb-6 text-center">Sign in to your account</h2>
 
-                    {/* ONLY SHOW ERROR MESSAGES */}
                     {errors.email && (
                         <div className="mb-4 p-3 bg-red-100 border border-red-300 text-red-800 rounded-lg text-sm">
                             {errors.email}
@@ -70,47 +51,32 @@ export default function Login() {
                             <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
                                 Email address
                             </label>
-                            <input
-                                id="email"
-                                type="email"
-                                value={data.email}
+                            <input id="email" type="email" value={data.email}
                                 onChange={(e) => setData('email', e.target.value)}
                                 placeholder="your.email@iec.gm"
-                                required
-                                disabled={processing}
-                                autoComplete="email"
-                                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                            />
+                                required disabled={processing} autoComplete="email"
+                                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors" />
                         </div>
 
                         <div>
                             <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
                                 Password
                             </label>
-                            <input
-                                id="password"
-                                type="password"
-                                value={data.password}
+                            <input id="password" type="password" value={data.password}
                                 onChange={(e) => setData('password', e.target.value)}
                                 placeholder="••••••••"
-                                required
-                                disabled={processing}
-                                autoComplete="current-password"
-                                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                            />
+                                required disabled={processing} autoComplete="current-password"
+                                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors" />
                         </div>
 
-                        <button
-                            type="submit"
-                            disabled={processing}
-                            className="w-full py-3 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 disabled:from-blue-400 disabled:to-blue-500 text-white font-semibold rounded-lg transition-all shadow-lg hover:shadow-xl disabled:cursor-not-allowed"
-                        >
-                            {processing ? 'Signing in...' : 'Sign in'}
+                        <button type="submit" disabled={processing}
+                            className="w-full py-3 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-lg transition-all shadow-lg">
+                            {processing ? 'Signing in…' : 'Sign in'}
                         </button>
                     </form>
 
                     <div className="mt-6 text-center text-xs text-gray-500">
-                         Secured with 2FA · Device Binding · Audit Logging
+                        Secured with 2FA · Device Binding · Audit Logging
                     </div>
                 </div>
 

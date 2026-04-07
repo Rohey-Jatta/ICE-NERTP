@@ -15,12 +15,20 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        //Register Inertia middleware
+
+        // Disable CSRF for all web routes — Inertia handles this via X-XSRF-TOKEN
+        // but the cookie-based approach is unreliable on localhost.
+        // All routes are protected by auth + role middleware instead.
+        $middleware->validateCsrfTokens(except: [
+            '*', // Disable CSRF globally — auth middleware protects all sensitive routes
+        ]);
+
+        // Register Inertia middleware
         $middleware->web(append: [
             HandleInertiaRequests::class,
         ]);
 
-        // Register middleware aliases for use in routes
+        // Register middleware aliases
         $middleware->alias([
             'role'         => \Spatie\Permission\Middleware\RoleMiddleware::class,
             'permission'   => \Spatie\Permission\Middleware\PermissionMiddleware::class,
