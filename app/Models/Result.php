@@ -25,7 +25,7 @@ class Result extends Model
     const STATUS_REJECTED                 = 'rejected';
 
     protected $fillable = [
-        'polling_station_id', 'election_id', 'submission_uuid',
+        'polling_station_id', 'election_id', 'submission_uuid', 'user_id',
         'total_registered_voters', 'total_votes_cast', 'valid_votes',
         'rejected_votes', 'disputed_votes', 'result_sheet_photo_path',
         'result_sheet_photo_hash', 'submitted_latitude', 'submitted_longitude',

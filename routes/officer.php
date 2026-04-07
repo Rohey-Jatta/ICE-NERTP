@@ -208,6 +208,7 @@ Route::middleware(['auth', 'role:polling-officer'])
         try {
             if ($existingResult) {
                 $existingResult->update([
+                    'user_id' => $user->id,
                     'total_registered_voters' => $registeredVoters,
                     'total_votes_cast'        => $totalVotesCast,
                     'valid_votes'             => $validVotes,
@@ -239,6 +240,7 @@ Route::middleware(['auth', 'role:polling-officer'])
                 'submission_uuid'         => \Illuminate\Support\Str::uuid(),
                 'election_id'             => (int) $request->election_id,
                 'polling_station_id'      => $station->id,
+                'user_id' => $user->id,
                 'total_registered_voters' => $registeredVoters,
                 'total_votes_cast'        => $totalVotesCast,
                 'valid_votes'             => $validVotes,
