@@ -1,6 +1,6 @@
 import AppLayout from '@/Layouts/AppLayout';
 import { useForm, Link } from '@inertiajs/react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 const PRESET_COLORS = [
     '#ef4444','#f97316','#eab308','#22c55e','#10b981',
@@ -120,10 +120,9 @@ function parseColors(colorStr) {
 }
 
 export default function PartyEdit({ auth, party }) {
-    const initialColors = parseColors(party.color);
+    // Parse existing colors from the party record
+    const initialColors = party.colors_array || parseColors(party.color);
 
-    // Use post() — file uploads require multipart/form-data.
-    // We send _method=POST to a dedicated POST route on the backend.
     const { data, setData, post, processing, errors } = useForm({
         name:         party.name         || '',
         abbreviation: party.abbreviation || '',
@@ -136,12 +135,9 @@ export default function PartyEdit({ auth, party }) {
         symbol:       null,
     });
 
-    const [leaderPreview, setLeaderPreview] = useState(
-        party.leader_photo_path ? `/storage/${party.leader_photo_path}` : null
-    );
-    const [symbolPreview, setSymbolPreview] = useState(
-        party.symbol_path ? `/storage/${party.symbol_path}` : null
-    );
+    // Use the server-provided URLs for existing photos
+    const [leaderPreview, setLeaderPreview] = useState(party.leader_photo_url || null);
+    const [symbolPreview, setSymbolPreview] = useState(party.symbol_url || null);
 
     const handleLeaderPhoto = (e) => {
         const file = e.target.files[0];
@@ -163,7 +159,6 @@ export default function PartyEdit({ auth, party }) {
 
     const handleSubmit = (e) => {
         e.preventDefault();
-        // Post to a dedicated update route — avoids Inertia put()+forceFormData bug
         post(`/admin/parties/${party.id}/update`);
     };
 
@@ -266,17 +261,32 @@ export default function PartyEdit({ auth, party }) {
                                     <label className="block text-gray-300 mb-2 font-semibold">Leader's Photo</label>
                                     <div className="flex items-center gap-4">
                                         {leaderPreview ? (
-                                            <img src={leaderPreview} alt="Leader"
-                                                className="w-16 h-16 rounded-full object-cover border-2 border-teal-500" />
+                                            <img
+                                                src={leaderPreview}
+                                                alt="Leader"
+                                                className="w-16 h-16 rounded-full object-cover border-2 border-teal-500 flex-shrink-0"
+                                                onError={(e) => { e.target.style.display = 'none'; }}
+                                            />
                                         ) : (
-                                            <div className="w-16 h-16 rounded-full bg-slate-700 flex items-center justify-center border-2 border-slate-600">
+                                            <div className="w-16 h-16 rounded-full bg-slate-700 flex items-center justify-center border-2 border-slate-600 flex-shrink-0">
                                                 <span className="text-gray-400 text-xs text-center">No photo</span>
                                             </div>
                                         )}
-                                        <label className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg cursor-pointer text-sm">
-                                            {leaderPreview ? 'Change Photo' : 'Upload Photo'}
-                                            <input type="file" accept="image/*" className="hidden" onChange={handleLeaderPhoto} />
-                                        </label>
+                                        <div>
+                                            <label className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg cursor-pointer text-sm inline-block">
+                                                {leaderPreview ? 'Change Photo' : 'Upload Photo'}
+                                                <input type="file" accept="image/*" className="hidden" onChange={handleLeaderPhoto} />
+                                            </label>
+                                            {leaderPreview && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => { setLeaderPreview(null); setData('leader_photo', null); }}
+                                                    className="ml-2 text-red-400 hover:text-red-300 text-xs"
+                                                >
+                                                    Remove
+                                                </button>
+                                            )}
+                                        </div>
                                     </div>
                                     {errors.leader_photo && <p className="text-red-400 text-sm mt-1">{errors.leader_photo}</p>}
                                 </div>
@@ -288,8 +298,12 @@ export default function PartyEdit({ auth, party }) {
                             <h3 className="text-white font-bold text-lg mb-4">Party Symbol / Logo</h3>
                             <div className="flex items-center gap-6">
                                 {symbolPreview ? (
-                                    <img src={symbolPreview} alt="Symbol"
-                                        className="w-24 h-24 object-contain border border-slate-600 rounded-lg bg-white p-1" />
+                                    <img
+                                        src={symbolPreview}
+                                        alt="Symbol"
+                                        className="w-24 h-24 object-contain border border-slate-600 rounded-lg bg-white p-1"
+                                        onError={(e) => { e.target.style.display = 'none'; }}
+                                    />
                                 ) : (
                                     <div className="w-24 h-24 bg-slate-700 border border-slate-600 rounded-lg flex items-center justify-center">
                                         <span className="text-gray-400 text-xs text-center">No symbol</span>
@@ -300,6 +314,15 @@ export default function PartyEdit({ auth, party }) {
                                         {symbolPreview ? 'Change Symbol / Logo' : 'Upload Symbol / Logo'}
                                         <input type="file" accept="image/*" className="hidden" onChange={handleSymbol} />
                                     </label>
+                                    {symbolPreview && (
+                                        <button
+                                            type="button"
+                                            onClick={() => { setSymbolPreview(null); setData('symbol', null); }}
+                                            className="ml-2 text-red-400 hover:text-red-300 text-xs"
+                                        >
+                                            Remove
+                                        </button>
+                                    )}
                                     <p className="text-gray-400 text-xs mt-2">PNG or SVG recommended</p>
                                 </div>
                             </div>

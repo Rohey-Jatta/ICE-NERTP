@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
@@ -49,5 +50,29 @@ class PoliticalParty extends Model
     public function partyAcceptances(): HasMany
     {
         return $this->hasMany(PartyAcceptance::class);
+    }
+
+    public function elections(): BelongsToMany
+    {
+        return $this->belongsToMany(Election::class, 'election_political_party')
+                    ->withTimestamps();
+    }
+
+    /**
+     * Parse the comma-separated color string into an array of hex colors.
+     */
+    public function getColorsArrayAttribute(): array
+    {
+        if (!$this->color) return [];
+        return array_filter(array_map('trim', explode(',', $this->color)), fn($c) => preg_match('/^#[0-9a-fA-F]{6}$/', $c));
+    }
+
+    /**
+     * Get the first color or a default.
+     */
+    public function getPrimaryColorAttribute(): string
+    {
+        $colors = $this->colors_array;
+        return $colors[0] ?? '#6b7280';
     }
 }

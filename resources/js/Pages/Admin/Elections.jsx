@@ -2,24 +2,133 @@ import AppLayout from '@/Layouts/AppLayout';
 import { Link, router, useForm } from '@inertiajs/react';
 import { useState } from 'react';
 
-export default function Elections({ auth, elections = [], flash }) {
+// Multi-select party picker component
+function PartySelector({ allParties, selectedIds, onChange }) {
+    const toggle = (id) => {
+        if (selectedIds.includes(id)) {
+            onChange(selectedIds.filter(p => p !== id));
+        } else {
+            onChange([...selectedIds, id]);
+        }
+    };
+
+    const parseColors = (colorStr) => {
+        if (!colorStr) return [];
+        return colorStr.split(',').map(c => c.trim()).filter(c => /^#[0-9a-fA-F]{6}$/.test(c));
+    };
+
+    if (!allParties || allParties.length === 0) {
+        return (
+            <div className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-lg">
+                <p className="text-amber-300 text-sm">
+                    No parties registered yet.{' '}
+                    <Link href="/admin/parties/create" className="underline text-teal-400">Register a party first</Link>.
+                </p>
+            </div>
+        );
+    }
+
+    return (
+        <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+            {allParties.map((party) => {
+                const selected = selectedIds.includes(party.id);
+                const colors = parseColors(party.color);
+                const primaryColor = colors[0] || '#6b7280';
+
+                return (
+                    <label
+                        key={party.id}
+                        className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer border transition-colors ${
+                            selected
+                                ? 'bg-teal-900/30 border-teal-500/50'
+                                : 'bg-slate-900/30 border-slate-700/30 hover:bg-slate-900/50'
+                        }`}
+                    >
+                        <input
+                            type="checkbox"
+                            checked={selected}
+                            onChange={() => toggle(party.id)}
+                            className="h-4 w-4 text-teal-600 bg-slate-900 border-slate-600 rounded"
+                        />
+                        {/* Color swatch(es) */}
+                        <div className="flex gap-0.5 flex-shrink-0">
+                            {colors.length > 0 ? colors.map((c, i) => (
+                                <span
+                                    key={i}
+                                    className="w-4 h-4 rounded-sm border border-white/20"
+                                    style={{ backgroundColor: c }}
+                                />
+                            )) : (
+                                <span className="w-4 h-4 rounded-sm bg-gray-500 border border-white/20" />
+                            )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                            <div className="text-white text-sm font-medium truncate">{party.name}</div>
+                            <div className="text-gray-400 text-xs">{party.abbreviation}</div>
+                        </div>
+                        {selected && (
+                            <span className="text-teal-400 text-xs font-semibold flex-shrink-0">✓ Selected</span>
+                        )}
+                    </label>
+                );
+            })}
+        </div>
+    );
+}
+
+// Inline party badges for the election card
+function PartyBadges({ parties }) {
+    if (!parties || parties.length === 0) {
+        return <span className="text-gray-500 text-xs italic">No parties assigned</span>;
+    }
+
+    const parseColors = (colorStr) => {
+        if (!colorStr) return [];
+        return colorStr.split(',').map(c => c.trim()).filter(c => /^#[0-9a-fA-F]{6}$/.test(c));
+    };
+
+    return (
+        <div className="flex flex-wrap gap-2 mt-2">
+            {parties.map((party) => {
+                const colors = parseColors(party.color);
+                const primaryColor = colors[0] || '#6b7280';
+                return (
+                    <span
+                        key={party.id}
+                        className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-semibold border border-white/10"
+                        style={{ backgroundColor: primaryColor + '22', color: primaryColor }}
+                    >
+                        <span
+                            className="w-2 h-2 rounded-full flex-shrink-0"
+                            style={{ backgroundColor: primaryColor }}
+                        />
+                        {party.abbreviation}
+                    </span>
+                );
+            })}
+        </div>
+    );
+}
+
+export default function Elections({ auth, elections = [], allParties = [], flash }) {
     const [editingElection, setEditingElection] = useState(null);
     const [showDeactivateConfirm, setShowDeactivateConfirm] = useState(null);
 
-    // ── Edit form ──────────────────────────────────────────────────────
     const { data, setData, put, processing, errors, reset } = useForm({
-        name:   '',
-        type:   'presidential',
-        date:   '',
-        status: 'active',
+        name:      '',
+        type:      'presidential',
+        date:      '',
+        status:    'active',
+        party_ids: [],
     });
 
     const openEdit = (election) => {
         setData({
-            name:   election.name,
-            type:   election.type?.replace('_', '-') || 'presidential',
-            date:   election.date || '',
-            status: election.status || 'active',
+            name:      election.name,
+            type:      election.type?.replace('_', '-') || 'presidential',
+            date:      election.date || '',
+            status:    election.status || 'active',
+            party_ids: election.participating_parties?.map(p => p.id) || [],
         });
         setEditingElection(election);
     };
@@ -36,7 +145,6 @@ export default function Elections({ auth, elections = [], flash }) {
         });
     };
 
-    // ── Deactivate ─────────────────────────────────────────────────────
     const handleDeactivate = (election) => {
         router.patch(`/admin/elections/${election.id}/toggle-status`, {}, {
             onSuccess: () => setShowDeactivateConfirm(null),
@@ -91,12 +199,14 @@ export default function Elections({ auth, elections = [], flash }) {
                 <div className="space-y-4">
                     {elections.length > 0 ? (
                         elections.map((election) => (
-                            <div key={election.id}
-                                 className={`bg-slate-800/40 rounded-xl p-6 border transition-colors ${
-                                     election.status === 'archived'
-                                         ? 'border-slate-700/30 opacity-60'
-                                         : 'border-slate-700/50'
-                                 }`}>
+                            <div
+                                key={election.id}
+                                className={`bg-slate-800/40 rounded-xl p-6 border transition-colors ${
+                                    election.status === 'archived'
+                                        ? 'border-slate-700/30 opacity-60'
+                                        : 'border-slate-700/50'
+                                }`}
+                            >
                                 <div className="flex justify-between items-start">
                                     {/* Info */}
                                     <div className="flex-1">
@@ -104,10 +214,17 @@ export default function Elections({ auth, elections = [], flash }) {
                                         <p className="text-gray-400 capitalize text-sm">
                                             {election.type?.replace(/_/g, ' ')} &bull; {election.date}
                                         </p>
+                                        {/* Participating parties */}
+                                        <div className="mt-3">
+                                            <p className="text-gray-500 text-xs mb-1 uppercase tracking-wide">
+                                                Participating Parties ({election.participating_parties?.length || 0})
+                                            </p>
+                                            <PartyBadges parties={election.participating_parties} />
+                                        </div>
                                     </div>
 
                                     {/* Status badge */}
-                                    <span className={`px-3 py-1 rounded-full text-xs font-semibold border mr-4 ${
+                                    <span className={`px-3 py-1 rounded-full text-xs font-semibold border mr-4 flex-shrink-0 ${
                                         statusColors[election.status] || statusColors.draft
                                     }`}>
                                         {election.status?.replace(/_/g, ' ')}
@@ -115,7 +232,6 @@ export default function Elections({ auth, elections = [], flash }) {
 
                                     {/* Actions */}
                                     <div className="flex gap-2 flex-shrink-0">
-                                        {/* Edit */}
                                         <button
                                             onClick={() => openEdit(election)}
                                             className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold transition-colors"
@@ -123,7 +239,6 @@ export default function Elections({ auth, elections = [], flash }) {
                                             Edit
                                         </button>
 
-                                        {/* Deactivate / Activate toggle */}
                                         {election.status !== 'certified' && (
                                             <button
                                                 onClick={() => setShowDeactivateConfirm(election)}
@@ -155,13 +270,13 @@ export default function Elections({ auth, elections = [], flash }) {
             {/* ── Edit Modal ───────────────────────────────────────────────── */}
             {editingElection && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-                    <div className="bg-slate-800 rounded-2xl border border-slate-700 w-full max-w-lg shadow-2xl">
+                    <div className="bg-slate-800 rounded-2xl border border-slate-700 w-full max-w-2xl shadow-2xl max-h-[90vh] overflow-y-auto">
                         <div className="flex items-center justify-between p-6 border-b border-slate-700">
                             <h2 className="text-xl font-bold text-white">Edit Election</h2>
                             <button onClick={closeEdit} className="text-gray-400 hover:text-white text-2xl leading-none">×</button>
                         </div>
 
-                        <form onSubmit={handleUpdate} className="p-6 space-y-4">
+                        <form onSubmit={handleUpdate} className="p-6 space-y-5">
                             {/* Name */}
                             <div>
                                 <label className="block text-gray-300 mb-1 text-sm font-semibold">Election Name</label>
@@ -170,7 +285,6 @@ export default function Elections({ auth, elections = [], flash }) {
                                     value={data.name}
                                     onChange={(e) => setData('name', e.target.value)}
                                     className="w-full px-4 py-3 bg-slate-900/60 border border-slate-600 rounded-lg text-white text-sm"
-                                    placeholder="e.g., National Presidential Election 2026"
                                     required
                                 />
                                 {errors.name && <p className="text-red-400 text-xs mt-1">{errors.name}</p>}
@@ -223,6 +337,22 @@ export default function Elections({ auth, elections = [], flash }) {
                                 {errors.status && <p className="text-red-400 text-xs mt-1">{errors.status}</p>}
                             </div>
 
+                            {/* Participating Parties */}
+                            <div>
+                                <label className="block text-gray-300 mb-2 text-sm font-semibold">
+                                    Participating Parties
+                                    <span className="ml-2 text-gray-500 font-normal text-xs">
+                                        ({data.party_ids.length} selected)
+                                    </span>
+                                </label>
+                                <PartySelector
+                                    allParties={allParties}
+                                    selectedIds={data.party_ids}
+                                    onChange={(ids) => setData('party_ids', ids)}
+                                />
+                                {errors.party_ids && <p className="text-red-400 text-xs mt-1">{errors.party_ids}</p>}
+                            </div>
+
                             {/* Buttons */}
                             <div className="flex gap-3 pt-2">
                                 <button
@@ -254,8 +384,8 @@ export default function Elections({ auth, elections = [], flash }) {
                         </h2>
                         <p className="text-gray-300 mb-6 text-sm leading-relaxed">
                             {showDeactivateConfirm.status === 'archived'
-                                ? <>Are you sure you want to <strong className="text-teal-300">activate</strong> <em>{showDeactivateConfirm.name}</em>? It will be set to <strong>active</strong> status.</>
-                                : <>Are you sure you want to <strong className="text-red-300">deactivate</strong> <em>{showDeactivateConfirm.name}</em>? It will be archived and hidden from active workflows.</>
+                                ? <>Are you sure you want to <strong className="text-teal-300">activate</strong> <em>{showDeactivateConfirm.name}</em>?</>
+                                : <>Are you sure you want to <strong className="text-red-300">deactivate</strong> <em>{showDeactivateConfirm.name}</em>?</>
                             }
                         </p>
                         <div className="flex gap-3">

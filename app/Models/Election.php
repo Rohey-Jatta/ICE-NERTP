@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Str;
 
@@ -43,6 +44,10 @@ class Election extends Model
     public function administrativeHierarchy(): HasMany { return $this->hasMany(AdministrativeHierarchy::class); }
     public function pollingStations(): HasMany { return $this->hasMany(PollingStation::class); }
     public function politicalParties(): HasMany { return $this->hasMany(PoliticalParty::class); }
+    public function participatingParties(): BelongsToMany {
+        return $this->belongsToMany(PoliticalParty::class, 'election_political_party')
+                    ->withTimestamps();
+    }
     public function candidates(): HasMany { return $this->hasMany(Candidate::class); }
     public function results(): HasMany { return $this->hasMany(Result::class); }
     public function partyRepresentatives(): HasMany { return $this->hasMany(PartyRepresentative::class); }
