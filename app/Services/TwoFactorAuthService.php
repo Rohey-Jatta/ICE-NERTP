@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\Log;
 
 class TwoFactorAuthService
 {
-    protected $smsService;
+    protected SmsService $smsService;
 
     public function __construct(SmsService $smsService)
     {
@@ -16,45 +16,53 @@ class TwoFactorAuthService
     }
 
     /**
-     * Generate code and cahe a 6-digit 2FA code for the given user
+     * Generate a 6-digit 2FA code and store it in cache for 10 minutes.
      */
-
     public function generateCode(User $user): string
     {
-        // Generate 6-digit code
-        $code = str_pad(rand(0, 999999), 6, '0', STR_PAD_LEFT);
-
-        // Store code in cache for 10 minutes
+        $code     = str_pad(random_int(0, 999999), 6, '0', STR_PAD_LEFT);
         $cacheKey = "2fa_code_{$user->id}";
         Cache::put($cacheKey, $code, now()->addMinutes(10));
 
         return $code;
     }
 
-    // send the generated code to the user's phone number via SMS
+    /**
+     * Send the generated code to the user's phone number via SMS.
+     * Always logs the code so developers can use it even without SMS configured.
+     */
     public function sendCode(User $user, string $code): bool
     {
+        // Always log so the code is accessible during development
+        Log::info("[2FA] Code for {$user->email} ({$user->phone}): {$code}");
 
-        Log::info("2FA Code for {$user->email} ({$user->phone}): {$code}");
-
-        // Send SMS
+        // Send via SMS — SmsService handles dev/prod branching internally
+        // and will never block on a network call in local environments
         return $this->smsService->send2FACode($user->phone, $code);
     }
 
     /**
-     * Verify 2FA code
+     * Alias used by some controllers.
+     */
+    public function sendSmsOtp(User $user): bool
+    {
+        $code = $this->generateCode($user);
+        return $this->sendCode($user, $code);
+    }
+
+    /**
+     * Verify a submitted 2FA code against the cached value.
      */
     public function verifyCode(User $user, string $code): bool
     {
-        $cacheKey = "2fa_code_{$user->id}";
+        $cacheKey   = "2fa_code_{$user->id}";
         $storedCode = Cache::get($cacheKey);
 
         if (!$storedCode) {
             return false;
         }
 
-        if ($code === $storedCode) {
-            // Clear the code after successful verification
+        if (hash_equals($storedCode, $code)) {
             Cache::forget($cacheKey);
             return true;
         }

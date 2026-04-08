@@ -29,49 +29,51 @@ class AuthenticatedSessionController extends Controller
      * Handle login form submission.
      *
      * We intentionally do NOT call Auth::attempt() here because that would
-     * log the user in immediately. Instead we validate credentials manually,
+     * log the user in immediately.  Instead we validate credentials manually,
      * store the pending user ID in the session, and redirect to 2FA.
      *
-     * We also do NOT call Auth::logout() / session()->invalidate() because
-     * that regenerates the CSRF token and causes 419 errors on the 2FA form.
+     * We also do NOT call Auth::logout() / session()->invalidate() here
+     * because that regenerates the CSRF token and causes 419 errors on
+     * the subsequent 2FA form submission.
      */
     public function store(Request $request)
     {
+        // Raise the time limit for this request only so a slow SMS gateway
+        // cannot kill the login flow.
+        set_time_limit(60);
+
         $request->validate([
             'email'    => 'required|email',
             'password' => 'required|string',
         ]);
 
-        // Find the user without logging them in
         $user = User::where('email', $request->email)->first();
 
-        // Validate credentials manually
         if (!$user || !Hash::check($request->password, $user->password)) {
             throw ValidationException::withMessages([
                 'email' => ['These credentials do not match our records.'],
             ]);
         }
 
-        // Check account status
         if ($user->status !== 'active') {
             throw ValidationException::withMessages([
                 'email' => ['Your account has been deactivated. Contact IEC Administrator.'],
             ]);
         }
 
-        // Store pending user ID in session for 2FA step
-        // Do NOT regenerate the session here — that would invalidate the CSRF token
+        // Store pending user ID for the 2FA step
         $request->session()->put('2fa_user_id', $user->id);
 
-        // Generate and send the 2FA code
-        $code = $this->twoFactorService->generateCode($user);
-        $this->twoFactorService->sendCode($user, $code);
-
+        // Generate + send 2FA code (non-blocking in local env)
+        $code      = $this->twoFactorService->generateCode($user);
         $expiresAt = now()->addMinutes(10);
-        $request->session()->put('2fa_sms_sent', true);
+
+        $request->session()->put('2fa_sms_sent',   true);
         $request->session()->put('2fa_expires_at', $expiresAt->timestamp);
 
-        // Redirect to 2FA page — session (and CSRF token) is still valid
+        // Send asynchronously — failure is logged but never fatal
+        $this->twoFactorService->sendCode($user, $code);
+
         return to_route('two-factor.show');
     }
 

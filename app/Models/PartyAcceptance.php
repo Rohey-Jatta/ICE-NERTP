@@ -9,14 +9,19 @@ class PartyAcceptance extends Model
     protected $fillable = [
         'result_id',
         'political_party_id',
-        'representative_id',
-        'status', // accepted, accepted_with_reservation, rejected
+        'party_representative_id',   // FIXED: was 'representative_id'
+        'election_id',               // ADDED: required NOT NULL column
+        'status',
         'comments',
+        'decided_at',                // ADDED
+        'is_final',                  // ADDED
     ];
 
     protected $casts = [
-        'created_at' => 'datetime',
-        'updated_at' => 'datetime',
+        'created_at'  => 'datetime',
+        'updated_at'  => 'datetime',
+        'decided_at'  => 'datetime',
+        'is_final'    => 'boolean',
     ];
 
     public function result()
@@ -31,6 +36,11 @@ class PartyAcceptance extends Model
 
     public function representative()
     {
-        return $this->belongsTo(User::class, 'representative_id');
+        return $this->belongsTo(User::class, 'party_representative_id');
+    }
+
+    public function politicalParty()
+    {
+        return $this->belongsTo(PoliticalParty::class, 'political_party_id');
     }
 }

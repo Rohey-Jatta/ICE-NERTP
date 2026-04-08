@@ -46,7 +46,7 @@ export default function Observations({
                 {/* Header */}
                 <div className="mb-6">
                     <Link href="/monitor/dashboard" className="text-gray-400 hover:text-white text-sm mb-2 inline-flex items-center gap-1">
-                        ← Back to Monitor Dashboard
+                        Back to Monitor Dashboard
                     </Link>
                     <div className="flex items-start justify-between flex-wrap gap-4">
                         <div>

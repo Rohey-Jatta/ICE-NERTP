@@ -98,7 +98,6 @@ class TestDataSeeder extends Seeder
             $role = $item['role'];
             unset($item['role']);
             $user = User::updateOrCreate(['email' => $item['email']], $item);
-            // Sync roles cleanly (avoid duplicate role errors on re-seed)
             $user->syncRoles([$role]);
             $this->command->info("✓ Created user: {$user->name} ({$user->email}) - Role: {$role}");
         }
@@ -109,25 +108,31 @@ class TestDataSeeder extends Seeder
         $constApprover  = User::where('email', 'constituency@iec.gm')->firstOrFail();
         $areaApprover   = User::where('email', 'adminarea@iec.gm')->firstOrFail();
 
-        // ── Step 2: Create election FIRST (parties & stations depend on it) ───
+        // ── Step 2: Create election ───────────────────────────────────────────
         $election = Election::updateOrCreate(
             ['name' => '2026 Presidential Election'],
             [
-                'type'                           => 'presidential',
-                'start_date'                     => now()->addMonth(),
-                'end_date'                       => now()->addMonth()->addDay(),
-                'status'                         => 'active',
-                'created_by'                     => $admin->id,
-                'allow_provisional_public_display'=> true,
-                'slug'                           => '2026-presidential-election',
+                'type'                            => 'presidential',
+                'start_date'                      => now()->addMonth(),
+                'end_date'                        => now()->addMonth()->addDay(),
+                'status'                          => 'active',
+                'created_by'                      => $admin->id,
+                'allow_provisional_public_display' => true,
+                'slug'                            => '2026-presidential-election',
             ]
         );
         $this->command->info("✓ Created election: {$election->name} (ID: {$election->id})");
 
-        // ── Step 3: Create administrative hierarchy ───────────────────────────
+        // ── Step 3: Create administrative hierarchy (national → area → constituency → ward) ──
+        // National level — used by IEC Chairman for final certification
+        $national = AdministrativeHierarchy::updateOrCreate(
+            ['election_id' => $election->id, 'level' => 'national', 'name' => 'The Gambia'],
+            ['parent_id' => null]
+        );
+
         $adminArea = AdministrativeHierarchy::updateOrCreate(
             ['election_id' => $election->id, 'level' => 'admin_area', 'name' => 'Banjul Administrative Area'],
-            ['parent_id' => null, 'assigned_approver_id' => $areaApprover->id]
+            ['parent_id' => $national->id, 'assigned_approver_id' => $areaApprover->id]
         );
 
         $constituency = AdministrativeHierarchy::updateOrCreate(
@@ -140,14 +145,14 @@ class TestDataSeeder extends Seeder
             ['parent_id' => $constituency->id, 'assigned_approver_id' => $wardApprover->id]
         );
 
-        $this->command->info("✓ Created hierarchy: Admin Area (ID:{$adminArea->id}) → Constituency (ID:{$constituency->id}) → Ward (ID:{$ward->id})");
+        $this->command->info("✓ Created hierarchy: National → Admin Area (ID:{$adminArea->id}) → Constituency (ID:{$constituency->id}) → Ward (ID:{$ward->id})");
 
-        // ── Step 4: Create political parties (MUST have election_id) ─────────
+        // ── Step 4: Create political parties ──────────────────────────────────
         $partiesData = [
-            ['name' => 'United Democratic Party',       'abbreviation' => 'UDP',   'color' => '#1e40af'],
-            ['name' => "National People's Party",       'abbreviation' => 'NPP',   'color' => '#059669'],
-            ['name' => 'Gambia Democratic Congress',    'abbreviation' => 'GDC',   'color' => '#dc2626'],
-            ["name" => "People's Democratic Organisation", 'abbreviation' => 'PDOIS', 'color' => '#ea580c'],
+            ['name' => 'United Democratic Party',          'abbreviation' => 'UDP',   'color' => '#1e40af'],
+            ['name' => "National People's Party",          'abbreviation' => 'NPP',   'color' => '#059669'],
+            ['name' => 'Gambia Democratic Congress',       'abbreviation' => 'GDC',   'color' => '#dc2626'],
+            ['name' => "People's Democratic Organisation", 'abbreviation' => 'PDOIS', 'color' => '#ea580c'],
         ];
 
         $createdParties = [];
@@ -155,10 +160,10 @@ class TestDataSeeder extends Seeder
             $party = PoliticalParty::updateOrCreate(
                 ['election_id' => $election->id, 'abbreviation' => $partyData['abbreviation']],
                 [
-                    'name'         => $partyData['name'],
-                    'color'        => $partyData['color'],
-                    'slug'         => \Illuminate\Support\Str::slug($partyData['name']),
-                    'election_id'  => $election->id,  // CRITICAL: always pass election_id
+                    'name'        => $partyData['name'],
+                    'color'       => $partyData['color'],
+                    'slug'        => \Illuminate\Support\Str::slug($partyData['name']),
+                    'election_id' => $election->id,
                 ]
             );
             $createdParties[] = $party;
@@ -209,7 +214,7 @@ class TestDataSeeder extends Seeder
         }
         $this->command->info("✓ Created " . count($stations) . " polling stations");
 
-        // ── Step 6: Create candidates (one per party) ─────────────────────────
+        // ── Step 6: Create candidates ─────────────────────────────────────────
         $candidateNames = [
             'UDP'   => 'Adama Barrow',
             'NPP'   => 'Ousainou Darboe',
@@ -222,10 +227,10 @@ class TestDataSeeder extends Seeder
             $candidate = Candidate::updateOrCreate(
                 ['election_id' => $election->id, 'political_party_id' => $party->id],
                 [
-                    'name'               => $candidateNames[$party->abbreviation] ?? $party->name . ' Candidate',
-                    'ballot_number'      => (string)(array_search($party, $createdParties) + 1),
-                    'is_independent'     => false,
-                    'is_active'          => true,
+                    'name'           => $candidateNames[$party->abbreviation] ?? $party->name . ' Candidate',
+                    'ballot_number'  => (string)(array_search($party, $createdParties) + 1),
+                    'is_independent' => false,
+                    'is_active'      => true,
                 ]
             );
             $createdCandidates[] = $candidate;
@@ -252,7 +257,6 @@ class TestDataSeeder extends Seeder
             ]
         );
 
-        // Add vote breakdown — 4 candidates, total = 410
         $voteDistribution = [150, 120, 90, 50];
         foreach ($createdCandidates as $i => $candidate) {
             ResultCandidateVote::updateOrCreate(
@@ -263,9 +267,9 @@ class TestDataSeeder extends Seeder
                 ]
             );
         }
-        $this->command->info("sample result with candidate vote breakdown");
+        $this->command->info("✓ Created sample result with candidate vote breakdown");
 
-        // ── Summary table ─────────────────────────────────────────────────────
+        // ── Summary ───────────────────────────────────────────────────────────
         $this->command->newLine();
         $this->command->info('═══════════════════════════════════════════════════════');
         $this->command->info('                  TEST CREDENTIALS                     ');
@@ -273,14 +277,14 @@ class TestDataSeeder extends Seeder
         $this->command->table(
             ['Role', 'Email', 'Password'],
             [
-                ['IEC Administrator',    'admina@iec.gm',        'password123'],
-                ['Polling Officer',      'officer@iec.gm',       'password123'],
-                ['Ward Approver',        'ward@iec.gm',          'password123'],
-                ['Constituency Approver','constituency@iec.gm',  'password123'],
-                ['Admin Area Approver',  'adminarea@iec.gm',     'password123'],
-                ['IEC Chairman',         'chairman@iec.gm',      'password123'],
-                ['Party Representative', 'party@iec.gm',         'password123'],
-                ['Election Monitor',     'monitor@iec.gm',       'password123'],
+                ['IEC Administrator',     'admina@iec.gm',       'password123'],
+                ['Polling Officer',       'officer@iec.gm',      'password123'],
+                ['Ward Approver',         'ward@iec.gm',         'password123'],
+                ['Constituency Approver', 'constituency@iec.gm', 'password123'],
+                ['Admin Area Approver',   'adminarea@iec.gm',    'password123'],
+                ['IEC Chairman',          'chairman@iec.gm',     'password123'],
+                ['Party Representative',  'party@iec.gm',        'password123'],
+                ['Election Monitor',      'monitor@iec.gm',      'password123'],
             ]
         );
         $this->command->info('All passwords: password123');

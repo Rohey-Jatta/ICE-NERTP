@@ -50,7 +50,7 @@ Route::middleware(['auth', 'role:constituency-approver'])
                 ->whereHas('pollingStation', fn($q) => $q->whereIn('ward_id', $wardIds))
                 ->count();
 
-            $totalResults = Result::whereHas('pollingStation', fn($q) => $q->whereIn('ward_id', $wardIds))->count();
+            $totalResults      = Result::whereHas('pollingStation', fn($q) => $q->whereIn('ward_id', $wardIds))->count();
             $stats['progress'] = $totalResults > 0 ? round(($stats['certified'] / $totalResults) * 100) : 0;
         }
 
@@ -61,7 +61,7 @@ Route::middleware(['auth', 'role:constituency-approver'])
         ]);
     })->name('dashboard');
 
-    // ── Approval Queue — shows ward-certified results for this constituency ───
+    // ── Approval Queue ────────────────────────────────────────────────────────
     Route::get('/approval-queue', function (Request $request) {
         $user         = Auth::user();
         $constituency = AdministrativeHierarchy::where('assigned_approver_id', $user->id)
@@ -77,7 +77,6 @@ Route::middleware(['auth', 'role:constituency-approver'])
                 ->where('level', 'ward')
                 ->pluck('id');
 
-            // Build counts for filter badges
             $counts['pending'] = Result::where('certification_status', Result::STATUS_PENDING_CONSTITUENCY)
                 ->whereHas('pollingStation', fn($q) => $q->whereIn('ward_id', $wardIds))->count();
 
@@ -185,23 +184,27 @@ Route::middleware(['auth', 'role:constituency-approver'])
             return back()->withErrors(['error' => 'Result is not pending constituency approval.']);
         }
 
-        DB::transaction(function () use ($result, $request) {
-            $constituency = AdministrativeHierarchy::where('assigned_approver_id', Auth::id())
-                ->where('level', 'constituency')->first();
+        $approverId        = Auth::id();
+        $constituency      = AdministrativeHierarchy::where('assigned_approver_id', $approverId)
+            ->where('level', 'constituency')->first();
+        // Derive constituency node from the station's ward parent if approver node not found
+        $constituencyNodeId = $constituency?->id
+            ?? AdministrativeHierarchy::where('id', $result->pollingStation?->ward_id)->value('parent_id')
+            ?? AdministrativeHierarchy::where('level', 'constituency')->value('id')
+            ?? 1;
 
-            // Record certification decision
+        DB::transaction(function () use ($result, $request, $approverId, $constituencyNodeId) {
             ResultCertification::create([
                 'result_id'           => $result->id,
                 'certification_level' => 'constituency',
-                'hierarchy_node_id'   => $constituency?->id ?? 1,
-                'approver_id'         => Auth::id(),
+                'hierarchy_node_id'   => $constituencyNodeId,
+                'approver_id'         => $approverId,
                 'status'              => 'approved',
                 'comments'            => $request->comments,
                 'assigned_at'         => now(),
                 'decided_at'          => now(),
             ]);
 
-            // Certify → auto-promote to admin area queue
             $result->update(['certification_status' => Result::STATUS_CONSTITUENCY_CERTIFIED]);
             $result->update(['certification_status' => Result::STATUS_PENDING_ADMIN_AREA]);
         });
@@ -225,15 +228,20 @@ Route::middleware(['auth', 'role:constituency-approver'])
             return back()->withErrors(['error' => 'Result is not pending constituency approval.']);
         }
 
-        DB::transaction(function () use ($result, $request) {
-            $constituency = AdministrativeHierarchy::where('assigned_approver_id', Auth::id())
-                ->where('level', 'constituency')->first();
+        $approverId        = Auth::id();
+        $constituency      = AdministrativeHierarchy::where('assigned_approver_id', $approverId)
+            ->where('level', 'constituency')->first();
+        $constituencyNodeId = $constituency?->id
+            ?? AdministrativeHierarchy::where('id', $result->pollingStation?->ward_id)->value('parent_id')
+            ?? AdministrativeHierarchy::where('level', 'constituency')->value('id')
+            ?? 1;
 
+        DB::transaction(function () use ($result, $request, $approverId, $constituencyNodeId) {
             ResultCertification::create([
                 'result_id'           => $result->id,
                 'certification_level' => 'constituency',
-                'hierarchy_node_id'   => $constituency?->id ?? 1,
-                'approver_id'         => Auth::id(),
+                'hierarchy_node_id'   => $constituencyNodeId,
+                'approver_id'         => $approverId,
                 'status'              => 'approved',
                 'comments'            => '[RESERVATION] ' . $request->comments,
                 'assigned_at'         => now(),
@@ -263,26 +271,30 @@ Route::middleware(['auth', 'role:constituency-approver'])
             return back()->withErrors(['error' => 'Result is not pending constituency approval.']);
         }
 
-        DB::transaction(function () use ($result, $request) {
-            $constituency = AdministrativeHierarchy::where('assigned_approver_id', Auth::id())
-                ->where('level', 'constituency')->first();
+        $approverId        = Auth::id();
+        $constituency      = AdministrativeHierarchy::where('assigned_approver_id', $approverId)
+            ->where('level', 'constituency')->first();
+        $constituencyNodeId = $constituency?->id
+            ?? AdministrativeHierarchy::where('id', $result->pollingStation?->ward_id)->value('parent_id')
+            ?? AdministrativeHierarchy::where('level', 'constituency')->value('id')
+            ?? 1;
 
+        DB::transaction(function () use ($result, $request, $approverId, $constituencyNodeId) {
             ResultCertification::create([
                 'result_id'           => $result->id,
                 'certification_level' => 'constituency',
-                'hierarchy_node_id'   => $constituency?->id ?? 1,
-                'approver_id'         => Auth::id(),
+                'hierarchy_node_id'   => $constituencyNodeId,
+                'approver_id'         => $approverId,
                 'status'              => 'rejected',
                 'comments'            => $request->comments,
                 'assigned_at'         => now(),
                 'decided_at'          => now(),
             ]);
 
-            // Return to ward-pending so ward approver must re-certify
             $result->update([
                 'certification_status'  => Result::STATUS_PENDING_WARD,
                 'last_rejection_reason' => $request->comments,
-                'last_rejected_by'      => Auth::id(),
+                'last_rejected_by'      => $approverId,
                 'last_rejected_at'      => now(),
                 'rejection_count'       => $result->rejection_count + 1,
             ]);
@@ -314,11 +326,11 @@ Route::middleware(['auth', 'role:constituency-approver'])
                 ->get();
 
             $wards = $wardNodes->map(function ($ward) {
-                $stations       = $ward->pollingStations;
-                $totalVotes     = 0;
+                $stations        = $ward->pollingStations;
+                $totalVotes      = 0;
                 $totalRegistered = 0;
-                $certified      = 0;
-                $stationCount   = $stations->count();
+                $certified       = 0;
+                $stationCount    = $stations->count();
 
                 foreach ($stations as $station) {
                     $latestResult = $station->results->last();
@@ -372,7 +384,6 @@ Route::middleware(['auth', 'role:constituency-approver'])
             ->where('level', 'constituency')
             ->first();
 
-        // Build aggregated report data
         $reportData = null;
         if ($constituency) {
             $wardIds = AdministrativeHierarchy::where('parent_id', $constituency->id)

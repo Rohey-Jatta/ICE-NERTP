@@ -26,6 +26,9 @@ export default function Users({ auth, users = [] }) {
         <AppLayout user={auth?.user}>
             <div className="container mx-auto px-4 py-8">
                 <div className="flex justify-between items-center mb-6">
+                    <Link href="/admin/dashboard" className="text-gray-400 hover:text-white text-sm mb-2 inline-block">
+                        ← Back to Dashboard
+                    </Link>
                     <h1 className="text-3xl font-bold text-white">User Management</h1>
                     <button type="button" onClick={handleAddUser} className="px-6 py-3 bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-lg cursor-pointer">
                         Add New User

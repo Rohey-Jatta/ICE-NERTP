@@ -21,24 +21,20 @@ Route::middleware(['auth', 'role:admin-area-approver'])
         $adminArea = AdministrativeHierarchy::where('assigned_approver_id', $user->id)
             ->where('level', 'admin_area')->first();
 
-        $pending        = 0;
-        $approved       = 0;
+        $pending       = 0;
+        $approved      = 0;
         $constituencies = 0;
-        $progress       = 0;
-        $awaitingBelow  = 0; // results still progressing through ward/constituency
+        $awaitingBelow  = 0;
 
         if ($adminArea) {
-            // Scope helper: all results under this admin area
             $areaScope = fn($q) => $q->whereHas('pollingStation.ward', fn($q2) =>
                 $q2->whereHas('parent', fn($q3) => $q3->where('parent_id', $adminArea->id))
             );
 
-            // Results ready for admin-area review
             $pending = $areaScope(Result::query())
                 ->where('certification_status', Result::STATUS_PENDING_ADMIN_AREA)
                 ->count();
 
-            // Results already certified at admin-area or above
             $approved = $areaScope(Result::query())
                 ->whereIn('certification_status', [
                     Result::STATUS_ADMIN_AREA_CERTIFIED,
@@ -46,7 +42,6 @@ Route::middleware(['auth', 'role:admin-area-approver'])
                     Result::STATUS_NATIONALLY_CERTIFIED,
                 ])->count();
 
-            // Results still moving through ward/constituency pipeline
             $awaitingBelow = $areaScope(Result::query())
                 ->whereIn('certification_status', [
                     Result::STATUS_SUBMITTED,
@@ -59,10 +54,10 @@ Route::middleware(['auth', 'role:admin-area-approver'])
 
             $constituencies = AdministrativeHierarchy::where('parent_id', $adminArea->id)
                 ->where('level', 'constituency')->count();
-
-            $total    = $pending + $approved;
-            $progress = $total > 0 ? round(($approved / $total) * 100) : 0;
         }
+
+        $total    = $pending + $approved;
+        $progress = $total > 0 ? round(($approved / $total) * 100) : 0;
 
         return Inertia::render('AdminArea/Dashboard', [
             'auth'           => ['user' => $user],
@@ -102,24 +97,17 @@ Route::middleware(['auth', 'role:admin-area-approver'])
             ]);
             $baseQuery = $areaScope($baseQuery);
 
-            // Counts — pending means ready for admin-area review
             $counts['pending']  = (clone $baseQuery)
-                ->where('certification_status', Result::STATUS_PENDING_ADMIN_AREA)
-                ->count();
-
+                ->where('certification_status', Result::STATUS_PENDING_ADMIN_AREA)->count();
             $counts['approved'] = (clone $baseQuery)
                 ->whereIn('certification_status', [
                     Result::STATUS_ADMIN_AREA_CERTIFIED,
                     Result::STATUS_PENDING_NATIONAL,
                     Result::STATUS_NATIONALLY_CERTIFIED,
                 ])->count();
-
-            // Rejected = returned to constituency level by this approver
             $counts['rejected'] = (clone $baseQuery)
                 ->where('certification_status', Result::STATUS_PENDING_CONSTITUENCY)
-                ->where('rejection_count', '>', 0)
-                ->count();
-
+                ->where('rejection_count', '>', 0)->count();
             $counts['all'] = $counts['pending'] + $counts['approved'] + $counts['rejected'];
 
             $activeQuery = match ($filter) {
@@ -147,10 +135,6 @@ Route::middleware(['auth', 'role:admin-area-approver'])
                 $partyTotal    = $r->partyAcceptances->count();
                 $constituency  = $r->pollingStation?->ward?->parent;
 
-                $photoUrl = $r->result_sheet_photo_path
-                    ? asset('storage/' . $r->result_sheet_photo_path)
-                    : null;
-
                 return [
                     'id'                      => $r->id,
                     'polling_station'         => $r->pollingStation->name ?? 'Unknown',
@@ -168,7 +152,9 @@ Route::middleware(['auth', 'role:admin-area-approver'])
                     'turnout'                 => $r->getTurnoutPercentage(),
                     'rejection_count'         => $r->rejection_count,
                     'last_rejection_reason'   => $r->last_rejection_reason,
-                    'photo_url'               => $photoUrl,
+                    'photo_url'               => $r->result_sheet_photo_path
+                        ? asset('storage/' . $r->result_sheet_photo_path)
+                        : null,
                     'party_accepted'          => $partyAccepted,
                     'party_total'             => $partyTotal,
                     'party_acceptances'       => $r->partyAcceptances->map(fn($pa) => [
@@ -205,15 +191,22 @@ Route::middleware(['auth', 'role:admin-area-approver'])
             return back()->withErrors(['error' => 'Result is not pending admin-area approval.']);
         }
 
-        DB::transaction(function () use ($result, $request) {
-            $adminArea = AdministrativeHierarchy::where('assigned_approver_id', Auth::id())
-                ->where('level', 'admin_area')->first();
+        $approverId  = Auth::id();
+        $adminArea   = AdministrativeHierarchy::where('assigned_approver_id', $approverId)
+            ->where('level', 'admin_area')->first();
+        // Derive admin area node from station's ward → constituency → admin area
+        $wardParentId      = AdministrativeHierarchy::where('id', $result->pollingStation?->ward_id)->value('parent_id');
+        $adminAreaNodeId   = $adminArea?->id
+            ?? AdministrativeHierarchy::where('id', $wardParentId)->value('parent_id')
+            ?? AdministrativeHierarchy::where('level', 'admin_area')->value('id')
+            ?? 1;
 
+        DB::transaction(function () use ($result, $request, $approverId, $adminAreaNodeId) {
             ResultCertification::create([
                 'result_id'           => $result->id,
                 'certification_level' => 'admin_area',
-                'hierarchy_node_id'   => $adminArea?->id ?? 1,
-                'approver_id'         => Auth::id(),
+                'hierarchy_node_id'   => $adminAreaNodeId,
+                'approver_id'         => $approverId,
                 'status'              => 'approved',
                 'comments'            => $request->comments,
                 'assigned_at'         => now(),
@@ -243,15 +236,21 @@ Route::middleware(['auth', 'role:admin-area-approver'])
             return back()->withErrors(['error' => 'Result is not pending admin-area approval.']);
         }
 
-        DB::transaction(function () use ($result, $request) {
-            $adminArea = AdministrativeHierarchy::where('assigned_approver_id', Auth::id())
-                ->where('level', 'admin_area')->first();
+        $approverId      = Auth::id();
+        $adminArea       = AdministrativeHierarchy::where('assigned_approver_id', $approverId)
+            ->where('level', 'admin_area')->first();
+        $wardParentId    = AdministrativeHierarchy::where('id', $result->pollingStation?->ward_id)->value('parent_id');
+        $adminAreaNodeId = $adminArea?->id
+            ?? AdministrativeHierarchy::where('id', $wardParentId)->value('parent_id')
+            ?? AdministrativeHierarchy::where('level', 'admin_area')->value('id')
+            ?? 1;
 
+        DB::transaction(function () use ($result, $request, $approverId, $adminAreaNodeId) {
             ResultCertification::create([
                 'result_id'           => $result->id,
                 'certification_level' => 'admin_area',
-                'hierarchy_node_id'   => $adminArea?->id ?? 1,
-                'approver_id'         => Auth::id(),
+                'hierarchy_node_id'   => $adminAreaNodeId,
+                'approver_id'         => $approverId,
                 'status'              => 'approved',
                 'comments'            => '[RESERVATION] ' . $request->comments,
                 'assigned_at'         => now(),
@@ -281,15 +280,21 @@ Route::middleware(['auth', 'role:admin-area-approver'])
             return back()->withErrors(['error' => 'Result is not pending admin-area approval.']);
         }
 
-        DB::transaction(function () use ($result, $request) {
-            $adminArea = AdministrativeHierarchy::where('assigned_approver_id', Auth::id())
-                ->where('level', 'admin_area')->first();
+        $approverId      = Auth::id();
+        $adminArea       = AdministrativeHierarchy::where('assigned_approver_id', $approverId)
+            ->where('level', 'admin_area')->first();
+        $wardParentId    = AdministrativeHierarchy::where('id', $result->pollingStation?->ward_id)->value('parent_id');
+        $adminAreaNodeId = $adminArea?->id
+            ?? AdministrativeHierarchy::where('id', $wardParentId)->value('parent_id')
+            ?? AdministrativeHierarchy::where('level', 'admin_area')->value('id')
+            ?? 1;
 
+        DB::transaction(function () use ($result, $request, $approverId, $adminAreaNodeId) {
             ResultCertification::create([
                 'result_id'           => $result->id,
                 'certification_level' => 'admin_area',
-                'hierarchy_node_id'   => $adminArea?->id ?? 1,
-                'approver_id'         => Auth::id(),
+                'hierarchy_node_id'   => $adminAreaNodeId,
+                'approver_id'         => $approverId,
                 'status'              => 'rejected',
                 'comments'            => $request->comments,
                 'assigned_at'         => now(),
@@ -299,7 +304,7 @@ Route::middleware(['auth', 'role:admin-area-approver'])
             $result->update([
                 'certification_status'  => Result::STATUS_PENDING_CONSTITUENCY,
                 'last_rejection_reason' => $request->comments,
-                'last_rejected_by'      => Auth::id(),
+                'last_rejected_by'      => $approverId,
                 'last_rejected_at'      => now(),
                 'rejection_count'       => $result->rejection_count + 1,
             ]);
@@ -338,12 +343,10 @@ Route::middleware(['auth', 'role:admin-area-approver'])
             $constituencies = $constituencyNodes->map(function ($constituency) use (
                 &$totalVotesCounted, &$certifiedCount, &$pendingCount, &$awaitingCount
             ) {
-                // All results for stations under this constituency
                 $allResults = Result::whereHas('pollingStation.ward', fn($q) =>
                     $q->where('parent_id', $constituency->id)
                 )->get();
 
-                // Results that have REACHED admin-area level (pending or certified)
                 $atAdminLevel = $allResults->whereIn('certification_status', [
                     Result::STATUS_PENDING_ADMIN_AREA,
                     Result::STATUS_ADMIN_AREA_CERTIFIED,
@@ -351,14 +354,12 @@ Route::middleware(['auth', 'role:admin-area-approver'])
                     Result::STATUS_NATIONALLY_CERTIFIED,
                 ]);
 
-                // Results certified AT or ABOVE admin-area
                 $adminCertified = $allResults->whereIn('certification_status', [
                     Result::STATUS_ADMIN_AREA_CERTIFIED,
                     Result::STATUS_PENDING_NATIONAL,
                     Result::STATUS_NATIONALLY_CERTIFIED,
                 ]);
 
-                // Results still in ward/constituency pipeline
                 $awaiting = $allResults->whereIn('certification_status', [
                     Result::STATUS_SUBMITTED,
                     Result::STATUS_PENDING_PARTY_ACCEPTANCE,
@@ -368,22 +369,19 @@ Route::middleware(['auth', 'role:admin-area-approver'])
                     Result::STATUS_CONSTITUENCY_CERTIFIED,
                 ]);
 
-                $totalStations   = $allResults->count();
-                $atAdminCount    = $atAdminLevel->count();
-                $certifiedNow    = $adminCertified->count();
-                $pendingNow      = $atAdminLevel->where('certification_status', Result::STATUS_PENDING_ADMIN_AREA)->count();
-                $awaitingNow     = $awaiting->count();
-
-                // Votes: only count results that have at least been submitted
-                $votes      = $allResults->sum('total_votes_cast');
-                $registered = $allResults->sum('total_registered_voters');
+                $totalStations = $allResults->count();
+                $atAdminCount  = $atAdminLevel->count();
+                $certifiedNow  = $adminCertified->count();
+                $pendingNow    = $atAdminLevel->where('certification_status', Result::STATUS_PENDING_ADMIN_AREA)->count();
+                $awaitingNow   = $awaiting->count();
+                $votes         = $allResults->sum('total_votes_cast');
+                $registered    = $allResults->sum('total_registered_voters');
 
                 $totalVotesCounted += $votes;
                 $certifiedCount    += ($certifiedNow === $totalStations && $totalStations > 0) ? 1 : 0;
                 $pendingCount      += $pendingNow > 0 ? 1 : 0;
                 $awaitingCount     += $awaitingNow > 0 ? 1 : 0;
 
-                // Determine the most descriptive pipeline status
                 if ($totalStations === 0) {
                     $status      = 'No Results';
                     $statusColor = 'gray';
@@ -391,18 +389,17 @@ Route::middleware(['auth', 'role:admin-area-approver'])
                     $status      = 'Certified';
                     $statusColor = 'teal';
                 } elseif ($pendingNow > 0) {
-                    $status      = 'Pending Review';  // arrived at admin-area, not yet decided
+                    $status      = 'Pending Review';
                     $statusColor = 'orange';
                 } elseif ($awaitingNow > 0) {
-                    $status      = 'In Pipeline';     // still at ward/constituency level
+                    $status      = 'In Pipeline';
                     $statusColor = 'blue';
                 } else {
                     $status      = 'In Progress';
                     $statusColor = 'amber';
                 }
 
-                $wards    = AdministrativeHierarchy::where('parent_id', $constituency->id)
-                    ->where('level', 'ward')->count();
+                $wards    = AdministrativeHierarchy::where('parent_id', $constituency->id)->where('level', 'ward')->count();
                 $stations = \App\Models\PollingStation::whereHas('ward', fn($q) =>
                     $q->where('parent_id', $constituency->id)
                 )->count();
@@ -415,11 +412,10 @@ Route::middleware(['auth', 'role:admin-area-approver'])
                     'votes'           => $votes,
                     'turnout'         => $registered > 0
                         ? round(($votes / $registered) * 100, 1) : 0,
-                    // Admin-area certified / total that reached admin-area
                     'certified_count' => $certifiedNow,
-                    'admin_level'     => $atAdminCount,   // at or past admin-area
-                    'pending_review'  => $pendingNow,     // waiting for this approver
-                    'in_pipeline'     => $awaitingNow,    // still at lower level
+                    'admin_level'     => $atAdminCount,
+                    'pending_review'  => $pendingNow,
+                    'in_pipeline'     => $awaitingNow,
                     'total_count'     => $totalStations,
                     'status'          => $status,
                     'status_color'    => $statusColor,

@@ -19,20 +19,15 @@ Route::middleware(['auth', 'role:iec-chairman'])
 
     // ── Dashboard ─────────────────────────────────────────────────────────────
     Route::get('/dashboard', function () {
-        $pendingNational = Result::where('certification_status', Result::STATUS_PENDING_NATIONAL)->count();
+        $pendingNational     = Result::where('certification_status', Result::STATUS_PENDING_NATIONAL)->count();
         $nationallyCertified = Result::where('certification_status', Result::STATUS_NATIONALLY_CERTIFIED)->count();
-        $totalStations   = PollingStation::count();
-        $totalVoters     = PollingStation::sum('registered_voters');
+        $totalStations       = PollingStation::count();
+        $totalVoters         = PollingStation::sum('registered_voters');
 
-        // National progress
-        $totalResults = Result::whereNotIn('certification_status', [
-            Result::STATUS_SUBMITTED, Result::STATUS_REJECTED
-        ])->count();
         $nationalProgress = $totalStations > 0
             ? round(($nationallyCertified / max($totalStations, 1)) * 100)
             : 0;
 
-        // Recent audit activity
         $recentActivity = \App\Models\AuditLog::with('user')
             ->whereIn('module', ['Certification', 'Results'])
             ->latest()
@@ -45,7 +40,6 @@ Route::middleware(['auth', 'role:iec-chairman'])
                 'outcome'=> $a->outcome,
             ]);
 
-        // Pipeline overview
         $pipelineCounts = [
             'submitted'               => Result::where('certification_status', Result::STATUS_SUBMITTED)->count(),
             'pending_party'           => Result::where('certification_status', Result::STATUS_PENDING_PARTY_ACCEPTANCE)->count(),
@@ -123,9 +117,9 @@ Route::middleware(['auth', 'role:iec-chairman'])
             ]);
 
         return Inertia::render('Chairman/NationalQueue', [
-            'auth'             => ['user' => Auth::user()],
-            'pendingResults'   => $results,
-            'pendingCount'     => $results->count(),
+            'auth'           => ['user' => Auth::user()],
+            'pendingResults' => $results,
+            'pendingCount'   => $results->count(),
         ]);
     })->name('national-queue');
 
@@ -139,6 +133,21 @@ Route::middleware(['auth', 'role:iec-chairman'])
             return back()->withErrors(['error' => 'Result is not pending national certification.']);
         }
 
+        $approverId = Auth::id();
+
+        // Resolve the best available hierarchy node for national level
+        // Priority: national → admin_area (of the result's station) → any existing node → 1
+        $nationalNodeId = AdministrativeHierarchy::where('level', 'national')->value('id');
+        if (!$nationalNodeId) {
+            // Derive from station: ward → constituency → admin_area
+            $wardParentId   = AdministrativeHierarchy::where('id', $result->pollingStation?->ward_id)->value('parent_id');
+            $adminAreaNodeId = AdministrativeHierarchy::where('id', $wardParentId)->value('parent_id');
+            $nationalNodeId = $adminAreaNodeId
+                ?? AdministrativeHierarchy::where('level', 'admin_area')->value('id')
+                ?? AdministrativeHierarchy::orderBy('id')->value('id')
+                ?? 1;
+        }
+
         $result->update([
             'certification_status'    => Result::STATUS_NATIONALLY_CERTIFIED,
             'nationally_certified_at' => now(),
@@ -147,8 +156,8 @@ Route::middleware(['auth', 'role:iec-chairman'])
         \App\Models\ResultCertification::create([
             'result_id'           => $result->id,
             'certification_level' => 'national',
-            'hierarchy_node_id'   => AdministrativeHierarchy::where('level', 'national')->value('id') ?? 1,
-            'approver_id'         => Auth::id(),
+            'hierarchy_node_id'   => $nationalNodeId,
+            'approver_id'         => $approverId,
             'status'              => 'approved',
             'comments'            => $request->comments,
             'assigned_at'         => now(),
@@ -176,10 +185,22 @@ Route::middleware(['auth', 'role:iec-chairman'])
             return back()->withErrors(['error' => 'Result is not pending national approval.']);
         }
 
+        $approverId = Auth::id();
+
+        $nationalNodeId = AdministrativeHierarchy::where('level', 'national')->value('id');
+        if (!$nationalNodeId) {
+            $wardParentId    = AdministrativeHierarchy::where('id', $result->pollingStation?->ward_id)->value('parent_id');
+            $adminAreaNodeId = AdministrativeHierarchy::where('id', $wardParentId)->value('parent_id');
+            $nationalNodeId  = $adminAreaNodeId
+                ?? AdministrativeHierarchy::where('level', 'admin_area')->value('id')
+                ?? AdministrativeHierarchy::orderBy('id')->value('id')
+                ?? 1;
+        }
+
         $result->update([
             'certification_status'  => Result::STATUS_PENDING_ADMIN_AREA,
             'last_rejection_reason' => $request->reason,
-            'last_rejected_by'      => Auth::id(),
+            'last_rejected_by'      => $approverId,
             'last_rejected_at'      => now(),
             'rejection_count'       => $result->rejection_count + 1,
         ]);
@@ -187,8 +208,8 @@ Route::middleware(['auth', 'role:iec-chairman'])
         \App\Models\ResultCertification::create([
             'result_id'           => $result->id,
             'certification_level' => 'national',
-            'hierarchy_node_id'   => AdministrativeHierarchy::where('level', 'national')->value('id') ?? 1,
-            'approver_id'         => Auth::id(),
+            'hierarchy_node_id'   => $nationalNodeId,
+            'approver_id'         => $approverId,
             'status'              => 'rejected',
             'comments'            => $request->reason,
             'assigned_at'         => now(),
@@ -206,7 +227,7 @@ Route::middleware(['auth', 'role:iec-chairman'])
         return back()->with('success', 'Result returned to Admin Area level for review.');
     })->name('reject');
 
-    // ── All Results (national overview) ───────────────────────────────────────
+    // ── All Results ───────────────────────────────────────────────────────────
     Route::get('/all-results', function (Request $request) {
         $filter = $request->get('filter', 'all');
 
@@ -221,7 +242,7 @@ Route::middleware(['auth', 'role:iec-chairman'])
                 Result::STATUS_NATIONALLY_CERTIFIED,
                 Result::STATUS_REJECTED,
             ]),
-            default => $query, // all
+            default => $query,
         };
 
         $results = $query->paginate(30)->through(fn($r) => [
@@ -237,7 +258,6 @@ Route::middleware(['auth', 'role:iec-chairman'])
             'rejection_count'      => $r->rejection_count,
         ]);
 
-        // Status counts
         $counts = [
             'all'                  => Result::count(),
             'pending_national'     => Result::where('certification_status', Result::STATUS_PENDING_NATIONAL)->count(),
@@ -267,18 +287,15 @@ Route::middleware(['auth', 'role:iec-chairman'])
             ]);
         }
 
-        // National aggregate
         $certified = Result::where('election_id', $election->id)
             ->where('certification_status', Result::STATUS_NATIONALLY_CERTIFIED);
 
-        $totalStations  = PollingStation::where('election_id', $election->id)->count();
+        $totalStations   = PollingStation::where('election_id', $election->id)->count();
         $totalRegistered = PollingStation::where('election_id', $election->id)->sum('registered_voters');
+        $votesCast       = (clone $certified)->sum('total_votes_cast');
+        $certifiedCount  = (clone $certified)->count();
 
-        $votesCast      = (clone $certified)->sum('total_votes_cast');
-        $certifiedCount = (clone $certified)->count();
-
-        // Candidate totals from certified results
-        $certifiedIds = (clone $certified)->pluck('id');
+        $certifiedIds    = (clone $certified)->pluck('id');
         $candidateTotals = ResultCandidateVote::whereIn('result_id', $certifiedIds)
             ->selectRaw('candidate_id, SUM(votes) as total')
             ->groupBy('candidate_id')
@@ -294,7 +311,6 @@ Route::middleware(['auth', 'role:iec-chairman'])
             ->sortByDesc('votes')
             ->values();
 
-        // Regional breakdown by admin area
         $adminAreas = AdministrativeHierarchy::where('election_id', $election->id)
             ->where('level', 'admin_area')
             ->get()
@@ -303,33 +319,31 @@ Route::middleware(['auth', 'role:iec-chairman'])
                     $q->where('parent_id', $area->id)
                 )->pluck('id');
 
-                $total      = $stationIds->count();
-                $certified  = Result::whereIn('polling_station_id', $stationIds)
-                    ->where('certification_status', Result::STATUS_NATIONALLY_CERTIFIED)
-                    ->count();
-                $votes      = Result::whereIn('polling_station_id', $stationIds)
-                    ->where('certification_status', Result::STATUS_NATIONALLY_CERTIFIED)
-                    ->sum('total_votes_cast');
+                $total     = $stationIds->count();
+                $certified = Result::whereIn('polling_station_id', $stationIds)
+                    ->where('certification_status', Result::STATUS_NATIONALLY_CERTIFIED)->count();
+                $votes     = Result::whereIn('polling_station_id', $stationIds)
+                    ->where('certification_status', Result::STATUS_NATIONALLY_CERTIFIED)->sum('total_votes_cast');
 
                 return [
-                    'name'     => $area->name,
-                    'total'    => $total,
-                    'certified'=> $certified,
-                    'progress' => $total > 0 ? round(($certified / $total) * 100) : 0,
-                    'votes'    => $votes,
+                    'name'      => $area->name,
+                    'total'     => $total,
+                    'certified' => $certified,
+                    'progress'  => $total > 0 ? round(($certified / $total) * 100) : 0,
+                    'votes'     => $votes,
                 ];
             });
 
         return Inertia::render('Chairman/Analytics', [
             'auth' => ['user' => Auth::user()],
             'nationalStats' => [
-                'totalStations'      => $totalStations,
-                'registeredVoters'   => $totalRegistered,
-                'votesCast'          => $votesCast,
-                'certifiedStations'  => $certifiedCount,
-                'certifiedPercentage'=> $totalStations > 0 ? round(($certifiedCount / $totalStations) * 100) : 0,
-                'turnout'            => $totalRegistered > 0 ? round(($votesCast / $totalRegistered) * 100, 2) : 0,
-                'partyPerformance'   => $candidateTotals,
+                'totalStations'       => $totalStations,
+                'registeredVoters'    => $totalRegistered,
+                'votesCast'           => $votesCast,
+                'certifiedStations'   => $certifiedCount,
+                'certifiedPercentage' => $totalStations > 0 ? round(($certifiedCount / $totalStations) * 100) : 0,
+                'turnout'             => $totalRegistered > 0 ? round(($votesCast / $totalRegistered) * 100, 2) : 0,
+                'partyPerformance'    => $candidateTotals,
             ],
             'regionalBreakdown' => $adminAreas,
         ]);
@@ -352,15 +366,15 @@ Route::middleware(['auth', 'role:iec-chairman'])
             'auth'           => ['user' => Auth::user()],
             'readinessCheck' => [
                 'allCertified'     => $allCertified,
-                'partyAcceptances' => true, // simplified — could add real check
+                'partyAcceptances' => true,
                 'auditComplete'    => true,
             ],
             'summary' => [
                 'total'          => $totalStations,
                 'certified'      => $certifiedStations,
-                'percentComplete'=> $totalStations > 0 ? round(($certifiedStations / $totalStations) * 100) : 0,
-                'pendingNational'=> $pendingNational,
-                'lastUpdated'    => now()->format('Y-m-d H:i'),
+                'percentComplete' => $totalStations > 0 ? round(($certifiedStations / $totalStations) * 100) : 0,
+                'pendingNational' => $pendingNational,
+                'lastUpdated'     => now()->format('Y-m-d H:i'),
             ],
         ]);
     })->name('publish');

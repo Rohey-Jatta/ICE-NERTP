@@ -23,7 +23,7 @@ export default function Publish({ auth, readinessCheck = {}, summary = {} }) {
                 <div className="mb-6">
                     <Link href="/chairman/dashboard"
                           className="text-gray-400 hover:text-white text-sm inline-flex items-center gap-1 mb-3">
-                        ← Chairman Dashboard
+                        Chairman Dashboard
                     </Link>
                     <h1 className="text-3xl font-bold text-white">Publish Final Results</h1>
                     <p className="text-gray-400 mt-1 text-sm">

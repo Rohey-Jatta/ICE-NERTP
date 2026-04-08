@@ -126,7 +126,7 @@ export default function AdminAreaApprovalQueue({ auth, adminArea, results = [], 
                 {/* Header */}
                 <div className="mb-6">
                     <Link href="/admin-area/dashboard" className="text-gray-400 hover:text-white text-sm mb-2 inline-flex items-center gap-1">
-                        ← Admin-Area Dashboard
+                        Admin-Area Dashboard
                     </Link>
                     <h1 className="text-3xl font-bold text-white">Admin-Area Approval Queue</h1>
                     {adminArea?.name && <p className="text-teal-300 mt-1">{adminArea.name}</p>}

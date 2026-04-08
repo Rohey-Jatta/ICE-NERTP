@@ -33,7 +33,7 @@ export default function AllResults({ auth, results = {}, filter = 'all', counts 
                 <div className="mb-6">
                     <Link href="/chairman/dashboard"
                           className="text-gray-400 hover:text-white text-sm inline-flex items-center gap-1 mb-3">
-                        ← Chairman Dashboard
+                        Chairman Dashboard
                     </Link>
                     <h1 className="text-3xl font-bold text-white">All Results — National Overview</h1>
                     <p className="text-gray-400 mt-1 text-sm">Complete view of all election results across the nation</p>

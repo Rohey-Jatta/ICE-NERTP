@@ -2,8 +2,8 @@
 
 namespace App\Jobs;
 
-use App\Models\AuditLog;
 use App\Models\Result;
+use App\Models\AuditLog;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -11,103 +11,60 @@ use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
 
-/**
- * ProcessResultSubmission - Background job for post-submission tasks.
- *
- * From architecture: app/Jobs/ProcessResultSubmission.php
- *
- * Tasks:
- * 1. Verify photo upload completed
- * 2. Generate result version snapshot
- * 3. Trigger aggregation job (if certified)
- * 4. Send notifications to party reps
- */
 class ProcessResultSubmission implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
-    public int $tries = 3;
-    public int $timeout = 120;
-
-    public function __construct(
-        public Result $result
-    ) {}
+    public function __construct(public Result $result) {}
 
     public function handle(): void
     {
-        Log::info("Processing result submission", [
-            'result_id' => $this->result->id,
-            'station_code' => $this->result->pollingStation->code,
-        ]);
+        try {
+            $result = $this->result->fresh();
 
-        // Create initial version snapshot
-        $this->createVersionSnapshot();
+            if (!$result) {
+                Log::warning('ProcessResultSubmission: result not found', ['id' => $this->result->id]);
+                return;
+            }
 
-        // Transition to pending party acceptance if required
-        $this->transitionToPendingAcceptance();
+            // Only process if still in initial SUBMITTED state (not already advanced)
+            if ($result->certification_status !== Result::STATUS_SUBMITTED) {
+                Log::info('ProcessResultSubmission: result already advanced, skipping', [
+                    'id'     => $result->id,
+                    'status' => $result->certification_status,
+                ]);
+                return;
+            }
 
-        // Audit log
-        AuditLog::record(
-            action: 'result.processing.completed',
-            event: 'updated',
-            module: 'Results',
-            auditable: $this->result,
-            extra: [
-                'election_id' => $this->result->election_id,
-                'outcome' => 'success',
-            ]
-        );
-
-        Log::info("Result processing completed", ['result_id' => $this->result->id]);
-    }
-
-    private function createVersionSnapshot(): void
-    {
-        $this->result->versions()->create([
-            'version_number' => 1,
-            'result_snapshot' => $this->result->toArray(),
-            'votes_snapshot' => $this->result->candidateVotes->toArray(),
-            'changed_by' => $this->result->submitted_by,
-            'change_reason' => 'initial_submission',
-            'certification_status_at_version' => $this->result->certification_status,
-        ]);
-    }
-
-    private function transitionToPendingAcceptance(): void
-    {
-        if ($this->result->election->requires_party_acceptance) {
-            $this->result->update([
+            // Advance from SUBMITTED → PENDING_PARTY_ACCEPTANCE
+            // This makes the result visible to party representatives
+            $result->update([
                 'certification_status' => Result::STATUS_PENDING_PARTY_ACCEPTANCE,
+                'processing_started_at' => now(),
             ]);
 
-            // TODO: Send notification to party reps assigned to this station
-            Log::info("Result transitioned to pending party acceptance", [
+            AuditLog::record(
+                action: 'result.processing.completed',
+                event:  'updated',
+                module: 'Results',
+                auditable: $result,
+                extra: [
+                    'outcome'    => 'success',
+                    'new_status' => Result::STATUS_PENDING_PARTY_ACCEPTANCE,
+                ]
+            );
+
+            Log::info('ProcessResultSubmission: advanced to PENDING_PARTY_ACCEPTANCE', [
+                'result_id'  => $result->id,
+                'station_id' => $result->polling_station_id,
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('ProcessResultSubmission failed', [
                 'result_id' => $this->result->id,
+                'error'     => $e->getMessage(),
             ]);
-        } else {
-            // Skip party acceptance, go straight to ward
-            $this->result->update([
-                'certification_status' => Result::STATUS_PENDING_WARD,
-            ]);
+            throw $e;
         }
-    }
-
-    public function failed(\Throwable $exception): void
-    {
-        Log::error("Result processing failed", [
-            'result_id' => $this->result->id,
-            'error' => $exception->getMessage(),
-        ]);
-
-        AuditLog::record(
-            action: 'result.processing.failed',
-            event: 'failure',
-            module: 'Results',
-            auditable: $this->result,
-            extra: [
-                'outcome' => 'failure',
-                'failure_reason' => $exception->getMessage(),
-            ]
-        );
     }
 }

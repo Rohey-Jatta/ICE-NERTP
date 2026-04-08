@@ -27,7 +27,7 @@ export default function MonitorStations({ auth, monitor, stations = [] }) {
                 {/* Header */}
                 <div className="mb-6">
                     <Link href="/monitor/dashboard" className="text-gray-400 hover:text-white text-sm mb-2 inline-flex items-center gap-1">
-                        ← Back to Monitor Dashboard
+                        Back to Monitor Dashboard
                     </Link>
                     <h1 className="text-3xl font-bold text-white">Assigned Polling Stations</h1>
                     <p className="text-gray-400 mt-1">

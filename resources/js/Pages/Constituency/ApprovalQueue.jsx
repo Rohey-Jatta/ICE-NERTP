@@ -149,7 +149,7 @@ export default function ConstituencyApprovalQueue({
                 {/* Header with back link */}
                 <div className="mb-6">
                     <Link href="/constituency/dashboard" className="text-gray-400 hover:text-white text-sm mb-2 inline-flex items-center gap-1">
-                        ← Back to Constituency Dashboard
+                        Back to Constituency Dashboard
                     </Link>
                     <h1 className="text-3xl font-bold text-white">Constituency Approval Queue</h1>
                     {constituency?.name && <p className="text-teal-300 mt-1">{constituency.name}</p>}
