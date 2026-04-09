@@ -12,6 +12,7 @@ use Illuminate\Support\Str;
 use Inertia\Inertia;
 use App\Models\AdministrativeHierarchy;
 use App\Models\AuditLog;
+use App\Models\Candidate;
 use App\Models\Election;
 use App\Models\PollingStation;
 use App\Models\PoliticalParty;
@@ -320,7 +321,6 @@ Route::middleware(['auth', 'role:iec-administrator'])
             ]),
         ]);
 
-        // All parties for the dropdown
         $allParties = PoliticalParty::select('id', 'name', 'abbreviation', 'color')->orderBy('name')->get();
 
         return Inertia::render('Admin/Elections', [
@@ -355,7 +355,6 @@ Route::middleware(['auth', 'role:iec-administrator'])
                 'created_by' => Auth::id(),
             ]);
 
-            // Attach participating parties
             if ($request->party_ids) {
                 $election->participatingParties()->sync($request->party_ids);
             }
@@ -387,7 +386,6 @@ Route::middleware(['auth', 'role:iec-administrator'])
                 'status'     => $request->status,
             ]);
 
-            // Sync participating parties
             $election->participatingParties()->sync($request->party_ids ?? []);
 
             AuditLog::record(action: 'election.updated', event: 'updated', module: 'ElectionManagement', auditable: $election);
@@ -513,9 +511,29 @@ Route::middleware(['auth', 'role:iec-administrator'])
 
     // ── Parties ───────────────────────────────────────────────────────────────
     Route::get('/parties', function () {
-        $parties = PoliticalParty::with(['candidates' => function($q) {
-            $q->with('politicalParty');
-        }])->get()->map(function($party) {
+        $activeElection = Election::where('status', 'active')->latest()->first();
+
+        // Only show parties that belong to the active election
+        $query = PoliticalParty::query();
+        if ($activeElection) {
+            $query->where('election_id', $activeElection->id);
+        }
+
+        $parties = $query->get()->map(function ($party) use ($activeElection) {
+            // Candidates scoped strictly to this party + active election
+            $candidates = $activeElection
+                ? Candidate::where('political_party_id', $party->id)
+                    ->where('election_id', $activeElection->id)
+                    ->get()
+                    ->map(fn($c) => [
+                        'id'            => $c->id,
+                        'name'          => $c->name,
+                        'ballot_number' => $c->ballot_number,
+                        'photo_path'    => $c->photo_path,
+                        'photo_url'     => $c->photo_path ? asset('storage/' . $c->photo_path) : null,
+                    ])
+                : collect();
+
             return [
                 'id'                => $party->id,
                 'name'              => $party->name,
@@ -530,19 +548,17 @@ Route::middleware(['auth', 'role:iec-administrator'])
                 'motto'             => $party->motto,
                 'headquarters'      => $party->headquarters,
                 'website'           => $party->website,
-                'candidates'        => $party->candidates->map(fn($c) => [
-                    'id'        => $c->id,
-                    'name'      => $c->name,
-                    'photo_path'=> $c->photo_path,
-                    'photo_url' => $c->photo_path ? asset('storage/' . $c->photo_path) : null,
-                ]),
+                'candidates'        => $candidates,
             ];
         });
 
         return Inertia::render('Admin/Parties', [
-            'auth'    => ['user' => Auth::user()],
-            'parties' => $parties,
-            'flash'   => session()->only(['success', 'error']),
+            'auth'           => ['user' => Auth::user()],
+            'parties'        => $parties,
+            'flash'          => session()->only(['success', 'error']),
+            'activeElection' => $activeElection
+                ? ['id' => $activeElection->id, 'name' => $activeElection->name]
+                : null,
         ]);
     })->name('parties');
 
@@ -551,7 +567,24 @@ Route::middleware(['auth', 'role:iec-administrator'])
     ]))->name('parties.create');
 
     Route::get('/parties/{id}/edit', function ($id) {
-        $party = PoliticalParty::findOrFail($id);
+        $party          = PoliticalParty::findOrFail($id);
+        $activeElection = Election::where('status', 'active')->latest()->first();
+
+        // Load candidates strictly for this party + active election
+        $candidates = $activeElection
+            ? Candidate::where('political_party_id', $party->id)
+                ->where('election_id', $activeElection->id)
+                ->get()
+                ->map(fn($c) => [
+                    'id'            => $c->id,
+                    'name'          => $c->name,
+                    'ballot_number' => $c->ballot_number,
+                    'photo_url'     => $c->photo_path ? asset('storage/' . $c->photo_path) : null,
+                ])
+                ->values()
+                ->toArray()
+            : [];
+
         return Inertia::render('Admin/PartyEdit', [
             'auth'  => ['user' => Auth::user()],
             'party' => array_merge($party->toArray(), [
@@ -559,6 +592,8 @@ Route::middleware(['auth', 'role:iec-administrator'])
                 'symbol_url'       => $party->symbol_path ? asset('storage/' . $party->symbol_path) : null,
                 'colors_array'     => $party->colors_array,
             ]),
+            'candidates'       => $candidates,
+            'activeElectionId' => $activeElection?->id,
         ]);
     })->name('parties.edit');
 
@@ -589,20 +624,16 @@ Route::middleware(['auth', 'role:iec-administrator'])
             }
             $colorString = implode(',', array_values($colorParts)) ?: ($party->color ?? '#3b82f6');
 
-            // Handle leader photo upload - keep existing if no new upload
             $leaderPhotoPath = $party->leader_photo_path;
             if ($request->hasFile('leader_photo') && $request->file('leader_photo')->isValid()) {
-                // Delete old photo if exists
                 if ($leaderPhotoPath && Storage::disk('public')->exists($leaderPhotoPath)) {
                     Storage::disk('public')->delete($leaderPhotoPath);
                 }
                 $leaderPhotoPath = $request->file('leader_photo')->store('party-photos/leaders', 'public');
             }
 
-            // Handle symbol upload - keep existing if no new upload
             $symbolPath = $party->symbol_path;
             if ($request->hasFile('symbol') && $request->file('symbol')->isValid()) {
-                // Delete old symbol if exists
                 if ($symbolPath && Storage::disk('public')->exists($symbolPath)) {
                     Storage::disk('public')->delete($symbolPath);
                 }
@@ -677,10 +708,72 @@ Route::middleware(['auth', 'role:iec-administrator'])
         }
     })->name('parties.store');
 
-    Route::get('/parties/{id}/candidates', fn($id) => Inertia::render('Admin/Parties', [
-        'auth'    => ['user' => Auth::user()],
-        'parties' => PoliticalParty::all(),
-    ]))->name('parties.candidates');
+    // ── Candidate Management ──────────────────────────────────────────────────
+    /**
+     * POST /admin/parties/{party}/candidates
+     * Add a candidate to a party for the active election.
+     */
+    Route::post('/parties/{party}/candidates', function (Request $request, PoliticalParty $party) {
+        $request->validate([
+            'name'          => 'required|string|max:255',
+            'ballot_number' => 'nullable|string|max:10',
+            'election_id'   => 'required|exists:elections,id',
+            'photo'         => 'nullable|image|max:5120',
+        ]);
+
+        $photoPath = null;
+        if ($request->hasFile('photo') && $request->file('photo')->isValid()) {
+            $photoPath = $request->file('photo')->store('candidate-photos', 'public');
+        }
+
+        $candidate = Candidate::create([
+            'election_id'        => $request->election_id,
+            'political_party_id' => $party->id,
+            'name'               => $request->name,
+            'ballot_number'      => $request->ballot_number,
+            'photo_path'         => $photoPath,
+            'is_active'          => true,
+            'is_independent'     => false,
+        ]);
+
+        AuditLog::record(
+            action:    'candidate.created',
+            event:     'created',
+            module:    'ElectionManagement',
+            auditable: $candidate,
+            extra:     ['outcome' => 'success', 'election_id' => (int) $request->election_id]
+        );
+
+        return response()->json([
+            'candidate' => [
+                'id'            => $candidate->id,
+                'name'          => $candidate->name,
+                'ballot_number' => $candidate->ballot_number,
+                'photo_url'     => $photoPath ? asset('storage/' . $photoPath) : null,
+            ]
+        ], 201);
+    })->name('parties.candidates.store');
+
+    /**
+     * DELETE /admin/candidates/{candidate}
+     * Remove a candidate (soft-delete).
+     */
+    Route::delete('/candidates/{candidate}', function (Candidate $candidate) {
+        if ($candidate->photo_path && Storage::disk('public')->exists($candidate->photo_path)) {
+            Storage::disk('public')->delete($candidate->photo_path);
+        }
+
+        AuditLog::record(
+            action:    'candidate.deleted',
+            event:     'deleted',
+            module:    'ElectionManagement',
+            auditable: $candidate,
+            extra:     ['outcome' => 'success']
+        );
+
+        $candidate->delete();
+        return response()->json(['success' => true]);
+    })->name('candidates.destroy');
 
     // ── Administrative Hierarchy ──────────────────────────────────────────────
 

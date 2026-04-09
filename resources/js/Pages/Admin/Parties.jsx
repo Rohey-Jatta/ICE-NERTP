@@ -29,7 +29,7 @@ function ColorDots({ colorsArray }) {
     );
 }
 
-export default function Parties({ auth, parties = [], flash }) {
+export default function Parties({ auth, parties = [], flash, activeElection }) {
     const handleRegister = () => router.visit('/admin/parties/create');
     const handleEdit = (id) => router.visit(`/admin/parties/${id}/edit`);
 
@@ -41,7 +41,18 @@ export default function Parties({ auth, parties = [], flash }) {
                         ← Back to Dashboard
                     </Link>
                     <div className="flex justify-between items-center">
-                        <h1 className="text-3xl font-bold text-white">Political Party Management</h1>
+                        <div>
+                            <h1 className="text-3xl font-bold text-white">Political Party Management</h1>
+                            {activeElection ? (
+                                <p className="text-teal-300 text-sm mt-1">
+                                    Showing parties for: <strong>{activeElection.name}</strong>
+                                </p>
+                            ) : (
+                                <p className="text-amber-400 text-sm mt-1">
+                                    ⚠ No active election — activate an election to manage parties and candidates.
+                                </p>
+                            )}
+                        </div>
                         <button onClick={handleRegister} className="px-6 py-3 bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-lg">
                             + Register Party
                         </button>
@@ -59,9 +70,26 @@ export default function Parties({ auth, parties = [], flash }) {
                     </div>
                 )}
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {parties.length > 0 ? (
-                        parties.map((party) => {
+                {parties.length === 0 ? (
+                    <div className="bg-slate-800/40 rounded-xl p-12 border border-slate-700/50 text-center">
+                        <div className="text-5xl mb-4">🏛️</div>
+                        <p className="text-gray-400 mb-2">
+                            {activeElection
+                                ? `No parties registered for ${activeElection.name} yet.`
+                                : 'No active election found.'}
+                        </p>
+                        {activeElection && (
+                            <button
+                                onClick={handleRegister}
+                                className="px-6 py-3 bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-lg mt-2"
+                            >
+                                Register First Party
+                            </button>
+                        )}
+                    </div>
+                ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        {parties.map((party) => {
                             const primaryColor = party.colors_array?.[0] || '#6b7280';
 
                             return (
@@ -133,12 +161,15 @@ export default function Parties({ auth, parties = [], flash }) {
                                             </div>
                                         )}
 
-                                        {/* Candidates */}
-                                        {party.candidates && party.candidates.length > 0 && (
-                                            <div className="mb-4">
-                                                <p className="text-gray-500 text-xs uppercase tracking-wide mb-2">
-                                                    Candidates ({party.candidates.length})
-                                                </p>
+                                        {/* Candidates — scoped to active election */}
+                                        <div className="mb-4">
+                                            <p className="text-gray-500 text-xs uppercase tracking-wide mb-2">
+                                                Candidates ({party.candidates?.length ?? 0})
+                                                {activeElection && (
+                                                    <span className="text-gray-600 normal-case ml-1">for {activeElection.name}</span>
+                                                )}
+                                            </p>
+                                            {party.candidates && party.candidates.length > 0 ? (
                                                 <div className="flex flex-wrap gap-2">
                                                     {party.candidates.map((candidate) => (
                                                         <div key={candidate.id} className="flex items-center gap-2 bg-slate-900/50 rounded-lg px-2 py-1.5 border border-slate-700/30">
@@ -156,14 +187,23 @@ export default function Parties({ auth, parties = [], flash }) {
                                                                     {candidate.name?.charAt(0) || '?'}
                                                                 </div>
                                                             )}
-                                                            <span className="text-gray-300 text-xs font-medium truncate max-w-[100px]">
-                                                                {candidate.name}
-                                                            </span>
+                                                            <div>
+                                                                <span className="text-gray-300 text-xs font-medium truncate max-w-[120px] block">
+                                                                    {candidate.name}
+                                                                </span>
+                                                                {candidate.ballot_number && (
+                                                                    <span className="text-gray-600 text-xs">#{candidate.ballot_number}</span>
+                                                                )}
+                                                            </div>
                                                         </div>
                                                     ))}
                                                 </div>
-                                            </div>
-                                        )}
+                                            ) : (
+                                                <p className="text-gray-600 text-xs italic">
+                                                    No candidates yet — add them via Edit Party.
+                                                </p>
+                                            )}
+                                        </div>
 
                                         {/* Extra info */}
                                         <div className="space-y-1 mb-4 text-sm">
@@ -182,31 +222,21 @@ export default function Parties({ auth, parties = [], flash }) {
                                             )}
                                         </div>
 
-                                        {/* Action — edit only */}
+                                        {/* Action */}
                                         <div className="mt-auto">
                                             <button
                                                 onClick={() => handleEdit(party.id)}
                                                 className="w-full px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition-colors"
                                             >
-                                                Edit Party Details
+                                                Edit Party & Manage Candidates
                                             </button>
                                         </div>
                                     </div>
                                 </div>
                             );
-                        })
-                    ) : (
-                        <div className="col-span-2 bg-slate-800/40 rounded-xl p-12 border border-slate-700/50 text-center">
-                            <p className="text-gray-400 mb-4">No political parties registered yet.</p>
-                            <button
-                                onClick={handleRegister}
-                                className="px-6 py-3 bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-lg"
-                            >
-                                Register First Party
-                            </button>
-                        </div>
-                    )}
-                </div>
+                        })}
+                    </div>
+                )}
             </div>
         </AppLayout>
     );
