@@ -20,12 +20,12 @@ Route::middleware(['auth', 'role:polling-officer'])
 
     // ── Dashboard ─────────────────────────────────────────────────────────────
     Route::get('/dashboard', function () {
-        $user    = Auth::user();
-        $station = PollingStation::where('assigned_officer_id', $user->id)
-            ->with('election')
-            ->first();
+        $user           = Auth::user();
+        $station        = PollingStation::where('assigned_officer_id', $user->id)->first();
+        $activeElection = Election::where('status', 'active')->latest()->first();
 
         $submissions = Result::where('submitted_by', $user->id)
+            ->when($activeElection, fn($q) => $q->where('election_id', $activeElection->id))
             ->orderByDesc('submitted_at')
             ->get();
 
@@ -48,8 +48,9 @@ Route::middleware(['auth', 'role:polling-officer'])
         $rejectedCount = $submissions->where('certification_status', Result::STATUS_SUBMITTED)
             ->where('rejection_count', '>', 0)->count();
 
-        $hasSubmitted = $station
+        $hasSubmitted = $station && $activeElection
             ? Result::where('polling_station_id', $station->id)
+                ->where('election_id', $activeElection->id)
                 ->whereNotIn('certification_status', [Result::STATUS_REJECTED])
                 ->exists()
             : false;
@@ -61,7 +62,7 @@ Route::middleware(['auth', 'role:polling-officer'])
                 'name'              => $station->name,
                 'code'              => $station->code,
                 'registered_voters' => $station->registered_voters,
-                'election_name'     => $station->election->name ?? 'N/A',
+                'election_name'     => $activeElection->name ?? 'N/A',
             ] : null,
             'statistics' => [
                 'totalSubmissions' => $submissions->count(),
@@ -70,50 +71,54 @@ Route::middleware(['auth', 'role:polling-officer'])
                 'rejected'         => $rejectedCount,
             ],
             'hasSubmitted' => $hasSubmitted,
-            'canSubmit'    => $station !== null && !$hasSubmitted,
+            'canSubmit'    => $station !== null && $activeElection !== null && !$hasSubmitted,
         ]);
     })->name('dashboard');
 
     // ── Result Submission Form ────────────────────────────────────────────────
     Route::get('/results/submit', function () {
-        $user     = Auth::user();
-        $station  = PollingStation::where('assigned_officer_id', $user->id)->first();
-        $election = $station
-            ? Election::where('id', $station->election_id)->where('status', 'active')->first()
-            : Election::where('status', 'active')->first();
+        $user           = Auth::user();
+        $station        = PollingStation::where('assigned_officer_id', $user->id)->first();
+        // FIXED: Always find the active election — never rely on station->election_id
+        $election       = Election::where('status', 'active')->latest()->first();
 
         if (!$station) {
             return redirect()->route('officer.dashboard')
                 ->with('error', 'You have no polling station assigned. Contact the administrator.');
         }
 
-        // Non-rejected result that is NOT editable
+        if (!$election) {
+            return redirect()->route('officer.dashboard')
+                ->with('error', 'No active election found. Contact the administrator.');
+        }
+
+        // A result that is NOT editable (already in pipeline for THIS active election)
         $existingResult = Result::where('polling_station_id', $station->id)
+            ->where('election_id', $election->id)
             ->whereNotIn('certification_status', [Result::STATUS_SUBMITTED])
             ->where('rejection_count', 0)
             ->first();
 
         // A rejected result the officer can fix and resubmit
         $editableResult = Result::where('polling_station_id', $station->id)
+            ->where('election_id', $election->id)
             ->where('submitted_by', $user->id)
             ->where('certification_status', Result::STATUS_SUBMITTED)
             ->where('rejection_count', '>', 0)
             ->latest('submitted_at')
             ->first();
 
-        $candidates = $election
-            ? Candidate::where('election_id', $election->id)
-                ->with('politicalParty')
-                ->where('is_active', true)
-                ->get()
-                ->map(fn($c) => [
-                    'id'          => $c->id,
-                    'name'        => $c->name ?? $c->full_name,
-                    'party_name'  => $c->politicalParty->name ?? 'Independent',
-                    'party_abbr'  => $c->politicalParty->abbreviation ?? 'IND',
-                    'party_color' => $c->politicalParty->color ?? '#6b7280',
-                ])
-            : [];
+        $candidates = Candidate::where('election_id', $election->id)
+            ->with('politicalParty')
+            ->where('is_active', true)
+            ->get()
+            ->map(fn($c) => [
+                'id'          => $c->id,
+                'name'        => $c->name ?? $c->full_name,
+                'party_name'  => $c->politicalParty->name ?? 'Independent',
+                'party_abbr'  => $c->politicalParty->abbreviation ?? 'IND',
+                'party_color' => $c->politicalParty->color ?? '#6b7280',
+            ]);
 
         return Inertia::render('Officer/ResultSubmit', [
             'auth'           => ['user' => $user],
@@ -125,11 +130,11 @@ Route::middleware(['auth', 'role:polling-officer'])
                 'latitude'          => $station->latitude,
                 'longitude'         => $station->longitude,
             ],
-            'election'       => $election ? [
+            'election'       => [
                 'id'   => $election->id,
                 'name' => $election->name,
                 'type' => $election->type,
-            ] : null,
+            ],
             'candidates'     => $candidates,
             'editableResult' => $editableResult ? [
                 'id'                      => $editableResult->id,
@@ -146,7 +151,6 @@ Route::middleware(['auth', 'role:polling-officer'])
 
     // ── Submit / Resubmit Result ──────────────────────────────────────────────
     Route::post('/results/submit', function (Request $request) {
-    // Explicitly get user from request — more reliable than Auth::user() in closures
         $user = $request->user();
 
         if (!$user) {
@@ -162,6 +166,15 @@ Route::middleware(['auth', 'role:polling-officer'])
             'photo'             => 'nullable|image|max:10240',
             'candidate_votes'   => 'required|array|min:1',
         ]);
+
+        // Ensure the election being submitted to is still active
+        $election = Election::where('id', $request->election_id)
+            ->where('status', 'active')
+            ->first();
+
+        if (!$election) {
+            return back()->withErrors(['error' => 'The selected election is no longer active.']);
+        }
 
         $totalVotesCast   = (int) $request->total_votes_cast;
         $validVotes       = (int) $request->valid_votes;
@@ -194,6 +207,7 @@ Route::middleware(['auth', 'role:polling-officer'])
         }
 
         $existingResult = Result::where('polling_station_id', $station->id)
+            ->where('election_id', $election->id)
             ->where('submitted_by', $user->id)
             ->where('certification_status', Result::STATUS_SUBMITTED)
             ->where('rejection_count', '>', 0)
@@ -208,7 +222,7 @@ Route::middleware(['auth', 'role:polling-officer'])
         try {
             if ($existingResult) {
                 $existingResult->update([
-                    'user_id' => $user->id,
+                    'user_id'                 => $user->id,
                     'total_registered_voters' => $registeredVoters,
                     'total_votes_cast'        => $totalVotesCast,
                     'valid_votes'             => $validVotes,
@@ -224,7 +238,7 @@ Route::middleware(['auth', 'role:polling-officer'])
                     ResultCandidateVote::create([
                         'result_id'    => $existingResult->id,
                         'candidate_id' => (int) $candidateId,
-                        'election_id'  => (int) $request->election_id,
+                        'election_id'  => $election->id,
                         'votes'        => (int) $votes,
                     ]);
                 }
@@ -235,12 +249,11 @@ Route::middleware(['auth', 'role:polling-officer'])
                     ->with('success', 'Result resubmitted successfully!');
             }
 
-            // Fresh submission — note: use submitted_by not user_id
             $result = Result::create([
                 'submission_uuid'         => \Illuminate\Support\Str::uuid(),
-                'election_id'             => (int) $request->election_id,
+                'election_id'             => $election->id,
                 'polling_station_id'      => $station->id,
-                'user_id' => $user->id,
+                'user_id'                 => $user->id,
                 'total_registered_voters' => $registeredVoters,
                 'total_votes_cast'        => $totalVotesCast,
                 'valid_votes'             => $validVotes,
@@ -248,7 +261,7 @@ Route::middleware(['auth', 'role:polling-officer'])
                 'disputed_votes'          => 0,
                 'result_sheet_photo_path' => $photoPath,
                 'certification_status'    => Result::STATUS_SUBMITTED,
-                'submitted_by'            => $user->id,   // ← correct column name
+                'submitted_by'            => $user->id,
                 'submitted_at'            => now(),
                 'gps_validated'           => false,
             ]);
@@ -257,7 +270,7 @@ Route::middleware(['auth', 'role:polling-officer'])
                 ResultCandidateVote::create([
                     'result_id'    => $result->id,
                     'candidate_id' => (int) $candidateId,
-                    'election_id'  => (int) $request->election_id,
+                    'election_id'  => $election->id,
                     'votes'        => (int) $votes,
                 ]);
             }
@@ -268,7 +281,7 @@ Route::middleware(['auth', 'role:polling-officer'])
                 ->with('success', 'Results submitted successfully!');
 
         } catch (\Exception $e) {
-            \Illuminate\Support\Facades\Log::error('Result submission failed', [
+            Log::error('Result submission failed', [
                 'error'   => $e->getMessage(),
                 'user_id' => $user->id,
                 'station' => $station->id,
@@ -279,10 +292,12 @@ Route::middleware(['auth', 'role:polling-officer'])
 
     // ── My Submissions ────────────────────────────────────────────────────────
     Route::get('/submissions', function () {
-        $user    = Auth::user();
-        $station = PollingStation::where('assigned_officer_id', $user->id)->first();
+        $user           = Auth::user();
+        $station        = PollingStation::where('assigned_officer_id', $user->id)->first();
+        $activeElection = Election::where('status', 'active')->latest()->first();
 
         $results = Result::where('submitted_by', $user->id)
+            ->when($activeElection, fn($q) => $q->where('election_id', $activeElection->id))
             ->with(['pollingStation', 'candidateVotes.candidate.politicalParty'])
             ->latest('submitted_at')
             ->get()

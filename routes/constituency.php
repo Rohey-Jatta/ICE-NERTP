@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 use App\Models\AdministrativeHierarchy;
 use App\Models\AuditLog;
+use App\Models\Election;
 use App\Models\Result;
 use App\Models\ResultCertification;
 
@@ -17,41 +18,41 @@ Route::middleware(['auth', 'role:constituency-approver'])
 
     // ── Dashboard ─────────────────────────────────────────────────────────────
     Route::get('/dashboard', function () {
-        $user         = Auth::user();
-        $constituency = AdministrativeHierarchy::where('assigned_approver_id', $user->id)
-            ->where('level', 'constituency')
-            ->first();
+        $user           = Auth::user();
+        $activeElection = Election::where('status', 'active')->latest()->first();
+        $constituency   = AdministrativeHierarchy::where('assigned_approver_id', $user->id)
+            ->where('level', 'constituency')->first();
 
         $stats = ['pending' => 0, 'certified' => 0, 'rejected' => 0, 'totalWards' => 0, 'progress' => 0];
 
-        if ($constituency) {
+        if ($constituency && $activeElection) {
             $wardIds = AdministrativeHierarchy::where('parent_id', $constituency->id)
-                ->where('level', 'ward')
-                ->pluck('id');
+                ->where('level', 'ward')->pluck('id');
 
             $stats['totalWards'] = $wardIds->count();
 
-            $stats['pending'] = Result::where('certification_status', Result::STATUS_PENDING_CONSTITUENCY)
-                ->whereHas('pollingStation', fn($q) => $q->whereIn('ward_id', $wardIds))
-                ->count();
+            $base = fn() => Result::where('election_id', $activeElection->id)
+                ->whereHas('pollingStation', fn($q) => $q->whereIn('ward_id', $wardIds));
 
-            $stats['certified'] = Result::whereIn('certification_status', [
+            $stats['pending'] = $base()
+                ->where('certification_status', Result::STATUS_PENDING_CONSTITUENCY)->count();
+
+            $stats['certified'] = $base()
+                ->whereIn('certification_status', [
                     Result::STATUS_CONSTITUENCY_CERTIFIED,
                     Result::STATUS_PENDING_ADMIN_AREA,
                     Result::STATUS_ADMIN_AREA_CERTIFIED,
                     Result::STATUS_PENDING_NATIONAL,
                     Result::STATUS_NATIONALLY_CERTIFIED,
-                ])
-                ->whereHas('pollingStation', fn($q) => $q->whereIn('ward_id', $wardIds))
-                ->count();
+                ])->count();
 
-            $stats['rejected'] = Result::where('certification_status', Result::STATUS_PENDING_WARD)
-                ->where('rejection_count', '>', 0)
-                ->whereHas('pollingStation', fn($q) => $q->whereIn('ward_id', $wardIds))
-                ->count();
+            $stats['rejected'] = $base()
+                ->where('certification_status', Result::STATUS_PENDING_WARD)
+                ->where('rejection_count', '>', 0)->count();
 
-            $totalResults      = Result::whereHas('pollingStation', fn($q) => $q->whereIn('ward_id', $wardIds))->count();
-            $stats['progress'] = $totalResults > 0 ? round(($stats['certified'] / $totalResults) * 100) : 0;
+            $totalResults      = $base()->count();
+            $stats['progress'] = $totalResults > 0
+                ? round(($stats['certified'] / $totalResults) * 100) : 0;
         }
 
         return Inertia::render('Constituency/Dashboard', [
@@ -63,45 +64,41 @@ Route::middleware(['auth', 'role:constituency-approver'])
 
     // ── Approval Queue ────────────────────────────────────────────────────────
     Route::get('/approval-queue', function (Request $request) {
-        $user         = Auth::user();
-        $constituency = AdministrativeHierarchy::where('assigned_approver_id', $user->id)
-            ->where('level', 'constituency')
-            ->first();
+        $user           = Auth::user();
+        $activeElection = Election::where('status', 'active')->latest()->first();
+        $constituency   = AdministrativeHierarchy::where('assigned_approver_id', $user->id)
+            ->where('level', 'constituency')->first();
 
         $filter  = $request->get('filter', 'pending');
         $results = collect();
         $counts  = ['pending' => 0, 'certified' => 0, 'rejected' => 0, 'all' => 0];
 
-        if ($constituency) {
+        if ($constituency && $activeElection) {
             $wardIds = AdministrativeHierarchy::where('parent_id', $constituency->id)
-                ->where('level', 'ward')
-                ->pluck('id');
+                ->where('level', 'ward')->pluck('id');
 
-            $counts['pending'] = Result::where('certification_status', Result::STATUS_PENDING_CONSTITUENCY)
-                ->whereHas('pollingStation', fn($q) => $q->whereIn('ward_id', $wardIds))->count();
+            $base = fn() => Result::where('election_id', $activeElection->id)
+                ->whereHas('pollingStation', fn($q) => $q->whereIn('ward_id', $wardIds));
 
-            $counts['certified'] = Result::whereIn('certification_status', [
-                    Result::STATUS_CONSTITUENCY_CERTIFIED,
-                    Result::STATUS_PENDING_ADMIN_AREA,
-                    Result::STATUS_ADMIN_AREA_CERTIFIED,
-                    Result::STATUS_PENDING_NATIONAL,
-                    Result::STATUS_NATIONALLY_CERTIFIED,
-                ])
-                ->whereHas('pollingStation', fn($q) => $q->whereIn('ward_id', $wardIds))->count();
-
-            $counts['rejected'] = Result::where('certification_status', Result::STATUS_PENDING_WARD)
-                ->where('rejection_count', '>', 0)
-                ->whereHas('pollingStation', fn($q) => $q->whereIn('ward_id', $wardIds))->count();
-
+            $counts['pending']   = $base()->where('certification_status', Result::STATUS_PENDING_CONSTITUENCY)->count();
+            $counts['certified'] = $base()->whereIn('certification_status', [
+                Result::STATUS_CONSTITUENCY_CERTIFIED,
+                Result::STATUS_PENDING_ADMIN_AREA,
+                Result::STATUS_ADMIN_AREA_CERTIFIED,
+                Result::STATUS_PENDING_NATIONAL,
+                Result::STATUS_NATIONALLY_CERTIFIED,
+            ])->count();
+            $counts['rejected'] = $base()
+                ->where('certification_status', Result::STATUS_PENDING_WARD)
+                ->where('rejection_count', '>', 0)->count();
             $counts['all'] = $counts['pending'] + $counts['certified'] + $counts['rejected'];
 
-            $query = Result::with([
-                    'pollingStation.ward',
-                    'candidateVotes.candidate.politicalParty',
-                    'partyAcceptances.politicalParty',
-                    'certifications' => fn($q) => $q->where('certification_level', 'ward')->latest(),
-                ])
-                ->whereHas('pollingStation', fn($q) => $q->whereIn('ward_id', $wardIds));
+            $query = $base()->with([
+                'pollingStation.ward',
+                'candidateVotes.candidate.politicalParty',
+                'partyAcceptances.politicalParty',
+                'certifications' => fn($q) => $q->where('certification_level', 'ward')->latest(),
+            ]);
 
             match ($filter) {
                 'pending'   => $query->where('certification_status', Result::STATUS_PENDING_CONSTITUENCY),
@@ -139,7 +136,7 @@ Route::middleware(['auth', 'role:constituency-approver'])
                     'total_votes_cast'        => $r->total_votes_cast,
                     'valid_votes'             => $r->valid_votes,
                     'rejected_votes'          => $r->rejected_votes,
-                    'disputed_votes'          => $r->disputed_votes,
+                    'disputed_votes'          => $r->disputed_votes ?? 0,
                     'turnout'                 => $r->getTurnoutPercentage(),
                     'rejection_count'         => $r->rejection_count,
                     'last_rejection_reason'   => $r->last_rejection_reason,
@@ -160,8 +157,7 @@ Route::middleware(['auth', 'role:constituency-approver'])
                         'party_color' => $cv->candidate->politicalParty->color ?? '#6b7280',
                         'votes'       => $cv->votes,
                         'percentage'  => $totalValid > 0
-                            ? round(($cv->votes / $totalValid) * 100, 1)
-                            : 0,
+                            ? round(($cv->votes / $totalValid) * 100, 1) : 0,
                     ])->sortByDesc('votes')->values(),
                 ];
             });
@@ -184,10 +180,9 @@ Route::middleware(['auth', 'role:constituency-approver'])
             return back()->withErrors(['error' => 'Result is not pending constituency approval.']);
         }
 
-        $approverId        = Auth::id();
-        $constituency      = AdministrativeHierarchy::where('assigned_approver_id', $approverId)
+        $approverId         = Auth::id();
+        $constituency       = AdministrativeHierarchy::where('assigned_approver_id', $approverId)
             ->where('level', 'constituency')->first();
-        // Derive constituency node from the station's ward parent if approver node not found
         $constituencyNodeId = $constituency?->id
             ?? AdministrativeHierarchy::where('id', $result->pollingStation?->ward_id)->value('parent_id')
             ?? AdministrativeHierarchy::where('level', 'constituency')->value('id')
@@ -204,17 +199,14 @@ Route::middleware(['auth', 'role:constituency-approver'])
                 'assigned_at'         => now(),
                 'decided_at'          => now(),
             ]);
-
             $result->update(['certification_status' => Result::STATUS_CONSTITUENCY_CERTIFIED]);
             $result->update(['certification_status' => Result::STATUS_PENDING_ADMIN_AREA]);
         });
 
         AuditLog::record(
-            action:    'certification.constituency.approved',
-            event:     'updated',
-            module:    'Certification',
-            auditable: $result,
-            extra:     ['outcome' => 'success', 'comments' => $request->comments]
+            action: 'certification.constituency.approved', event: 'updated',
+            module: 'Certification', auditable: $result,
+            extra: ['outcome' => 'success', 'comments' => $request->comments]
         );
 
         return back()->with('success', 'Result certified at constituency level and promoted to Admin Area queue.');
@@ -228,8 +220,8 @@ Route::middleware(['auth', 'role:constituency-approver'])
             return back()->withErrors(['error' => 'Result is not pending constituency approval.']);
         }
 
-        $approverId        = Auth::id();
-        $constituency      = AdministrativeHierarchy::where('assigned_approver_id', $approverId)
+        $approverId         = Auth::id();
+        $constituency       = AdministrativeHierarchy::where('assigned_approver_id', $approverId)
             ->where('level', 'constituency')->first();
         $constituencyNodeId = $constituency?->id
             ?? AdministrativeHierarchy::where('id', $result->pollingStation?->ward_id)->value('parent_id')
@@ -247,17 +239,14 @@ Route::middleware(['auth', 'role:constituency-approver'])
                 'assigned_at'         => now(),
                 'decided_at'          => now(),
             ]);
-
             $result->update(['certification_status' => Result::STATUS_CONSTITUENCY_CERTIFIED]);
             $result->update(['certification_status' => Result::STATUS_PENDING_ADMIN_AREA]);
         });
 
         AuditLog::record(
-            action:    'certification.constituency.approved_with_reservation',
-            event:     'updated',
-            module:    'Certification',
-            auditable: $result,
-            extra:     ['outcome' => 'success', 'reservation' => $request->comments]
+            action: 'certification.constituency.approved_with_reservation', event: 'updated',
+            module: 'Certification', auditable: $result,
+            extra: ['outcome' => 'success', 'reservation' => $request->comments]
         );
 
         return back()->with('success', 'Result certified with reservation and promoted to Admin Area queue.');
@@ -271,8 +260,8 @@ Route::middleware(['auth', 'role:constituency-approver'])
             return back()->withErrors(['error' => 'Result is not pending constituency approval.']);
         }
 
-        $approverId        = Auth::id();
-        $constituency      = AdministrativeHierarchy::where('assigned_approver_id', $approverId)
+        $approverId         = Auth::id();
+        $constituency       = AdministrativeHierarchy::where('assigned_approver_id', $approverId)
             ->where('level', 'constituency')->first();
         $constituencyNodeId = $constituency?->id
             ?? AdministrativeHierarchy::where('id', $result->pollingStation?->ward_id)->value('parent_id')
@@ -290,7 +279,6 @@ Route::middleware(['auth', 'role:constituency-approver'])
                 'assigned_at'         => now(),
                 'decided_at'          => now(),
             ]);
-
             $result->update([
                 'certification_status'  => Result::STATUS_PENDING_WARD,
                 'last_rejection_reason' => $request->comments,
@@ -301,11 +289,9 @@ Route::middleware(['auth', 'role:constituency-approver'])
         });
 
         AuditLog::record(
-            action:    'certification.constituency.rejected',
-            event:     'updated',
-            module:    'Certification',
-            auditable: $result,
-            extra:     ['outcome' => 'rejected', 'reason' => $request->comments]
+            action: 'certification.constituency.rejected', event: 'updated',
+            module: 'Certification', auditable: $result,
+            extra: ['outcome' => 'rejected', 'reason' => $request->comments]
         );
 
         return back()->with('success', 'Result rejected and returned to Ward Approver.');
@@ -313,19 +299,19 @@ Route::middleware(['auth', 'role:constituency-approver'])
 
     // ── Ward Breakdowns ───────────────────────────────────────────────────────
     Route::get('/ward-breakdowns', function () {
-        $user         = Auth::user();
-        $constituency = AdministrativeHierarchy::where('assigned_approver_id', $user->id)
-            ->where('level', 'constituency')
-            ->first();
+        $user           = Auth::user();
+        $activeElection = Election::where('status', 'active')->latest()->first();
+        $constituency   = AdministrativeHierarchy::where('assigned_approver_id', $user->id)
+            ->where('level', 'constituency')->first();
 
         $wards = [];
         if ($constituency) {
             $wardNodes = AdministrativeHierarchy::where('parent_id', $constituency->id)
                 ->where('level', 'ward')
-                ->with('pollingStations.results')
+                ->with('pollingStations')
                 ->get();
 
-            $wards = $wardNodes->map(function ($ward) {
+            $wards = $wardNodes->map(function ($ward) use ($activeElection) {
                 $stations        = $ward->pollingStations;
                 $totalVotes      = 0;
                 $totalRegistered = 0;
@@ -333,7 +319,12 @@ Route::middleware(['auth', 'role:constituency-approver'])
                 $stationCount    = $stations->count();
 
                 foreach ($stations as $station) {
-                    $latestResult = $station->results->last();
+                    $latestResult = $activeElection
+                        ? Result::where('polling_station_id', $station->id)
+                            ->where('election_id', $activeElection->id)
+                            ->latest('submitted_at')->first()
+                        : null;
+
                     if ($latestResult) {
                         $totalVotes      += $latestResult->total_votes_cast;
                         $totalRegistered += $latestResult->total_registered_voters;
@@ -351,10 +342,8 @@ Route::middleware(['auth', 'role:constituency-approver'])
                     }
                 }
 
-                $turnout = $totalRegistered > 0
-                    ? round(($totalVotes / $totalRegistered) * 100, 1)
-                    : 0;
-
+                $turnout     = $totalRegistered > 0
+                    ? round(($totalVotes / $totalRegistered) * 100, 1) : 0;
                 $allCertified = $stationCount > 0 && $certified === $stationCount;
 
                 return [
@@ -379,18 +368,18 @@ Route::middleware(['auth', 'role:constituency-approver'])
 
     // ── Reports ───────────────────────────────────────────────────────────────
     Route::get('/reports', function () {
-        $user         = Auth::user();
-        $constituency = AdministrativeHierarchy::where('assigned_approver_id', $user->id)
-            ->where('level', 'constituency')
-            ->first();
+        $user           = Auth::user();
+        $activeElection = Election::where('status', 'active')->latest()->first();
+        $constituency   = AdministrativeHierarchy::where('assigned_approver_id', $user->id)
+            ->where('level', 'constituency')->first();
 
         $reportData = null;
-        if ($constituency) {
+        if ($constituency && $activeElection) {
             $wardIds = AdministrativeHierarchy::where('parent_id', $constituency->id)
                 ->where('level', 'ward')->pluck('id');
 
-            $results = Result::whereHas('pollingStation', fn($q) => $q->whereIn('ward_id', $wardIds))
-                ->with(['pollingStation.ward', 'candidateVotes.candidate.politicalParty'])
+            $results = Result::where('election_id', $activeElection->id)
+                ->whereHas('pollingStation', fn($q) => $q->whereIn('ward_id', $wardIds))
                 ->get();
 
             $reportData = [
@@ -400,8 +389,7 @@ Route::middleware(['auth', 'role:constituency-approver'])
                 'total_rejected'    => $results->sum('rejected_votes'),
                 'total_registered'  => $results->sum('total_registered_voters'),
                 'turnout'           => $results->sum('total_registered_voters') > 0
-                    ? round(($results->sum('total_votes_cast') / $results->sum('total_registered_voters')) * 100, 2)
-                    : 0,
+                    ? round(($results->sum('total_votes_cast') / $results->sum('total_registered_voters')) * 100, 2) : 0,
                 'certified_count'   => $results->whereIn('certification_status', [
                     Result::STATUS_CONSTITUENCY_CERTIFIED,
                     Result::STATUS_PENDING_ADMIN_AREA,
