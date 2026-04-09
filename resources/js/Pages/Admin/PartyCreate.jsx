@@ -259,7 +259,7 @@ export default function PartyCreate({ auth }) {
                                     value={data.name}
                                     onChange={(e) => setData('name', e.target.value)}
                                     className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white"
-                                    placeholder="e.g., United Democratic Party"
+                                    placeholder="party's full name"
                                     required
                                 />
                                 {errors.name && <p className="text-red-400 text-sm mt-1">{errors.name}</p>}
@@ -273,7 +273,7 @@ export default function PartyCreate({ auth }) {
                                     value={data.abbreviation}
                                     onChange={(e) => setData('abbreviation', e.target.value.toUpperCase().slice(0, 10))}
                                     className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white font-mono"
-                                    placeholder="UDP"
+                                    placeholder="party abbreviation (e.g., DEM, GOP)"
                                     maxLength={10}
                                     required
                                 />
@@ -313,7 +313,7 @@ export default function PartyCreate({ auth }) {
                                 value={data.motto}
                                 onChange={(e) => setData('motto', e.target.value)}
                                 className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white"
-                                placeholder="e.g., Unity, Freedom, Progress"
+                                placeholder="party's motto or slogan"
                             />
                             {errors.motto && <p className="text-red-400 text-sm mt-1">{errors.motto}</p>}
                         </div>
@@ -327,7 +327,7 @@ export default function PartyCreate({ auth }) {
                                     value={data.headquarters}
                                     onChange={(e) => setData('headquarters', e.target.value)}
                                     className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white"
-                                    placeholder="e.g., Banjul, The Gambia"
+                                    placeholder="party headquarters location"
                                 />
                                 {errors.headquarters && <p className="text-red-400 text-sm mt-1">{errors.headquarters}</p>}
                             </div>
@@ -355,7 +355,7 @@ export default function PartyCreate({ auth }) {
                                         value={data.leader_name}
                                         onChange={(e) => setData('leader_name', e.target.value)}
                                         className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white"
-                                        placeholder="e.g., Ousainou Darboe"
+                                        placeholder="Candidate's full name"
                                     />
                                     {errors.leader_name && <p className="text-red-400 text-sm mt-1">{errors.leader_name}</p>}
                                 </div>
