@@ -108,166 +108,166 @@ class TestDataSeeder extends Seeder
         $constApprover  = User::where('email', 'constituency@iec.gm')->firstOrFail();
         $areaApprover   = User::where('email', 'adminarea@iec.gm')->firstOrFail();
 
-        // ── Step 2: Create election ───────────────────────────────────────────
-        $election = Election::updateOrCreate(
-            ['name' => '2026 Presidential Election'],
-            [
-                'type'                            => 'presidential',
-                'start_date'                      => now()->addMonth(),
-                'end_date'                        => now()->addMonth()->addDay(),
-                'status'                          => 'active',
-                'created_by'                      => $admin->id,
-                'allow_provisional_public_display' => true,
-                'slug'                            => '2026-presidential-election',
-            ]
-        );
-        $this->command->info("✓ Created election: {$election->name} (ID: {$election->id})");
+        // // ── Step 2: Create election ───────────────────────────────────────────
+        // $election = Election::updateOrCreate(
+        //     ['name' => '2026 Presidential Election'],
+        //     [
+        //         'type'                            => 'presidential',
+        //         'start_date'                      => now()->addMonth(),
+        //         'end_date'                        => now()->addMonth()->addDay(),
+        //         'status'                          => 'active',
+        //         'created_by'                      => $admin->id,
+        //         'allow_provisional_public_display' => true,
+        //         'slug'                            => '2026-presidential-election',
+        //     ]
+        // );
+        // $this->command->info("✓ Created election: {$election->name} (ID: {$election->id})");
 
-        // ── Step 3: Create administrative hierarchy (national → area → constituency → ward) ──
-        // National level — used by IEC Chairman for final certification
-        $national = AdministrativeHierarchy::updateOrCreate(
-            ['election_id' => $election->id, 'level' => 'national', 'name' => 'The Gambia'],
-            ['parent_id' => null]
-        );
+        // // ── Step 3: Create administrative hierarchy (national → area → constituency → ward) ──
+        // // National level — used by IEC Chairman for final certification
+        // $national = AdministrativeHierarchy::updateOrCreate(
+        //     ['election_id' => $election->id, 'level' => 'national', 'name' => 'The Gambia'],
+        //     ['parent_id' => null]
+        // );
 
-        $adminArea = AdministrativeHierarchy::updateOrCreate(
-            ['election_id' => $election->id, 'level' => 'admin_area', 'name' => 'Banjul Administrative Area'],
-            ['parent_id' => $national->id, 'assigned_approver_id' => $areaApprover->id]
-        );
+        // $adminArea = AdministrativeHierarchy::updateOrCreate(
+        //     ['election_id' => $election->id, 'level' => 'admin_area', 'name' => 'Banjul Administrative Area'],
+        //     ['parent_id' => $national->id, 'assigned_approver_id' => $areaApprover->id]
+        // );
 
-        $constituency = AdministrativeHierarchy::updateOrCreate(
-            ['election_id' => $election->id, 'level' => 'constituency', 'name' => 'Banjul North Constituency'],
-            ['parent_id' => $adminArea->id, 'assigned_approver_id' => $constApprover->id]
-        );
+        // $constituency = AdministrativeHierarchy::updateOrCreate(
+        //     ['election_id' => $election->id, 'level' => 'constituency', 'name' => 'Banjul North Constituency'],
+        //     ['parent_id' => $adminArea->id, 'assigned_approver_id' => $constApprover->id]
+        // );
 
-        $ward = AdministrativeHierarchy::updateOrCreate(
-            ['election_id' => $election->id, 'level' => 'ward', 'name' => 'Campama Ward'],
-            ['parent_id' => $constituency->id, 'assigned_approver_id' => $wardApprover->id]
-        );
+        // $ward = AdministrativeHierarchy::updateOrCreate(
+        //     ['election_id' => $election->id, 'level' => 'ward', 'name' => 'Campama Ward'],
+        //     ['parent_id' => $constituency->id, 'assigned_approver_id' => $wardApprover->id]
+        // );
 
-        $this->command->info("✓ Created hierarchy: National → Admin Area (ID:{$adminArea->id}) → Constituency (ID:{$constituency->id}) → Ward (ID:{$ward->id})");
+        // $this->command->info("✓ Created hierarchy: National → Admin Area (ID:{$adminArea->id}) → Constituency (ID:{$constituency->id}) → Ward (ID:{$ward->id})");
 
-        // ── Step 4: Create political parties ──────────────────────────────────
-        $partiesData = [
-            ['name' => 'United Democratic Party',          'abbreviation' => 'UDP',   'color' => '#1e40af'],
-            ['name' => "National People's Party",          'abbreviation' => 'NPP',   'color' => '#059669'],
-            ['name' => 'Gambia Democratic Congress',       'abbreviation' => 'GDC',   'color' => '#dc2626'],
-            ['name' => "People's Democratic Organisation", 'abbreviation' => 'PDOIS', 'color' => '#ea580c'],
-        ];
+       // ── Step 4: Create political parties ──────────────────────────────────
+        // $partiesData = [
+        //     ['name' => 'United Democratic Party',          'abbreviation' => 'UDP',   'color' => '#1e40af'],
+        //     ['name' => "National People's Party",          'abbreviation' => 'NPP',   'color' => '#059669'],
+        //     ['name' => 'Gambia Democratic Congress',       'abbreviation' => 'GDC',   'color' => '#dc2626'],
+        //     ['name' => "People's Democratic Organisation", 'abbreviation' => 'PDOIS', 'color' => '#ea580c'],
+        // ];
 
-        $createdParties = [];
-        foreach ($partiesData as $partyData) {
-            $party = PoliticalParty::updateOrCreate(
-                ['election_id' => $election->id, 'abbreviation' => $partyData['abbreviation']],
-                [
-                    'name'        => $partyData['name'],
-                    'color'       => $partyData['color'],
-                    'slug'        => \Illuminate\Support\Str::slug($partyData['name']),
-                    'election_id' => $election->id,
-                ]
-            );
-            $createdParties[] = $party;
-        }
-        $this->command->info("✓ Created " . count($createdParties) . " political parties");
+        // $createdParties = [];
+        // foreach ($partiesData as $partyData) {
+        //     $party = PoliticalParty::updateOrCreate(
+        //         ['election_id' => $election->id, 'abbreviation' => $partyData['abbreviation']],
+        //         [
+        //             'name'        => $partyData['name'],
+        //             'color'       => $partyData['color'],
+        //             'slug'        => \Illuminate\Support\Str::slug($partyData['name']),
+        //             'election_id' => $election->id,
+        //         ]
+        //     );
+        //     $createdParties[] = $party;
+        // }
+        // $this->command->info("✓ Created " . count($createdParties) . " political parties");
 
-        // ── Step 5: Create polling stations ───────────────────────────────────
-        $stationsData = [
-            [
-                'code'                => 'BNL-001',
-                'name'                => 'Campama Primary School',
-                'ward_id'             => $ward->id,
-                'election_id'         => $election->id,
-                'latitude'            => 13.4549,
-                'longitude'           => -16.5790,
-                'registered_voters'   => 450,
-                'assigned_officer_id' => $pollingOfficer->id,
-                'is_active'           => true,
-            ],
-            [
-                'code'              => 'BNL-002',
-                'name'              => 'Mosque Road Polling Station',
-                'ward_id'           => $ward->id,
-                'election_id'       => $election->id,
-                'latitude'          => 13.4560,
-                'longitude'         => -16.5800,
-                'registered_voters' => 380,
-                'is_active'         => true,
-            ],
-            [
-                'code'              => 'BNL-003',
-                'name'              => 'Market Street Center',
-                'ward_id'           => $ward->id,
-                'election_id'       => $election->id,
-                'latitude'          => 13.4570,
-                'longitude'         => -16.5810,
-                'registered_voters' => 520,
-                'is_active'         => true,
-            ],
-        ];
+        // // ── Step 5: Create polling stations ───────────────────────────────────
+        // $stationsData = [
+        //     [
+        //         'code'                => 'BNL-001',
+        //         'name'                => 'Campama Primary School',
+        //         'ward_id'             => $ward->id,
+        //         'election_id'         => $election->id,
+        //         'latitude'            => 13.4549,
+        //         'longitude'           => -16.5790,
+        //         'registered_voters'   => 450,
+        //         'assigned_officer_id' => $pollingOfficer->id,
+        //         'is_active'           => true,
+        //     ],
+        //     [
+        //         'code'              => 'BNL-002',
+        //         'name'              => 'Mosque Road Polling Station',
+        //         'ward_id'           => $ward->id,
+        //         'election_id'       => $election->id,
+        //         'latitude'          => 13.4560,
+        //         'longitude'         => -16.5800,
+        //         'registered_voters' => 380,
+        //         'is_active'         => true,
+        //     ],
+        //     [
+        //         'code'              => 'BNL-003',
+        //         'name'              => 'Market Street Center',
+        //         'ward_id'           => $ward->id,
+        //         'election_id'       => $election->id,
+        //         'latitude'          => 13.4570,
+        //         'longitude'         => -16.5810,
+        //         'registered_voters' => 520,
+        //         'is_active'         => true,
+        //     ],
+        // ];
 
-        $stations = [];
-        foreach ($stationsData as $stationData) {
-            $stations[] = PollingStation::updateOrCreate(
-                ['code' => $stationData['code']],
-                $stationData
-            );
-        }
-        $this->command->info("✓ Created " . count($stations) . " polling stations");
+        // $stations = [];
+        // foreach ($stationsData as $stationData) {
+        //     $stations[] = PollingStation::updateOrCreate(
+        //         ['code' => $stationData['code']],
+        //         $stationData
+        //     );
+        // }
+        // $this->command->info("✓ Created " . count($stations) . " polling stations");
 
         // ── Step 6: Create candidates ─────────────────────────────────────────
-        $candidateNames = [
-            'UDP'   => 'Adama Barrow',
-            'NPP'   => 'Ousainou Darboe',
-            'GDC'   => 'Mama Kandeh',
-            'PDOIS' => 'Halifa Sallah',
-        ];
+        // $candidateNames = [
+        //     'UDP'   => 'Adama Barrow',
+        //     'NPP'   => 'Ousainou Darboe',
+        //     'GDC'   => 'Mama Kandeh',
+        //     'PDOIS' => 'Halifa Sallah',
+        // ];
 
-        $createdCandidates = [];
-        foreach ($createdParties as $party) {
-            $candidate = Candidate::updateOrCreate(
-                ['election_id' => $election->id, 'political_party_id' => $party->id],
-                [
-                    'name'           => $candidateNames[$party->abbreviation] ?? $party->name . ' Candidate',
-                    'ballot_number'  => (string)(array_search($party, $createdParties) + 1),
-                    'is_independent' => false,
-                    'is_active'      => true,
-                ]
-            );
-            $createdCandidates[] = $candidate;
-        }
-        $this->command->info("✓ Created " . count($createdCandidates) . " candidates");
+        // $createdCandidates = [];
+        // foreach ($createdParties as $party) {
+        //     $candidate = Candidate::updateOrCreate(
+        //         ['election_id' => $election->id, 'political_party_id' => $party->id],
+        //         [
+        //             'name'           => $candidateNames[$party->abbreviation] ?? $party->name . ' Candidate',
+        //             'ballot_number'  => (string)(array_search($party, $createdParties) + 1),
+        //             'is_independent' => false,
+        //             'is_active'      => true,
+        //         ]
+        //     );
+        //     $createdCandidates[] = $candidate;
+        // }
+        // $this->command->info("✓ Created " . count($createdCandidates) . " candidates");
 
         // ── Step 7: Create a sample submitted result ──────────────────────────
-        $firstStation = $stations[0];
+        // $firstStation = $stations[0];
 
-        $result = Result::updateOrCreate(
-            ['polling_station_id' => $firstStation->id, 'election_id' => $election->id],
-            [
-                'submission_uuid'         => \Illuminate\Support\Str::uuid(),
-                'user_id'                 => $pollingOfficer->id,
-                'total_registered_voters' => 450,
-                'total_votes_cast'        => 420,
-                'valid_votes'             => 410,
-                'rejected_votes'          => 10,
-                'disputed_votes'          => 0,
-                'certification_status'    => 'submitted',
-                'submitted_by'            => $pollingOfficer->id,
-                'submitted_at'            => now(),
-                'gps_validated'           => false,
-            ]
-        );
+        // $result = Result::updateOrCreate(
+        //     ['polling_station_id' => $firstStation->id, 'election_id' => $election->id],
+        //     [
+        //         'submission_uuid'         => \Illuminate\Support\Str::uuid(),
+        //         'user_id'                 => $pollingOfficer->id,
+        //         'total_registered_voters' => 450,
+        //         'total_votes_cast'        => 420,
+        //         'valid_votes'             => 410,
+        //         'rejected_votes'          => 10,
+        //         'disputed_votes'          => 0,
+        //         'certification_status'    => 'submitted',
+        //         'submitted_by'            => $pollingOfficer->id,
+        //         'submitted_at'            => now(),
+        //         'gps_validated'           => false,
+        //     ]
+        // );
 
-        $voteDistribution = [150, 120, 90, 50];
-        foreach ($createdCandidates as $i => $candidate) {
-            ResultCandidateVote::updateOrCreate(
-                ['result_id' => $result->id, 'candidate_id' => $candidate->id],
-                [
-                    'election_id' => $election->id,
-                    'votes'       => $voteDistribution[$i] ?? 0,
-                ]
-            );
-        }
-        $this->command->info("✓ Created sample result with candidate vote breakdown");
+        // $voteDistribution = [150, 120, 90, 50];
+        // foreach ($createdCandidates as $i => $candidate) {
+        //     ResultCandidateVote::updateOrCreate(
+        //         ['result_id' => $result->id, 'candidate_id' => $candidate->id],
+        //         [
+        //             'election_id' => $election->id,
+        //             'votes'       => $voteDistribution[$i] ?? 0,
+        //         ]
+        //     );
+        // }
+        // $this->command->info("✓ Created sample result with candidate vote breakdown");
 
         // ── Summary ───────────────────────────────────────────────────────────
         $this->command->newLine();

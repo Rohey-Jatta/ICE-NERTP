@@ -146,6 +146,19 @@ Route::middleware(['auth', 'role:iec-administrator'])
         }
     })->name('users.update');
 
+    Route::delete('/users/{user}', function (User $user) {
+        try {
+            if ($user->id === Auth::id()) {
+                return back()->withErrors(['error' => 'You cannot delete your own account.']);
+            }
+            AuditLog::record(action: 'user.deleted', event: 'deleted', module: 'UserManagement', auditable: $user);
+            $user->delete();
+            return redirect()->route('admin.users')->with('success', 'User deleted successfully.');
+        } catch (\Exception $e) {
+            return back()->withErrors(['error' => 'Failed to delete user: ' . $e->getMessage()]);
+        }
+    })->name('users.destroy');
+
     // ── Party Representatives ─────────────────────────────────────────────────
     Route::get('/party-representatives', function () {
         return Inertia::render('Admin/PartyRepresentatives', [
@@ -508,6 +521,21 @@ Route::middleware(['auth', 'role:iec-administrator'])
             return back()->withErrors(['error' => 'Failed: '.$e->getMessage()]);
         }
     })->name('polling-stations.update');
+
+    Route::delete('/polling-stations/{id}', function ($id) {
+        try {
+            $station = PollingStation::findOrFail($id);
+            // Check if station has submitted results
+            if ($station->results()->exists()) {
+                return back()->withErrors(['error' => 'Cannot delete: this station has submitted results. Remove results first.']);
+            }
+            $station->delete();
+            AuditLog::record(action: 'polling_station.deleted', event: 'deleted', module: 'PollingStation');
+            return redirect()->route('admin.polling-stations')->with('success', 'Polling station deleted.');
+        } catch (\Exception $e) {
+            return back()->withErrors(['error' => 'Failed: ' . $e->getMessage()]);
+        }
+    })->name('polling-stations.destroy');
 
     // ── Parties ───────────────────────────────────────────────────────────────
     Route::get('/parties', function () {
@@ -1109,7 +1137,8 @@ Route::middleware(['auth', 'role:iec-administrator'])
     })->name('backups.list');
 
     Route::post('/backups/create', function () {
-        try { Artisan::call('backup:run --only-db'); return response()->json(['success' => true, 'message' => 'Backup created successfully!']); }
+        try { Artisan::call('backup:run --only-db'); return response()->json(['success' => true, 'message' 
+        => 'Backup created successfully!']); }
         catch (\Exception $e) { return response()->json(['success' => false, 'message' => 'Backup failed: '.$e->getMessage()], 500); }
     })->name('backups.create');
 

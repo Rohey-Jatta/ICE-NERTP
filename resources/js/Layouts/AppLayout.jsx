@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import { Link, router } from '@inertiajs/react';
 
+
 export default function AppLayout({ user, children }) {
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const [isLoggingOut, setIsLoggingOut]     = useState(false);

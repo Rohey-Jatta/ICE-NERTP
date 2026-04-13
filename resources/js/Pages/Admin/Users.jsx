@@ -1,10 +1,20 @@
 import AppLayout from '@/Layouts/AppLayout';
 import { Link, router } from '@inertiajs/react';
+import { useState } from 'react';
 
 export default function Users({ auth, users = [] }) {
+    const [deletingId, setDeletingId] = useState(null);
+
     const handleAddUser = () => router.visit('/admin/users/create');
     const handleEdit = (id) => router.visit(`/admin/users/${id}/edit`);
-    const handleAddFirstUser = () => router.visit('/admin/users/create');
+
+    const handleDelete = (user) => {
+        if (!window.confirm(`Are you sure you want to delete user "${user.name}"? This cannot be undone.`)) return;
+        setDeletingId(user.id);
+        router.delete(`/admin/users/${user.id}`, {
+            onFinish: () => setDeletingId(null),
+        });
+    };
 
     const getRoleDisplay = (user) => {
         if (user.roles && user.roles.length > 0) {
@@ -60,16 +70,28 @@ export default function Users({ auth, users = [] }) {
                                                 </span>
                                             </td>
                                             <td className="py-4 text-center">
-                                                <button onClick={() => handleEdit(user.id)} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm">
-                                                    Edit
-                                                </button>
+                                                <div className="flex items-center justify-center gap-2">
+                                                    <button
+                                                        onClick={() => handleEdit(user.id)}
+                                                        className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm"
+                                                    >
+                                                        Edit
+                                                    </button>
+                                                    <button
+                                                        onClick={() => handleDelete(user)}
+                                                        disabled={deletingId === user.id || user.id === auth?.user?.id}
+                                                        title={user.id === auth?.user?.id ? "Cannot delete your own account" : "Delete user"}
+                                                        className="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-lg text-sm"
+                                                    >
+                                                        {deletingId === user.id ? 'Deleting…' : 'Delete'}
+                                                    </button>
+                                                </div>
                                             </td>
                                         </tr>
                                     ))}
                                 </tbody>
                             </table>
 
-                            {/* Pagination — guard against null URLs */}
                             {users.links && (
                                 <div className="mt-6 flex justify-center">
                                     <div className="flex space-x-1">
@@ -100,7 +122,7 @@ export default function Users({ auth, users = [] }) {
                     ) : (
                         <div className="text-center py-12">
                             <p className="text-gray-400 mb-4">No users found</p>
-                            <button type="button" onClick={handleAddFirstUser} className="px-6 py-3 bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-lg cursor-pointer">
+                            <button type="button" onClick={handleAddUser} className="px-6 py-3 bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-lg cursor-pointer">
                                 Add First User
                             </button>
                         </div>

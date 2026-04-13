@@ -101,7 +101,7 @@ export default function ElectionCreate({ auth, allParties = [] }) {
                                 value={data.name}
                                 onChange={(e) => setData('name', e.target.value)}
                                 className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white"
-                                placeholder="e.g., National Presidential Election 2026"
+                                placeholder="Election Name/Type"
                                 required
                             />
                             {errors.name && <p className="text-red-400 text-sm mt-1">{errors.name}</p>}

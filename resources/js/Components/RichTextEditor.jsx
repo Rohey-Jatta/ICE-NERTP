@@ -1,7 +1,7 @@
 import { useRef, useCallback } from 'react';
 
 /**
- * RichTextEditor - Google Docs-like rich text editor
+ * RichTextEditor - Rich text editor
  * Uses contentEditable with execCommand for formatting
  */
 export default function RichTextEditor({ value, onChange, placeholder = 'Add your comments here...', minHeight = '200px' }) {
@@ -56,7 +56,7 @@ export default function RichTextEditor({ value, onChange, placeholder = 'Add you
     );
 
     return (
-        <div className="border border-slate-600 rounded-lg overflow-hidden bg-slate-900/50 focus-within:border-teal-500 transition-colors">
+        <div className="border border-slate-500 rounded-lg overflow-hidden bg-slate-900 focus-within:border-teal-400 transition-colors shadow-lg">
             {/* Toolbar */}
             <div className="flex flex-wrap items-center gap-1 px-3 py-2 bg-slate-800 border-b border-slate-600">
                 {/* Heading select */}
@@ -146,14 +146,24 @@ export default function RichTextEditor({ value, onChange, placeholder = 'Add you
                 suppressContentEditableWarning
                 onInput={handleInput}
                 onKeyDown={(e) => {
-                    // Tab inserts spaces
                     if (e.key === 'Tab') {
                         e.preventDefault();
                         document.execCommand('insertText', false, '    ');
                     }
                 }}
-                className="px-4 py-3 text-white focus:outline-none prose prose-invert max-w-none"
-                style={{ minHeight, whiteSpace: 'pre-wrap', lineHeight: '1.7' }}
+                className="px-4 py-3 text-white focus:outline-none"
+                style={{
+                    minHeight,
+                    whiteSpace: 'pre-wrap',
+                    lineHeight: '1.7',
+                    direction: 'ltr',
+                    textAlign: 'left',
+                    unicodeBidi: 'plaintext',
+                    overflowY: 'auto',
+                    maxHeight: '300px',
+                    fontSize: '14px',
+                    fontFamily: 'system-ui, -apple-system, sans-serif',
+                }}
                 data-placeholder={placeholder}
                 dangerouslySetInnerHTML={{ __html: value || '' }}
             />
@@ -164,6 +174,12 @@ export default function RichTextEditor({ value, onChange, placeholder = 'Add you
                     content: attr(data-placeholder);
                     color: #6b7280;
                     pointer-events: none;
+                    direction: ltr;
+                    text-align: left;
+                }
+                [contenteditable] * {
+                    direction: ltr !important;
+                    unicode-bidi: normal !important;
                 }
             `}</style>
         </div>

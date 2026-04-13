@@ -1,9 +1,20 @@
 import AppLayout from '@/Layouts/AppLayout';
 import { Link, router } from '@inertiajs/react';
+import { useState } from 'react';
 
 export default function PollingStations({ auth, stations = [] }) {
+    const [deletingId, setDeletingId] = useState(null);
+
     const handleRegister = () => router.visit('/admin/polling-stations/create');
     const handleEdit = (id) => router.visit(`/admin/polling-stations/${id}/edit`);
+
+    const handleDelete = (station) => {
+        if (!window.confirm(`Are you sure you want to delete polling station "${station.name}" (${station.code})? This action cannot be undone.`)) return;
+        setDeletingId(station.id);
+        router.delete(`/admin/polling-stations/${station.id}`, {
+            onFinish: () => setDeletingId(null),
+        });
+    };
 
     return (
         <AppLayout user={auth?.user}>
@@ -41,12 +52,21 @@ export default function PollingStations({ auth, stations = [] }) {
                                             <td className="py-4 text-white">{station.ward}</td>
                                             <td className="py-4 text-right text-white">{station.voters}</td>
                                             <td className="py-4 text-center">
-                                                <button
-                                                    onClick={() => handleEdit(station.id)}
-                                                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm"
-                                                >
-                                                    Edit
-                                                </button>
+                                                <div className="flex items-center justify-center gap-2">
+                                                    <button
+                                                        onClick={() => handleEdit(station.id)}
+                                                        className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm"
+                                                    >
+                                                        Edit
+                                                    </button>
+                                                    <button
+                                                        onClick={() => handleDelete(station)}
+                                                        disabled={deletingId === station.id}
+                                                        className="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white rounded-lg text-sm"
+                                                    >
+                                                        {deletingId === station.id ? 'Deleting…' : 'Delete'}
+                                                    </button>
+                                                </div>
                                             </td>
                                         </tr>
                                     ))}
