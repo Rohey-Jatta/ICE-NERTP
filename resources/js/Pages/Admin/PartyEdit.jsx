@@ -13,25 +13,12 @@ function CandidatesSection({ partyId, activeElectionId, initialCandidates = [] }
     const [deleting, setDeleting]         = useState(null);
     const [error, setError]               = useState('');
 
-    if (!activeElectionId) {
-        return (
-            <div className="border border-slate-700 rounded-xl p-6">
-                <h3 className="text-white font-bold text-lg mb-3">Candidates</h3>
-                <div className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-lg">
-                    <p className="text-amber-300 text-sm">
-                        No active election. Activate an election first, then add candidates here.
-                    </p>
-                </div>
-            </div>
-        );
-    }
-
     const getCsrf = () =>
         document.head.querySelector('meta[name="csrf-token"]')?.content || '';
 
     const handleAddCandidate = async (e) => {
         e.preventDefault();
-        if (!form.name.trim()) return;
+        if (!form.name.trim() || !activeElectionId) return;
         setSaving(true);
         setError('');
 
@@ -68,76 +55,79 @@ function CandidatesSection({ partyId, activeElectionId, initialCandidates = [] }
     const handleDelete = async (candidateId) => {
         if (!confirm('Remove this candidate from the election?')) return;
         setDeleting(candidateId);
-
         try {
             const res = await fetch(`/admin/candidates/${candidateId}`, {
                 method:  'DELETE',
-                headers: {
-                    'X-CSRF-TOKEN':  getCsrf(),
-                    'Content-Type': 'application/json',
-                },
+                headers: { 'X-CSRF-TOKEN': getCsrf(), 'Content-Type': 'application/json' },
             });
             if (res.ok) {
                 setCandidates(prev => prev.filter(c => c.id !== candidateId));
             }
         } catch { /* ignore */ }
-        finally {
-            setDeleting(null);
-        }
+        finally { setDeleting(null); }
     };
 
+    // Group candidates by election
+    const byElection = candidates.reduce((acc, c) => {
+        const key = c.election_name || 'Unknown Election';
+        if (!acc[key]) acc[key] = [];
+        acc[key].push(c);
+        return acc;
+    }, {});
+
     return (
-        <div className="border border-slate-700 rounded-xl p-6">
+        <div className="bg-slate-800/40 rounded-xl border border-slate-700/50 p-6">
             <div className="flex items-center justify-between mb-4">
-                <h3 className="text-white font-bold text-lg">
-                    Candidates
-                    <span className="text-gray-500 font-normal text-sm ml-2">({candidates.length})</span>
-                </h3>
-                <button
-                    type="button"
-                    onClick={() => { setShowForm(f => !f); setError(''); }}
-                    className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-sm font-semibold transition-colors"
-                >
-                    {showForm ? '✕ Cancel' : '+ Add Candidate'}
-                </button>
+                <div>
+                    <h3 className="text-white font-bold text-lg">
+                        Candidates
+                        <span className="text-gray-500 font-normal text-sm ml-2">({candidates.length} total)</span>
+                    </h3>
+                    <p className="text-gray-500 text-xs mt-0.5">
+                        {activeElectionId
+                            ? 'New candidates will be linked to the active election.'
+                            : '⚠ No active election — activate an election to add candidates.'}
+                    </p>
+                </div>
+                {activeElectionId && (
+                    <button type="button"
+                        onClick={() => { setShowForm(f => !f); setError(''); }}
+                        className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-sm font-semibold transition-colors">
+                        {showForm ? '✕ Cancel' : '+ Add Candidate'}
+                    </button>
+                )}
             </div>
 
             {/* ── Add Candidate Form ──────────────────────────────────────── */}
-            {showForm && (
+            {showForm && activeElectionId && (
                 <form onSubmit={handleAddCandidate}
-                    className="mb-5 p-4 bg-slate-900/60 rounded-xl border border-slate-600">
+                    className="mb-5 p-4 bg-slate-900/60 rounded-xl border border-teal-600/30">
+                    <div className="text-xs text-teal-400 mb-3 font-semibold">
+                        ✦ Adding candidate for: Active Election
+                    </div>
                     {error && (
                         <div className="mb-3 p-2 bg-red-500/20 text-red-300 text-sm rounded-lg">{error}</div>
                     )}
-
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                         <div>
                             <label className="block text-gray-300 text-sm font-semibold mb-1">
                                 Candidate Name <span className="text-red-400">*</span>
                             </label>
-                            <input
-                                type="text"
-                                required
-                                value={form.name}
+                            <input type="text" required value={form.name}
                                 onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
                                 className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white text-sm focus:outline-none focus:border-teal-500"
-                                placeholder="Full name"
-                            />
+                                placeholder="Full name" />
                         </div>
                         <div>
                             <label className="block text-gray-300 text-sm font-semibold mb-1">
                                 Ballot Number <span className="text-gray-500 font-normal">(optional)</span>
                             </label>
-                            <input
-                                type="text"
-                                value={form.ballot_number}
+                            <input type="text" value={form.ballot_number}
                                 onChange={e => setForm(f => ({ ...f, ballot_number: e.target.value }))}
                                 className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white text-sm focus:outline-none focus:border-teal-500"
-                                placeholder="e.g., 1, 2, A"
-                            />
+                                placeholder="e.g., 1, 2, A" />
                         </div>
                     </div>
-
                     <div className="mb-4">
                         <label className="block text-gray-300 text-sm font-semibold mb-1">
                             Photo <span className="text-gray-500 font-normal">(optional)</span>
@@ -157,60 +147,66 @@ function CandidatesSection({ partyId, activeElectionId, initialCandidates = [] }
                                         const reader = new FileReader();
                                         reader.onloadend = () => setPhotoPreview(reader.result);
                                         reader.readAsDataURL(file);
-                                    }}
-                                />
+                                    }} />
                             </label>
                             {photoPreview && (
                                 <button type="button" onClick={() => { setPhoto(null); setPhotoPreview(null); }}
-                                    className="text-gray-500 hover:text-red-400 text-sm">
-                                    Remove
-                                </button>
+                                    className="text-gray-500 hover:text-red-400 text-sm">Remove</button>
                             )}
                         </div>
                     </div>
-
-                    <button
-                        type="submit"
-                        disabled={saving || !form.name.trim()}
-                        className="px-5 py-2 bg-teal-600 hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg text-sm font-semibold transition-colors"
-                    >
+                    <button type="submit" disabled={saving || !form.name.trim()}
+                        className="px-5 py-2 bg-teal-600 hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg text-sm font-semibold transition-colors">
                         {saving ? 'Adding...' : 'Add Candidate'}
                     </button>
                 </form>
             )}
 
-            {/* ── Candidates List ─────────────────────────────────────────── */}
+            {/* ── Candidates List grouped by election ─────────────────────── */}
             {candidates.length === 0 ? (
-                <div className="text-center py-6 border-2 border-dashed border-slate-700 rounded-xl">
-                    <p className="text-gray-500 text-sm">No candidates yet. Click "+ Add Candidate" to add one.</p>
+                <div className="text-center py-8 border-2 border-dashed border-slate-700 rounded-xl">
+                    <div className="text-3xl mb-2">🗳️</div>
+                    <p className="text-gray-500 text-sm">
+                        {activeElectionId
+                            ? 'No candidates yet. Click "+ Add Candidate" to add one.'
+                            : 'No candidates registered for this party.'}
+                    </p>
                 </div>
             ) : (
-                <div className="space-y-2">
-                    {candidates.map(c => (
-                        <div key={c.id}
-                            className="flex items-center gap-3 p-3 bg-slate-900/40 rounded-lg border border-slate-700/30">
-                            {c.photo_url ? (
-                                <img src={c.photo_url} alt={c.name}
-                                    className="w-10 h-10 rounded-full object-cover flex-shrink-0 border border-slate-600" />
-                            ) : (
-                                <div className="w-10 h-10 rounded-full bg-slate-700 flex items-center justify-center text-white font-bold text-sm flex-shrink-0 border border-slate-600">
-                                    {c.name?.charAt(0)?.toUpperCase() ?? '?'}
-                                </div>
-                            )}
-                            <div className="flex-1 min-w-0">
-                                <div className="text-white font-medium text-sm">{c.name}</div>
-                                {c.ballot_number && (
-                                    <div className="text-gray-500 text-xs">Ballot #{c.ballot_number}</div>
-                                )}
+                <div className="space-y-4">
+                    {Object.entries(byElection).map(([electionName, electionCandidates]) => (
+                        <div key={electionName}>
+                            <div className="text-xs text-gray-500 uppercase tracking-wide mb-2 flex items-center gap-2">
+                                <span className="w-4 h-px bg-slate-600 block" />
+                                {electionName}
+                                <span className="w-full h-px bg-slate-600 block" />
                             </div>
-                            <button
-                                type="button"
-                                onClick={() => handleDelete(c.id)}
-                                disabled={deleting === c.id}
-                                className="px-3 py-1 text-xs font-semibold bg-red-600/20 hover:bg-red-600/40 text-red-300 rounded border border-red-600/30 disabled:opacity-50 transition-colors"
-                            >
-                                {deleting === c.id ? '...' : 'Remove'}
-                            </button>
+                            <div className="space-y-2">
+                                {electionCandidates.map(c => (
+                                    <div key={c.id}
+                                        className="flex items-center gap-3 p-3 bg-slate-900/40 rounded-lg border border-slate-700/30">
+                                        {c.photo_url ? (
+                                            <img src={c.photo_url} alt={c.name}
+                                                className="w-10 h-10 rounded-full object-cover flex-shrink-0 border border-slate-600" />
+                                        ) : (
+                                            <div className="w-10 h-10 rounded-full bg-slate-700 flex items-center justify-center text-white font-bold text-sm flex-shrink-0 border border-slate-600">
+                                                {c.name?.charAt(0)?.toUpperCase() ?? '?'}
+                                            </div>
+                                        )}
+                                        <div className="flex-1 min-w-0">
+                                            <div className="text-white font-medium text-sm">{c.name}</div>
+                                            {c.ballot_number && (
+                                                <div className="text-gray-500 text-xs">Ballot #{c.ballot_number}</div>
+                                            )}
+                                        </div>
+                                        <button type="button" onClick={() => handleDelete(c.id)}
+                                            disabled={deleting === c.id}
+                                            className="px-3 py-1 text-xs font-semibold bg-red-600/20 hover:bg-red-600/40 text-red-300 rounded border border-red-600/30 disabled:opacity-50 transition-colors">
+                                            {deleting === c.id ? '...' : 'Remove'}
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
                         </div>
                     ))}
                 </div>
@@ -219,8 +215,7 @@ function CandidatesSection({ partyId, activeElectionId, initialCandidates = [] }
     );
 }
 
-// ── Multi-color picker (unchanged from before) ─────────────────────────────
-
+// ── Multi-color picker ────────────────────────────────────────────────────────
 const PRESET_COLORS = [
     '#ef4444','#f97316','#eab308','#22c55e','#10b981',
     '#14b8a6','#06b6d4','#3b82f6','#6366f1','#8b5cf6',
@@ -273,7 +268,6 @@ function MultiColorPicker({ colors, onChange, max = 3 }) {
                     {colors.length === 0 ? 'No colors selected' : colors.join(' + ')}
                 </div>
             </div>
-
             <div className="flex gap-3 flex-wrap mb-3">
                 {slots.map((color, i) => (
                     <div key={i} className="relative">
@@ -296,37 +290,25 @@ function MultiColorPicker({ colors, onChange, max = 3 }) {
                     </div>
                 ))}
             </div>
-
-            <p className="text-gray-500 text-xs mb-3">
-                Select up to {max} colors. Single-color parties pick one; tri-color flag parties pick three.
-            </p>
-
+            <p className="text-gray-500 text-xs mb-3">Select up to {max} colors.</p>
             {showPicker && (
                 <div className="bg-slate-900/80 border border-slate-600 rounded-xl p-4 mt-2">
                     <div className="flex items-center justify-between mb-3">
                         <span className="text-white text-sm font-semibold">Picking Color {activeSlot + 1}</span>
                         <button type="button" onClick={() => setShowPicker(false)}
-                                className="text-gray-400 hover:text-white text-lg">×</button>
+                            className="text-gray-400 hover:text-white text-lg">×</button>
                     </div>
                     <div className="flex items-center gap-3 mb-4">
-                        <input
-                            type="color"
+                        <input type="color"
                             value={customInput.match(/^#[0-9a-fA-F]{6}$/) ? customInput : '#3b82f6'}
                             onChange={(e) => setCustomInput(e.target.value)}
-                            className="w-12 h-10 rounded-lg cursor-pointer border-0 bg-transparent"
-                        />
-                        <input
-                            type="text"
-                            value={customInput}
+                            className="w-12 h-10 rounded-lg cursor-pointer border-0 bg-transparent" />
+                        <input type="text" value={customInput}
                             onChange={(e) => setCustomInput(e.target.value)}
-                            placeholder="#rrggbb"
-                            maxLength={7}
-                            className="flex-1 px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white font-mono text-sm"
-                        />
+                            placeholder="#rrggbb" maxLength={7}
+                            className="flex-1 px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white font-mono text-sm" />
                         <button type="button" onClick={applyCustom}
-                            className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white text-sm rounded-lg font-semibold">
-                            Apply
-                        </button>
+                            className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white text-sm rounded-lg font-semibold">Apply</button>
                     </div>
                     <div className="grid grid-cols-10 gap-1.5">
                         {PRESET_COLORS.map((c) => (
@@ -344,14 +326,12 @@ function MultiColorPicker({ colors, onChange, max = 3 }) {
     );
 }
 
-// ── Main Component ────────────────────────────────────────────────────────────
-
 function parseColors(colorStr) {
     if (!colorStr) return [];
     return colorStr.split(',').map(c => c.trim()).filter(c => /^#[0-9a-fA-F]{6}$/.test(c));
 }
 
-export default function PartyEdit({ auth, party, candidates = [], activeElectionId = null }) {
+export default function PartyEdit({ auth, party, candidates = [], activeElectionId = null, flash }) {
     const initialColors = party.colors_array || parseColors(party.color);
 
     const { data, setData, post, processing, errors } = useForm({
@@ -399,190 +379,179 @@ export default function PartyEdit({ auth, party, candidates = [], activeElection
                     <Link href="/admin/parties" className="text-gray-400 hover:text-white text-sm mb-2 inline-block">
                         ← Back to Parties
                     </Link>
-                    <h1 className="text-3xl font-bold text-white">Edit Party: {party.name}</h1>
+                    <div className="flex items-start justify-between gap-4">
+                        <div>
+                            <h1 className="text-3xl font-bold text-white">Edit Party</h1>
+                            <p className="text-gray-400 text-sm mt-1">{party.name}</p>
+                        </div>
+                        {/* Party color swatch */}
+                        <div className="flex-shrink-0 w-12 h-12 rounded-xl border border-slate-600"
+                            style={initialColors.length > 1
+                                ? { background: `linear-gradient(135deg, ${initialColors.join(', ')})` }
+                                : { background: initialColors[0] || '#334155' }} />
+                    </div>
                 </div>
 
-                <div className="space-y-6">
-                    {/* ── Party Details Form ────────────────────────────── */}
-                    <div className="bg-slate-800/40 rounded-xl p-6 border border-slate-700/50">
-                        <h2 className="text-lg font-bold text-white mb-5">Party Details</h2>
+                {/* Flash messages */}
+                {flash?.success && (
+                    <div className="mb-6 p-4 bg-green-500/20 border border-green-500/50 rounded-xl text-green-300">
+                        ✓ {flash.success}
+                    </div>
+                )}
+                {flash?.error && (
+                    <div className="mb-6 p-4 bg-red-500/20 border border-red-500/50 rounded-xl text-red-300">
+                        ⚠ {flash.error}
+                    </div>
+                )}
 
-                        <form onSubmit={handleSubmit} className="space-y-6">
-                            {/* Name & Abbreviation */}
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                <div className="md:col-span-2">
-                                    <label className="block text-gray-300 mb-2 font-semibold">
-                                        Party Name <span className="text-red-400">*</span>
-                                    </label>
-                                    <input type="text" value={data.name}
-                                        onChange={(e) => setData('name', e.target.value)}
-                                        className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white"
-                                        required />
-                                    {errors.name && <p className="text-red-400 text-sm mt-1">{errors.name}</p>}
-                                </div>
-                                <div>
-                                    <label className="block text-gray-300 mb-2 font-semibold">
-                                        Abbreviation <span className="text-red-400">*</span>
-                                    </label>
-                                    <input type="text" value={data.abbreviation}
-                                        onChange={(e) => setData('abbreviation', e.target.value.toUpperCase().slice(0, 10))}
-                                        className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white font-mono"
-                                        maxLength={10} required />
-                                    {errors.abbreviation && <p className="text-red-400 text-sm mt-1">{errors.abbreviation}</p>}
-                                </div>
+                {/* ── Party Details Form ──────────────────────────────────────── */}
+                <div className="bg-slate-800/40 rounded-xl p-6 border border-slate-700/50 mb-6">
+                    <h2 className="text-white font-bold text-lg mb-5 pb-3 border-b border-slate-700">
+                        Party Details
+                    </h2>
+                    <form onSubmit={handleSubmit} className="space-y-6">
+                        {/* Name & Abbreviation */}
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div className="md:col-span-2">
+                                <label className="block text-gray-300 mb-2 font-semibold">
+                                    Party Name <span className="text-red-400">*</span>
+                                </label>
+                                <input type="text" value={data.name}
+                                    onChange={(e) => setData('name', e.target.value)}
+                                    className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-teal-500"
+                                    placeholder="Party's full name" required />
+                                {errors.name && <p className="text-red-400 text-sm mt-1">{errors.name}</p>}
                             </div>
-
-                            {/* Party Colors */}
                             <div>
                                 <label className="block text-gray-300 mb-2 font-semibold">
-                                    Party Colors
-                                    <span className="text-gray-500 font-normal text-xs ml-2">
-                                        (up to 3 — e.g., red + white + blue for tri-color parties)
-                                    </span>
+                                    Abbreviation <span className="text-red-400">*</span>
                                 </label>
-                                <MultiColorPicker
-                                    colors={data.colors}
-                                    onChange={(newColors) => setData('colors', newColors)}
-                                    max={3}
-                                />
-                                {errors.color && <p className="text-red-400 text-sm mt-1">{errors.color}</p>}
+                                <input type="text" value={data.abbreviation}
+                                    onChange={(e) => setData('abbreviation', e.target.value.toUpperCase().slice(0, 10))}
+                                    className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white font-mono focus:outline-none focus:border-teal-500"
+                                    placeholder="e.g., UDP" maxLength={10} required />
+                                {errors.abbreviation && <p className="text-red-400 text-sm mt-1">{errors.abbreviation}</p>}
                             </div>
+                        </div>
 
-                            {/* Motto */}
+                        {/* Colors */}
+                        <div>
+                            <label className="block text-gray-300 mb-2 font-semibold">
+                                Party Colors
+                                <span className="text-gray-500 font-normal text-xs ml-2">(up to 3)</span>
+                            </label>
+                            <MultiColorPicker
+                                colors={data.colors}
+                                onChange={(newColors) => setData('colors', newColors)}
+                                max={3}
+                            />
+                            {data.colors.map((c, i) => (
+                                <input key={i} type="hidden" name={`color_${i}`} value={c} />
+                            ))}
+                        </div>
+
+                        {/* Motto */}
+                        <div>
+                            <label className="block text-gray-300 mb-2 font-semibold">Party Motto</label>
+                            <input type="text" value={data.motto}
+                                onChange={(e) => setData('motto', e.target.value)}
+                                className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-teal-500"
+                                placeholder="Party's motto or slogan" />
+                        </div>
+
+                        {/* Headquarters & Website */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
-                                <label className="block text-gray-300 mb-2 font-semibold">Party Motto</label>
-                                <input type="text" value={data.motto}
-                                    onChange={(e) => setData('motto', e.target.value)}
-                                    className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white"
-                                    placeholder="e.g., Unity, Freedom, Progress" />
-                                {errors.motto && <p className="text-red-400 text-sm mt-1">{errors.motto}</p>}
+                                <label className="block text-gray-300 mb-2 font-semibold">Headquarters</label>
+                                <input type="text" value={data.headquarters}
+                                    onChange={(e) => setData('headquarters', e.target.value)}
+                                    className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-teal-500"
+                                    placeholder="e.g., Banjul" />
                             </div>
+                            <div>
+                                <label className="block text-gray-300 mb-2 font-semibold">Website</label>
+                                <input type="url" value={data.website}
+                                    onChange={(e) => setData('website', e.target.value)}
+                                    className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-teal-500"
+                                    placeholder="https://..." />
+                            </div>
+                        </div>
 
-                            {/* Headquarters & Website */}
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {/* Leader */}
+                        <div className="border border-slate-700 rounded-xl p-6">
+                            <h3 className="text-white font-bold text-lg mb-4">Party Leader</h3>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <div>
-                                    <label className="block text-gray-300 mb-2 font-semibold">Headquarters</label>
-                                    <input type="text" value={data.headquarters}
-                                        onChange={(e) => setData('headquarters', e.target.value)}
-                                        className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white"
-                                        placeholder="e.g., Banjul, The Gambia" />
-                                    {errors.headquarters && <p className="text-red-400 text-sm mt-1">{errors.headquarters}</p>}
+                                    <label className="block text-gray-300 mb-2 font-semibold">Leader's Full Name</label>
+                                    <input type="text" value={data.leader_name}
+                                        onChange={(e) => setData('leader_name', e.target.value)}
+                                        className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-teal-500"
+                                        placeholder="Full name" />
                                 </div>
                                 <div>
-                                    <label className="block text-gray-300 mb-2 font-semibold">Website</label>
-                                    <input type="url" value={data.website}
-                                        onChange={(e) => setData('website', e.target.value)}
-                                        className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white"
-                                        placeholder="https://..." />
-                                    {errors.website && <p className="text-red-400 text-sm mt-1">{errors.website}</p>}
-                                </div>
-                            </div>
-
-                            {/* Leader Section */}
-                            <div className="border border-slate-700 rounded-xl p-6">
-                                <h3 className="text-white font-bold text-lg mb-4">Party Leader</h3>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                    <div>
-                                        <label className="block text-gray-300 mb-2 font-semibold">Leader's Full Name</label>
-                                        <input type="text" value={data.leader_name}
-                                            onChange={(e) => setData('leader_name', e.target.value)}
-                                            className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white"
-                                            placeholder="e.g., Ousainou Darboe" />
-                                        {errors.leader_name && <p className="text-red-400 text-sm mt-1">{errors.leader_name}</p>}
-                                    </div>
-                                    <div>
-                                        <label className="block text-gray-300 mb-2 font-semibold">Leader's Photo</label>
-                                        <div className="flex items-center gap-4">
-                                            {leaderPreview ? (
-                                                <img
-                                                    src={leaderPreview}
-                                                    alt="Leader"
-                                                    className="w-16 h-16 rounded-full object-cover border-2 border-teal-500 flex-shrink-0"
-                                                    onError={(e) => { e.target.style.display = 'none'; }}
-                                                />
-                                            ) : (
-                                                <div className="w-16 h-16 rounded-full bg-slate-700 flex items-center justify-center border-2 border-slate-600 flex-shrink-0">
-                                                    <span className="text-gray-400 text-xs text-center">No photo</span>
-                                                </div>
-                                            )}
-                                            <div>
-                                                <label className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg cursor-pointer text-sm inline-block">
-                                                    {leaderPreview ? 'Change Photo' : 'Upload Photo'}
-                                                    <input type="file" accept="image/*" className="hidden" onChange={handleLeaderPhoto} />
-                                                </label>
-                                                {leaderPreview && (
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => { setLeaderPreview(null); setData('leader_photo', null); }}
-                                                        className="ml-2 text-red-400 hover:text-red-300 text-xs"
-                                                    >
-                                                        Remove
-                                                    </button>
-                                                )}
+                                    <label className="block text-gray-300 mb-2 font-semibold">Leader's Photo</label>
+                                    <div className="flex items-center gap-4">
+                                        {leaderPreview ? (
+                                            <img src={leaderPreview} alt="Leader"
+                                                className="w-16 h-16 rounded-full object-cover border-2 border-teal-500 flex-shrink-0" />
+                                        ) : (
+                                            <div className="w-16 h-16 rounded-full bg-slate-700 flex items-center justify-center border-2 border-slate-600 flex-shrink-0">
+                                                <span className="text-gray-400 text-2xl font-bold">
+                                                    {party.abbreviation?.charAt(0) ?? '?'}
+                                                </span>
                                             </div>
-                                        </div>
-                                        {errors.leader_photo && <p className="text-red-400 text-sm mt-1">{errors.leader_photo}</p>}
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Party Symbol */}
-                            <div className="border border-slate-700 rounded-xl p-6">
-                                <h3 className="text-white font-bold text-lg mb-4">Party Symbol / Logo</h3>
-                                <div className="flex items-center gap-6">
-                                    {symbolPreview ? (
-                                        <img
-                                            src={symbolPreview}
-                                            alt="Symbol"
-                                            className="w-24 h-24 object-contain border border-slate-600 rounded-lg bg-white p-1"
-                                            onError={(e) => { e.target.style.display = 'none'; }}
-                                        />
-                                    ) : (
-                                        <div className="w-24 h-24 bg-slate-700 border border-slate-600 rounded-lg flex items-center justify-center">
-                                            <span className="text-gray-400 text-xs text-center">No symbol</span>
-                                        </div>
-                                    )}
-                                    <div>
-                                        <label className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg cursor-pointer text-sm inline-block">
-                                            {symbolPreview ? 'Change Symbol / Logo' : 'Upload Symbol / Logo'}
-                                            <input type="file" accept="image/*" className="hidden" onChange={handleSymbol} />
-                                        </label>
-                                        {symbolPreview && (
-                                            <button
-                                                type="button"
-                                                onClick={() => { setSymbolPreview(null); setData('symbol', null); }}
-                                                className="ml-2 text-red-400 hover:text-red-300 text-xs"
-                                            >
-                                                Remove
-                                            </button>
                                         )}
-                                        <p className="text-gray-400 text-xs mt-2">PNG or SVG recommended</p>
+                                        <label className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg cursor-pointer text-sm transition-colors">
+                                            {leaderPreview ? 'Change Photo' : 'Upload Photo'}
+                                            <input type="file" accept="image/*" className="hidden" onChange={handleLeaderPhoto} />
+                                        </label>
                                     </div>
                                 </div>
-                                {errors.symbol && <p className="text-red-400 text-sm mt-1">{errors.symbol}</p>}
                             </div>
+                        </div>
 
-                            {/* Submit party details */}
-                            <div className="flex gap-4">
-                                <button type="submit" disabled={processing}
-                                    className="flex-1 px-6 py-3 bg-teal-600 hover:bg-teal-700 disabled:opacity-50 text-white font-bold rounded-lg">
-                                    {processing ? 'Saving…' : 'Save Party Details'}
-                                </button>
-                                <Link href="/admin/parties"
-                                    className="flex-1 px-6 py-3 bg-slate-700 hover:bg-slate-600 text-white font-bold rounded-lg text-center">
-                                    Cancel
-                                </Link>
+                        {/* Symbol */}
+                        <div className="border border-slate-700 rounded-xl p-6">
+                            <h3 className="text-white font-bold text-lg mb-4">Party Symbol / Logo</h3>
+                            <div className="flex items-center gap-6">
+                                {symbolPreview ? (
+                                    <img src={symbolPreview} alt="Symbol"
+                                        className="w-24 h-24 object-contain border border-slate-600 rounded-lg bg-white p-1" />
+                                ) : (
+                                    <div className="w-24 h-24 bg-slate-700 border border-slate-600 rounded-lg flex items-center justify-center">
+                                        <span className="text-gray-400 text-xs text-center px-2">No symbol uploaded</span>
+                                    </div>
+                                )}
+                                <div>
+                                    <label className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg cursor-pointer text-sm inline-block transition-colors">
+                                        {symbolPreview ? 'Replace Symbol' : 'Upload Symbol / Logo'}
+                                        <input type="file" accept="image/*" className="hidden" onChange={handleSymbol} />
+                                    </label>
+                                    <p className="text-gray-400 text-xs mt-2">PNG or SVG recommended. Max 5MB.</p>
+                                </div>
                             </div>
-                        </form>
-                    </div>
+                        </div>
 
-                    {/* ── Candidates Section (independent from the party details form) ── */}
-                    <CandidatesSection
-                        partyId={party.id}
-                        activeElectionId={activeElectionId}
-                        initialCandidates={candidates}
-                    />
+                        {/* Submit */}
+                        <div className="flex gap-4">
+                            <button type="submit" disabled={processing}
+                                className="flex-1 px-6 py-3 bg-teal-600 hover:bg-teal-700 disabled:opacity-50 text-white font-bold rounded-lg transition-colors">
+                                {processing ? 'Saving…' : '✓ Save Party Details'}
+                            </button>
+                            <Link href="/admin/parties"
+                                className="px-6 py-3 bg-slate-700 hover:bg-slate-600 text-white font-bold rounded-lg text-center transition-colors">
+                                Cancel
+                            </Link>
+                        </div>
+                    </form>
                 </div>
+
+                {/* ── Candidates Section ──────────────────────────────────────── */}
+                <CandidatesSection
+                    partyId={party.id}
+                    activeElectionId={activeElectionId}
+                    initialCandidates={candidates}
+                />
             </div>
         </AppLayout>
     );

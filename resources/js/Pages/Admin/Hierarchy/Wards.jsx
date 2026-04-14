@@ -5,7 +5,13 @@ export default function Wards({ auth, wards = [], flash }) {
 
     const handleDelete = (ward) => {
         if (!window.confirm(`Delete ward "${ward.name}"? This cannot be undone.`)) return;
-        router.delete(`/admin/hierarchy/wards/${ward.id}`, { preserveScroll: true });
+        router.delete(`/admin/hierarchy/wards/${ward.id}`, {
+            preserveScroll: true,
+            onError: (errors) => {
+                const msg = errors?.error || 'Failed to delete ward.';
+                alert(msg);
+            },
+        });
     };
 
     return (

@@ -483,6 +483,7 @@ Route::middleware(['auth', 'role:iec-administrator'])
             'auth'     => ['user' => Auth::user()],
             'station'  => $station,
             'wards'    => AdministrativeHierarchy::where('level', 'ward')->get(['id', 'name']),
+            // Include ALL polling officers (not just unassigned) so current assignment shows
             'officers' => User::role('polling-officer')->select('id', 'name', 'email')->get(),
             'election' => Election::where('status', 'active')->first(['id', 'name']),
         ]);
@@ -525,7 +526,6 @@ Route::middleware(['auth', 'role:iec-administrator'])
     Route::delete('/polling-stations/{id}', function ($id) {
         try {
             $station = PollingStation::findOrFail($id);
-            // Check if station has submitted results
             if ($station->results()->exists()) {
                 return back()->withErrors(['error' => 'Cannot delete: this station has submitted results. Remove results first.']);
             }
@@ -541,14 +541,12 @@ Route::middleware(['auth', 'role:iec-administrator'])
     Route::get('/parties', function () {
         $activeElection = Election::where('status', 'active')->latest()->first();
 
-        // Only show parties that belong to the active election
         $query = PoliticalParty::query();
         if ($activeElection) {
             $query->where('election_id', $activeElection->id);
         }
 
         $parties = $query->get()->map(function ($party) use ($activeElection) {
-            // Candidates scoped strictly to this party + active election
             $candidates = $activeElection
                 ? Candidate::where('political_party_id', $party->id)
                     ->where('election_id', $activeElection->id)
@@ -598,7 +596,6 @@ Route::middleware(['auth', 'role:iec-administrator'])
         $party          = PoliticalParty::findOrFail($id);
         $activeElection = Election::where('status', 'active')->latest()->first();
 
-        // Load candidates strictly for this party + active election
         $candidates = $activeElection
             ? Candidate::where('political_party_id', $party->id)
                 ->where('election_id', $activeElection->id)
@@ -737,10 +734,6 @@ Route::middleware(['auth', 'role:iec-administrator'])
     })->name('parties.store');
 
     // ── Candidate Management ──────────────────────────────────────────────────
-    /**
-     * POST /admin/parties/{party}/candidates
-     * Add a candidate to a party for the active election.
-     */
     Route::post('/parties/{party}/candidates', function (Request $request, PoliticalParty $party) {
         $request->validate([
             'name'          => 'required|string|max:255',
@@ -782,10 +775,6 @@ Route::middleware(['auth', 'role:iec-administrator'])
         ], 201);
     })->name('parties.candidates.store');
 
-    /**
-     * DELETE /admin/candidates/{candidate}
-     * Remove a candidate (soft-delete).
-     */
     Route::delete('/candidates/{candidate}', function (Candidate $candidate) {
         if ($candidate->photo_path && Storage::disk('public')->exists($candidate->photo_path)) {
             Storage::disk('public')->delete($candidate->photo_path);
@@ -804,7 +793,6 @@ Route::middleware(['auth', 'role:iec-administrator'])
     })->name('candidates.destroy');
 
     // ── Administrative Hierarchy ──────────────────────────────────────────────
-
     Route::get('/hierarchy/admin-areas', function () {
         $adminAreas = AdministrativeHierarchy::where('level', 'admin_area')
             ->with('election')->withCount('children')->orderBy('name')->get()
@@ -850,12 +838,14 @@ Route::middleware(['auth', 'role:iec-administrator'])
         }
     })->name('hierarchy.admin-areas.store');
 
+    // ── FIXED: renders dedicated AdminAreaEdit component with existing data ──
     Route::get('/hierarchy/admin-areas/{id}/edit', function ($id) {
-        return Inertia::render('Admin/Hierarchy/AdminAreaCreate', [
+        $adminArea = AdministrativeHierarchy::findOrFail($id);
+        return Inertia::render('Admin/Hierarchy/AdminAreaEdit', [
             'auth'      => ['user' => Auth::user()],
+            'adminArea' => $adminArea,
             'elections' => Election::whereIn('status', ['active', 'draft', 'configured'])
                 ->orderByDesc('created_at')->get(['id', 'name']),
-            'adminArea' => AdministrativeHierarchy::findOrFail($id),
         ]);
     })->name('hierarchy.admin-areas.edit');
 
@@ -931,11 +921,13 @@ Route::middleware(['auth', 'role:iec-administrator'])
         }
     })->name('hierarchy.constituencies.store');
 
+    // ── FIXED: renders dedicated ConstituencyEdit component with existing data ──
     Route::get('/hierarchy/constituencies/{id}/edit', function ($id) {
-        return Inertia::render('Admin/Hierarchy/ConstituencyCreate', [
-            'auth'           => ['user' => Auth::user()],
-            'adminAreas'     => AdministrativeHierarchy::where('level', 'admin_area')->orderBy('name')->get(['id', 'name']),
-            'constituency'   => AdministrativeHierarchy::findOrFail($id),
+        $constituency = AdministrativeHierarchy::findOrFail($id);
+        return Inertia::render('Admin/Hierarchy/ConstituencyEdit', [
+            'auth'         => ['user' => Auth::user()],
+            'constituency' => $constituency,
+            'adminAreas'   => AdministrativeHierarchy::where('level', 'admin_area')->orderBy('name')->get(['id', 'name']),
         ]);
     })->name('hierarchy.constituencies.edit');
 
@@ -1019,14 +1011,16 @@ Route::middleware(['auth', 'role:iec-administrator'])
         }
     })->name('hierarchy.wards.store');
 
+    // ── FIXED: renders dedicated WardEdit component with existing data ──
     Route::get('/hierarchy/wards/{id}/edit', function ($id) {
+        $ward = AdministrativeHierarchy::findOrFail($id);
         $constituencies = AdministrativeHierarchy::where('level', 'constituency')
             ->with('parent')->orderBy('name')->get()
             ->map(fn($c) => ['id' => $c->id, 'name' => $c->name, 'parent_name' => $c->parent->name ?? null]);
-        return Inertia::render('Admin/Hierarchy/WardCreate', [
+        return Inertia::render('Admin/Hierarchy/WardEdit', [
             'auth'           => ['user' => Auth::user()],
+            'ward'           => $ward,
             'constituencies' => $constituencies,
-            'ward'           => AdministrativeHierarchy::findOrFail($id),
         ]);
     })->name('hierarchy.wards.edit');
 
@@ -1137,8 +1131,7 @@ Route::middleware(['auth', 'role:iec-administrator'])
     })->name('backups.list');
 
     Route::post('/backups/create', function () {
-        try { Artisan::call('backup:run --only-db'); return response()->json(['success' => true, 'message' 
-        => 'Backup created successfully!']); }
+        try { Artisan::call('backup:run --only-db'); return response()->json(['success' => true, 'message' => 'Backup created successfully!']); }
         catch (\Exception $e) { return response()->json(['success' => false, 'message' => 'Backup failed: '.$e->getMessage()], 500); }
     })->name('backups.create');
 

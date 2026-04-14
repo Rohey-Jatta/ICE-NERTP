@@ -5,7 +5,13 @@ export default function Constituencies({ auth, constituencies = [], flash }) {
 
     const handleDelete = (c) => {
         if (!window.confirm(`Delete constituency "${c.name}"? This cannot be undone.`)) return;
-        router.delete(`/admin/hierarchy/constituencies/${c.id}`, { preserveScroll: true });
+        router.delete(`/admin/hierarchy/constituencies/${c.id}`, {
+            preserveScroll: true,
+            onError: (errors) => {
+                const msg = errors?.error || 'Failed to delete constituency.';
+                alert(msg);
+            },
+        });
     };
 
     return (

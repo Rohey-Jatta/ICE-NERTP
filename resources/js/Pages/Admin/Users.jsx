@@ -12,7 +12,17 @@ export default function Users({ auth, users = [] }) {
         if (!window.confirm(`Are you sure you want to delete user "${user.name}"? This cannot be undone.`)) return;
         setDeletingId(user.id);
         router.delete(`/admin/users/${user.id}`, {
-            onFinish: () => setDeletingId(null),
+            preserveScroll: true,
+            onSuccess: () => {
+                setDeletingId(null);
+            },
+            onError: () => {
+                setDeletingId(null);
+                alert('Failed to delete user. Please try again.');
+            },
+            onFinish: () => {
+                setDeletingId(null);
+            },
         });
     };
 

@@ -1,414 +1,360 @@
 import AppLayout from '@/Layouts/AppLayout';
-import { Link, router, useForm } from '@inertiajs/react';
+import { Link, router } from '@inertiajs/react';
 import { useState } from 'react';
 
-// Multi-select party picker component
-function PartySelector({ allParties, selectedIds, onChange }) {
-    const toggle = (id) => {
-        if (selectedIds.includes(id)) {
-            onChange(selectedIds.filter(p => p !== id));
+// ── Party Selector with candidate preview ─────────────────────────────────────
+function PartySelector({ allParties = [], selectedIds = [], onChange }) {
+    const [expanded, setExpanded] = useState(null);
+
+    const toggle = (partyId) => {
+        if (selectedIds.includes(partyId)) {
+            onChange(selectedIds.filter(id => id !== partyId));
         } else {
-            onChange([...selectedIds, id]);
+            onChange([...selectedIds, partyId]);
         }
     };
 
-    const parseColors = (colorStr) => {
-        if (!colorStr) return [];
-        return colorStr.split(',').map(c => c.trim()).filter(c => /^#[0-9a-fA-F]{6}$/.test(c));
-    };
-
-    if (!allParties || allParties.length === 0) {
+    if (allParties.length === 0) {
         return (
-            <div className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-lg">
-                <p className="text-amber-300 text-sm">
-                    No parties registered yet.{' '}
-                    <Link href="/admin/parties/create" className="underline text-teal-400">Register a party first</Link>.
-                </p>
+            <div className="text-center py-6 border-2 border-dashed border-slate-700 rounded-xl">
+                <p className="text-gray-500 text-sm">No parties registered yet.</p>
+                <Link href="/admin/parties/create"
+                    className="text-teal-400 hover:text-teal-300 text-sm underline mt-1 inline-block">
+                    Register a party first →
+                </Link>
             </div>
         );
     }
 
     return (
-        <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
-            {allParties.map((party) => {
-                const selected = selectedIds.includes(party.id);
-                const colors = parseColors(party.color);
-                const primaryColor = colors[0] || '#6b7280';
+        <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
+            {allParties.map(party => {
+                const isSelected = selectedIds.includes(party.id);
+                const isExpanded = expanded === party.id;
+                const colorStyle = party.colors_array?.length > 1
+                    ? { background: `linear-gradient(135deg, ${party.colors_array.join(', ')})` }
+                    : { background: party.colors_array?.[0] || party.color || '#3b82f6' };
 
                 return (
-                    <label
-                        key={party.id}
-                        className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer border transition-colors ${
-                            selected
-                                ? 'bg-teal-900/30 border-teal-500/50'
-                                : 'bg-slate-900/30 border-slate-700/30 hover:bg-slate-900/50'
-                        }`}
-                    >
-                        <input
-                            type="checkbox"
-                            checked={selected}
-                            onChange={() => toggle(party.id)}
-                            className="h-4 w-4 text-teal-600 bg-slate-900 border-slate-600 rounded"
-                        />
-                        {/* Color swatch(es) */}
-                        <div className="flex gap-0.5 flex-shrink-0">
-                            {colors.length > 0 ? colors.map((c, i) => (
-                                <span
-                                    key={i}
-                                    className="w-4 h-4 rounded-sm border border-white/20"
-                                    style={{ backgroundColor: c }}
-                                />
-                            )) : (
-                                <span className="w-4 h-4 rounded-sm bg-gray-500 border border-white/20" />
+                    <div key={party.id}
+                        className={`rounded-xl border transition-colors ${
+                            isSelected
+                                ? 'border-teal-500/60 bg-teal-900/10'
+                                : 'border-slate-700/50 bg-slate-900/30 hover:border-slate-600'
+                        }`}>
+                        {/* Party row */}
+                        <div className="flex items-center gap-3 p-3">
+                            {/* Color swatch */}
+                            <div className="w-8 h-8 rounded-lg flex-shrink-0 border border-white/10"
+                                style={colorStyle} />
+
+                            {/* Party info */}
+                            <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2">
+                                    <span className="text-white font-semibold text-sm truncate">{party.name}</span>
+                                    <span className="text-xs text-gray-500 font-mono flex-shrink-0">
+                                        {party.abbreviation}
+                                    </span>
+                                </div>
+                                {party.leader_name && (
+                                    <div className="text-gray-500 text-xs truncate">Leader: {party.leader_name}</div>
+                                )}
+                            </div>
+
+                            {/* Candidate count badge + expand */}
+                            {party.candidate_count > 0 && (
+                                <button type="button"
+                                    onClick={() => setExpanded(isExpanded ? null : party.id)}
+                                    className="text-xs text-gray-400 hover:text-teal-300 flex items-center gap-1 flex-shrink-0 transition-colors px-2 py-1 rounded-lg hover:bg-slate-700/40">
+                                    <span>👤 {party.candidate_count}</span>
+                                    <span>{isExpanded ? '▲' : '▼'}</span>
+                                </button>
                             )}
+
+                            {/* Select toggle */}
+                            <button type="button" onClick={() => toggle(party.id)}
+                                className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
+                                    isSelected
+                                        ? 'bg-teal-600 hover:bg-red-600/80 text-white'
+                                        : 'bg-slate-700 hover:bg-teal-600/70 text-gray-300 hover:text-white'
+                                }`}>
+                                {isSelected ? '✓ Added' : '+ Add'}
+                            </button>
                         </div>
-                        <div className="flex-1 min-w-0">
-                            <div className="text-white text-sm font-medium truncate">{party.name}</div>
-                            <div className="text-gray-400 text-xs">{party.abbreviation}</div>
-                        </div>
-                        {selected && (
-                            <span className="text-teal-400 text-xs font-semibold flex-shrink-0">✓ Selected</span>
+
+                        {/* Candidate list (expandable) */}
+                        {isExpanded && party.candidates?.length > 0 && (
+                            <div className="border-t border-slate-700/50 px-3 pb-3 pt-2">
+                                <div className="text-xs text-gray-500 mb-2 uppercase tracking-wide">Candidates</div>
+                                <div className="space-y-1">
+                                    {party.candidates.map(c => (
+                                        <div key={c.id}
+                                            className="flex items-center gap-2 text-sm text-gray-300 py-1">
+                                            <span className="text-gray-600 font-mono text-xs w-6 text-right flex-shrink-0">
+                                                {c.ballot_number || '—'}
+                                            </span>
+                                            <span className="w-px h-4 bg-slate-700 flex-shrink-0" />
+                                            <span className="truncate">{c.name}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
                         )}
-                    </label>
+                    </div>
                 );
             })}
         </div>
     );
 }
 
-// Inline party badges for the election card
-function PartyBadges({ parties }) {
-    if (!parties || parties.length === 0) {
-        return <span className="text-gray-500 text-xs italic">No parties assigned</span>;
-    }
+// ── Election Card ─────────────────────────────────────────────────────────────
+function ElectionCard({ election, allParties, onToggleStatus }) {
+    const [editingParties, setEditingParties] = useState(false);
+    const [selectedIds, setSelectedIds]       = useState(
+        election.participating_parties?.map(p => p.id) ?? []
+    );
+    const [saving, setSaving] = useState(false);
 
-    const parseColors = (colorStr) => {
-        if (!colorStr) return [];
-        return colorStr.split(',').map(c => c.trim()).filter(c => /^#[0-9a-fA-F]{6}$/.test(c));
+    const STATUS_COLORS = {
+        active:          'bg-green-500/20 text-green-300 border-green-500/40',
+        draft:           'bg-slate-500/20 text-slate-300 border-slate-500/40',
+        configured:      'bg-blue-500/20 text-blue-300 border-blue-500/40',
+        results_pending: 'bg-yellow-500/20 text-yellow-300 border-yellow-500/40',
+        certifying:      'bg-orange-500/20 text-orange-300 border-orange-500/40',
+        certified:       'bg-teal-500/20 text-teal-300 border-teal-500/40',
+        archived:        'bg-gray-500/20 text-gray-400 border-gray-500/40',
+    };
+
+    const saveParties = async () => {
+        setSaving(true);
+        await new Promise(resolve => {
+            router.put(`/admin/elections/${election.id}`, {
+                name:      election.name,
+                type:      election.type,
+                date:      election.date,
+                status:    election.status,
+                party_ids: selectedIds,
+            }, {
+                preserveScroll: true,
+                onFinish: resolve,
+            });
+        });
+        setSaving(false);
+        setEditingParties(false);
     };
 
     return (
-        <div className="flex flex-wrap gap-2 mt-2">
-            {parties.map((party) => {
-                const colors = parseColors(party.color);
-                const primaryColor = colors[0] || '#6b7280';
-                return (
-                    <span
-                        key={party.id}
-                        className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-semibold border border-white/10"
-                        style={{ backgroundColor: primaryColor + '22', color: primaryColor }}
-                    >
-                        <span
-                            className="w-2 h-2 rounded-full flex-shrink-0"
-                            style={{ backgroundColor: primaryColor }}
+        <div className="bg-slate-800/40 rounded-xl border border-slate-700/50 overflow-hidden">
+            {/* Header */}
+            <div className="p-5 flex items-start justify-between gap-4">
+                <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-3 flex-wrap">
+                        <h3 className="text-white font-bold text-lg truncate">{election.name}</h3>
+                        <span className={`text-xs px-2 py-0.5 rounded-full border font-semibold capitalize ${
+                            STATUS_COLORS[election.status] ?? STATUS_COLORS.draft
+                        }`}>
+                            {election.status?.replace('_', ' ')}
+                        </span>
+                    </div>
+                    <div className="flex items-center gap-4 mt-1 text-sm text-gray-400">
+                        <span className="capitalize">{election.type?.replace('_', ' ')}</span>
+                        {election.date && <span>📅 {election.date}</span>}
+                    </div>
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                    <button
+                        onClick={() => onToggleStatus(election.id)}
+                        className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition-colors ${
+                            election.status === 'archived'
+                                ? 'border-green-600/40 text-green-400 hover:bg-green-600/20'
+                                : 'border-red-600/40 text-red-400 hover:bg-red-600/20'
+                        }`}>
+                        {election.status === 'archived' ? 'Activate' : 'Archive'}
+                    </button>
+                </div>
+            </div>
+
+            {/* Participating Parties */}
+            <div className="border-t border-slate-700/50 p-5">
+                <div className="flex items-center justify-between mb-3">
+                    <div className="text-sm font-semibold text-gray-300">
+                        Participating Parties
+                        <span className="text-gray-500 font-normal ml-2">
+                            ({election.participating_parties?.length ?? 0})
+                        </span>
+                    </div>
+                    <button type="button"
+                        onClick={() => setEditingParties(e => !e)}
+                        className="text-xs text-teal-400 hover:text-teal-300 underline transition-colors">
+                        {editingParties ? 'Cancel' : 'Edit Parties'}
+                    </button>
+                </div>
+
+                {editingParties ? (
+                    <>
+                        <PartySelector
+                            allParties={allParties}
+                            selectedIds={selectedIds}
+                            onChange={setSelectedIds}
                         />
-                        {party.abbreviation}
-                    </span>
-                );
-            })}
+                        <div className="flex gap-3 mt-3">
+                            <button type="button" onClick={saveParties} disabled={saving}
+                                className="px-4 py-2 bg-teal-600 hover:bg-teal-700 disabled:opacity-50 text-white text-sm rounded-lg font-semibold transition-colors">
+                                {saving ? 'Saving…' : 'Save Parties'}
+                            </button>
+                            <button type="button"
+                                onClick={() => {
+                                    setSelectedIds(election.participating_parties?.map(p => p.id) ?? []);
+                                    setEditingParties(false);
+                                }}
+                                className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-gray-300 text-sm rounded-lg transition-colors">
+                                Discard
+                            </button>
+                        </div>
+                    </>
+                ) : (
+                    <>
+                        {election.participating_parties?.length > 0 ? (
+                            <div className="flex flex-wrap gap-2">
+                                {election.participating_parties.map(p => {
+                                    // find full party data for color
+                                    const full = allParties.find(ap => ap.id === p.id);
+                                    const colorStyle = full?.colors_array?.length > 1
+                                        ? { background: `linear-gradient(135deg, ${full.colors_array.join(', ')})` }
+                                        : { background: full?.colors_array?.[0] || p.color || '#3b82f6' };
+                                    return (
+                                        <div key={p.id}
+                                            className="flex items-center gap-2 px-3 py-1.5 bg-slate-900/50 rounded-lg border border-slate-700/50">
+                                            <div className="w-4 h-4 rounded-sm flex-shrink-0"
+                                                style={colorStyle} />
+                                            <span className="text-white text-sm font-medium">{p.name}</span>
+                                            <span className="text-gray-500 text-xs font-mono">{p.abbreviation}</span>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        ) : (
+                            <p className="text-gray-500 text-sm italic">
+                                No parties assigned yet.{' '}
+                                <button type="button" onClick={() => setEditingParties(true)}
+                                    className="text-teal-400 hover:text-teal-300 underline">
+                                    Add parties →
+                                </button>
+                            </p>
+                        )}
+                    </>
+                )}
+            </div>
         </div>
     );
 }
 
+// ── Main Page ─────────────────────────────────────────────────────────────────
 export default function Elections({ auth, elections = [], allParties = [], flash }) {
-    const [editingElection, setEditingElection] = useState(null);
-    const [showDeactivateConfirm, setShowDeactivateConfirm] = useState(null);
-
-    const { data, setData, put, processing, errors, reset } = useForm({
-        name:      '',
-        type:      'presidential',
-        date:      '',
-        status:    'active',
-        party_ids: [],
-    });
-
-    const openEdit = (election) => {
-        setData({
-            name:      election.name,
-            type:      election.type?.replace('_', '-') || 'presidential',
-            date:      election.date || '',
-            status:    election.status || 'active',
-            party_ids: election.participating_parties?.map(p => p.id) || [],
-        });
-        setEditingElection(election);
+    const handleToggleStatus = (electionId) => {
+        if (!confirm('Toggle the status of this election?')) return;
+        router.patch(`/admin/elections/${electionId}/toggle-status`, {}, { preserveScroll: true });
     };
-
-    const closeEdit = () => {
-        reset();
-        setEditingElection(null);
-    };
-
-    const handleUpdate = (e) => {
-        e.preventDefault();
-        put(`/admin/elections/${editingElection.id}`, {
-            onSuccess: () => closeEdit(),
-        });
-    };
-
-    const handleDeactivate = (election) => {
-        router.patch(`/admin/elections/${election.id}/toggle-status`, {}, {
-            onSuccess: () => setShowDeactivateConfirm(null),
-        });
-    };
-
-    const statusColors = {
-        active:          'bg-teal-500/20 text-teal-300 border-teal-500/30',
-        draft:           'bg-gray-500/20 text-gray-300 border-gray-500/30',
-        certified:       'bg-green-500/20 text-green-300 border-green-500/30',
-        results_pending: 'bg-amber-500/20 text-amber-300 border-amber-500/30',
-        certifying:      'bg-blue-500/20 text-blue-300 border-blue-500/30',
-        archived:        'bg-slate-500/20 text-slate-400 border-slate-500/30',
-    };
-
-    const typeOptions = [
-        { value: 'presidential',  label: 'Presidential' },
-        { value: 'parliamentary', label: 'Parliamentary' },
-        { value: 'local',         label: 'Local Council' },
-        { value: 'referendum',    label: 'Referendum' },
-    ];
 
     return (
         <AppLayout user={auth?.user}>
             <div className="container mx-auto px-4 py-8">
-                {/* Header */}
-                <div className="flex justify-between items-center mb-6">
-                    <div>
-                        <Link href="/admin/dashboard" className="text-gray-400 hover:text-white text-sm mb-2 inline-block">
-                            ← Back to Dashboard
-                        </Link>
-                        <h1 className="text-3xl font-bold text-white">Election Management</h1>
-                    </div>
-                    <Link href="/admin/elections/create" className="px-6 py-3 bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-lg">
-                        + Create New Election
+                <div className="mb-6">
+                    <Link href="/admin/dashboard"
+                        className="text-gray-400 hover:text-white text-sm mb-2 inline-block">
+                        ← Back to Dashboard
                     </Link>
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <h1 className="text-3xl font-bold text-white">Election Management</h1>
+                            <p className="text-gray-400 text-sm mt-1">
+                                {elections.length} election{elections.length !== 1 ? 's' : ''} registered
+                            </p>
+                        </div>
+                        <Link href="/admin/elections/create"
+                            className="px-6 py-3 bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-lg transition-colors">
+                            + Create Election
+                        </Link>
+                    </div>
                 </div>
 
-                {/* Flash messages */}
                 {flash?.success && (
-                    <div className="mb-6 p-4 bg-green-500/20 border border-green-500/50 rounded-lg text-green-300">
-                        {flash.success}
+                    <div className="mb-6 p-4 bg-green-500/20 border border-green-500/50 rounded-xl text-green-300">
+                        ✓ {flash.success}
                     </div>
                 )}
                 {flash?.error && (
-                    <div className="mb-6 p-4 bg-red-500/20 border border-red-500/50 rounded-lg text-red-300">
-                        {flash.error}
+                    <div className="mb-6 p-4 bg-red-500/20 border border-red-500/50 rounded-xl text-red-300">
+                        ⚠ {flash.error}
                     </div>
                 )}
 
-                {/* Elections list */}
-                <div className="space-y-4">
-                    {elections.length > 0 ? (
-                        elections.map((election) => (
-                            <div
+                {elections.length === 0 ? (
+                    <div className="text-center py-20 bg-slate-800/40 rounded-xl border border-slate-700/50">
+                        <div className="text-5xl mb-4">🗳️</div>
+                        <p className="text-gray-400 mb-4">No elections created yet.</p>
+                        <Link href="/admin/elections/create"
+                            className="px-6 py-3 bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-lg inline-block">
+                            Create First Election
+                        </Link>
+                    </div>
+                ) : (
+                    <div className="space-y-4">
+                        {elections.map(election => (
+                            <ElectionCard
                                 key={election.id}
-                                className={`bg-slate-800/40 rounded-xl p-6 border transition-colors ${
-                                    election.status === 'archived'
-                                        ? 'border-slate-700/30 opacity-60'
-                                        : 'border-slate-700/50'
-                                }`}
-                            >
-                                <div className="flex justify-between items-start">
-                                    {/* Info */}
-                                    <div className="flex-1">
-                                        <h3 className="text-xl font-bold text-white mb-1">{election.name}</h3>
-                                        <p className="text-gray-400 capitalize text-sm">
-                                            {election.type?.replace(/_/g, ' ')} &bull; {election.date}
-                                        </p>
-                                        {/* Participating parties */}
-                                        <div className="mt-3">
-                                            <p className="text-gray-500 text-xs mb-1 uppercase tracking-wide">
-                                                Participating Parties ({election.participating_parties?.length || 0})
-                                            </p>
-                                            <PartyBadges parties={election.participating_parties} />
-                                        </div>
-                                    </div>
+                                election={election}
+                                allParties={allParties}
+                                onToggleStatus={handleToggleStatus}
+                            />
+                        ))}
+                    </div>
+                )}
 
-                                    {/* Status badge */}
-                                    <span className={`px-3 py-1 rounded-full text-xs font-semibold border mr-4 flex-shrink-0 ${
-                                        statusColors[election.status] || statusColors.draft
-                                    }`}>
-                                        {election.status?.replace(/_/g, ' ')}
-                                    </span>
-
-                                    {/* Actions */}
-                                    <div className="flex gap-2 flex-shrink-0">
-                                        <button
-                                            onClick={() => openEdit(election)}
-                                            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold transition-colors"
-                                        >
-                                            Edit
-                                        </button>
-
-                                        {election.status !== 'certified' && (
-                                            <button
-                                                onClick={() => setShowDeactivateConfirm(election)}
-                                                className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
-                                                    election.status === 'archived'
-                                                        ? 'bg-teal-600 hover:bg-teal-700 text-white'
-                                                        : 'bg-red-600/80 hover:bg-red-700 text-white'
-                                                }`}
-                                            >
-                                                {election.status === 'archived' ? '✅ Activate' : '🚫 Deactivate'}
-                                            </button>
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
-                        ))
-                    ) : (
-                        <div className="bg-slate-800/40 rounded-xl p-12 border border-slate-700/50 text-center">
-                            <p className="text-gray-400 mb-4">No elections configured yet.</p>
-                            <Link href="/admin/elections/create"
-                                  className="px-6 py-3 bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-lg inline-block">
-                                Create First Election
+                {/* Parties overview panel */}
+                {allParties.length > 0 && (
+                    <div className="mt-8 bg-slate-800/40 rounded-xl border border-slate-700/50 p-6">
+                        <div className="flex items-center justify-between mb-4">
+                            <h2 className="text-white font-bold text-lg">
+                                Registered Parties
+                                <span className="text-gray-500 font-normal text-sm ml-2">
+                                    ({allParties.length})
+                                </span>
+                            </h2>
+                            <Link href="/admin/parties"
+                                className="text-teal-400 hover:text-teal-300 text-sm underline transition-colors">
+                                Manage all parties →
                             </Link>
                         </div>
-                    )}
-                </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                            {allParties.map(party => {
+                                const colorStyle = party.colors_array?.length > 1
+                                    ? { background: `linear-gradient(135deg, ${party.colors_array.join(', ')})` }
+                                    : { background: party.colors_array?.[0] || party.color || '#3b82f6' };
+                                return (
+                                    <div key={party.id}
+                                        className="flex items-center gap-3 p-3 bg-slate-900/40 rounded-xl border border-slate-700/30">
+                                        <div className="w-10 h-10 rounded-lg flex-shrink-0 border border-white/10"
+                                            style={colorStyle} />
+                                        <div className="flex-1 min-w-0">
+                                            <div className="text-white font-semibold text-sm truncate">{party.name}</div>
+                                            <div className="text-gray-500 text-xs">
+                                                {party.abbreviation}
+                                                {party.candidate_count > 0 &&
+                                                    <span className="ml-2">· {party.candidate_count} candidate{party.candidate_count !== 1 ? 's' : ''}</span>}
+                                            </div>
+                                        </div>
+                                        <Link href={`/admin/parties/${party.id}/edit`}
+                                            className="text-xs text-gray-400 hover:text-teal-300 transition-colors flex-shrink-0">
+                                            Edit
+                                        </Link>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                )}
             </div>
-
-            {/* ── Edit Modal ───────────────────────────────────────────────── */}
-            {editingElection && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-                    <div className="bg-slate-800 rounded-2xl border border-slate-700 w-full max-w-2xl shadow-2xl max-h-[90vh] overflow-y-auto">
-                        <div className="flex items-center justify-between p-6 border-b border-slate-700">
-                            <h2 className="text-xl font-bold text-white">Edit Election</h2>
-                            <button onClick={closeEdit} className="text-gray-400 hover:text-white text-2xl leading-none">×</button>
-                        </div>
-
-                        <form onSubmit={handleUpdate} className="p-6 space-y-5">
-                            {/* Name */}
-                            <div>
-                                <label className="block text-gray-300 mb-1 text-sm font-semibold">Election Name</label>
-                                <input
-                                    type="text"
-                                    value={data.name}
-                                    onChange={(e) => setData('name', e.target.value)}
-                                    className="w-full px-4 py-3 bg-slate-900/60 border border-slate-600 rounded-lg text-white text-sm"
-                                    required
-                                />
-                                {errors.name && <p className="text-red-400 text-xs mt-1">{errors.name}</p>}
-                            </div>
-
-                            {/* Type */}
-                            <div>
-                                <label className="block text-gray-300 mb-1 text-sm font-semibold">Election Type</label>
-                                <select
-                                    value={data.type}
-                                    onChange={(e) => setData('type', e.target.value)}
-                                    className="w-full px-4 py-3 bg-slate-900/60 border border-slate-600 rounded-lg text-white text-sm"
-                                >
-                                    {typeOptions.map(o => (
-                                        <option key={o.value} value={o.value}>{o.label}</option>
-                                    ))}
-                                </select>
-                                {errors.type && <p className="text-red-400 text-xs mt-1">{errors.type}</p>}
-                            </div>
-
-                            {/* Date */}
-                            <div>
-                                <label className="block text-gray-300 mb-1 text-sm font-semibold">Election Date</label>
-                                <input
-                                    type="date"
-                                    value={data.date}
-                                    onChange={(e) => setData('date', e.target.value)}
-                                    className="w-full px-4 py-3 bg-slate-900/60 border border-slate-600 rounded-lg text-white text-sm"
-                                    required
-                                />
-                                {errors.date && <p className="text-red-400 text-xs mt-1">{errors.date}</p>}
-                            </div>
-
-                            {/* Status */}
-                            <div>
-                                <label className="block text-gray-300 mb-1 text-sm font-semibold">Status</label>
-                                <select
-                                    value={data.status}
-                                    onChange={(e) => setData('status', e.target.value)}
-                                    className="w-full px-4 py-3 bg-slate-900/60 border border-slate-600 rounded-lg text-white text-sm"
-                                >
-                                    <option value="draft">Draft</option>
-                                    <option value="configured">Configured</option>
-                                    <option value="active">Active</option>
-                                    <option value="results_pending">Results Pending</option>
-                                    <option value="certifying">Certifying</option>
-                                    <option value="certified">Certified</option>
-                                    <option value="archived">Archived</option>
-                                </select>
-                                {errors.status && <p className="text-red-400 text-xs mt-1">{errors.status}</p>}
-                            </div>
-
-                            {/* Participating Parties */}
-                            <div>
-                                <label className="block text-gray-300 mb-2 text-sm font-semibold">
-                                    Participating Parties
-                                    <span className="ml-2 text-gray-500 font-normal text-xs">
-                                        ({data.party_ids.length} selected)
-                                    </span>
-                                </label>
-                                <PartySelector
-                                    allParties={allParties}
-                                    selectedIds={data.party_ids}
-                                    onChange={(ids) => setData('party_ids', ids)}
-                                />
-                                {errors.party_ids && <p className="text-red-400 text-xs mt-1">{errors.party_ids}</p>}
-                            </div>
-
-                            {/* Buttons */}
-                            <div className="flex gap-3 pt-2">
-                                <button
-                                    type="submit"
-                                    disabled={processing}
-                                    className="flex-1 py-3 bg-teal-600 hover:bg-teal-700 disabled:opacity-50 text-white font-bold rounded-lg text-sm"
-                                >
-                                    {processing ? 'Saving…' : 'Save Changes'}
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={closeEdit}
-                                    className="flex-1 py-3 bg-slate-700 hover:bg-slate-600 text-white font-bold rounded-lg text-sm"
-                                >
-                                    Cancel
-                                </button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            )}
-
-            {/* ── Deactivate Confirm Modal ─────────────────────────────────── */}
-            {showDeactivateConfirm && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-                    <div className="bg-slate-800 rounded-2xl border border-slate-700 w-full max-w-md shadow-2xl p-6">
-                        <h2 className="text-xl font-bold text-white mb-3">
-                            {showDeactivateConfirm.status === 'archived' ? 'Activate Election' : 'Deactivate Election'}
-                        </h2>
-                        <p className="text-gray-300 mb-6 text-sm leading-relaxed">
-                            {showDeactivateConfirm.status === 'archived'
-                                ? <>Are you sure you want to <strong className="text-teal-300">activate</strong> <em>{showDeactivateConfirm.name}</em>?</>
-                                : <>Are you sure you want to <strong className="text-red-300">deactivate</strong> <em>{showDeactivateConfirm.name}</em>?</>
-                            }
-                        </p>
-                        <div className="flex gap-3">
-                            <button
-                                onClick={() => handleDeactivate(showDeactivateConfirm)}
-                                className={`flex-1 py-3 font-bold rounded-lg text-white text-sm ${
-                                    showDeactivateConfirm.status === 'archived'
-                                        ? 'bg-teal-600 hover:bg-teal-700'
-                                        : 'bg-red-600 hover:bg-red-700'
-                                }`}
-                            >
-                                {showDeactivateConfirm.status === 'archived' ? 'Yes, Activate' : 'Yes, Deactivate'}
-                            </button>
-                            <button
-                                onClick={() => setShowDeactivateConfirm(null)}
-                                className="flex-1 py-3 bg-slate-700 hover:bg-slate-600 text-white font-bold rounded-lg text-sm"
-                            >
-                                Cancel
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
         </AppLayout>
     );
 }

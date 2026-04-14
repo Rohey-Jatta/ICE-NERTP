@@ -5,7 +5,13 @@ export default function AdminAreas({ auth, adminAreas = [], flash }) {
 
     const handleDelete = (area) => {
         if (!window.confirm(`Delete admin area "${area.name}"? This cannot be undone.`)) return;
-        router.delete(`/admin/hierarchy/admin-areas/${area.id}`, { preserveScroll: true });
+        router.delete(`/admin/hierarchy/admin-areas/${area.id}`, {
+            preserveScroll: true,
+            onError: (errors) => {
+                const msg = errors?.error || 'Failed to delete admin area.';
+                alert(msg);
+            },
+        });
     };
 
     return (

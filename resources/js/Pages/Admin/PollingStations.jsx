@@ -12,7 +12,18 @@ export default function PollingStations({ auth, stations = [] }) {
         if (!window.confirm(`Are you sure you want to delete polling station "${station.name}" (${station.code})? This action cannot be undone.`)) return;
         setDeletingId(station.id);
         router.delete(`/admin/polling-stations/${station.id}`, {
-            onFinish: () => setDeletingId(null),
+            preserveScroll: true,
+            onSuccess: () => {
+                setDeletingId(null);
+            },
+            onError: (errors) => {
+                setDeletingId(null);
+                const msg = errors?.error || 'Failed to delete polling station.';
+                alert(msg);
+            },
+            onFinish: () => {
+                setDeletingId(null);
+            },
         });
     };
 
