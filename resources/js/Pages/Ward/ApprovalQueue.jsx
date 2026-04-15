@@ -4,44 +4,46 @@ import { Link, router } from '@inertiajs/react';
 import RichTextEditor from '@/Components/RichTextEditor';
 
 const STATUS_LABELS = {
-    submitted:                  { label: 'Submitted',            color: 'bg-gray-500/20 text-gray-300' },
-    pending_party_acceptance:   { label: 'Party Pending',         color: 'bg-yellow-500/20 text-yellow-300' },
-    pending_ward:               { label: 'Pending Ward',          color: 'bg-amber-500/20 text-amber-300' },
-    ward_certified:             { label: 'Ward Certified',        color: 'bg-teal-500/20 text-teal-300' },
-    pending_constituency:       { label: 'At Constituency',       color: 'bg-blue-500/20 text-blue-300' },
-    constituency_certified:     { label: 'Constituency Certified',color: 'bg-cyan-500/20 text-cyan-300' },
-    pending_admin_area:         { label: 'At Admin Area',         color: 'bg-purple-500/20 text-purple-300' },
-    admin_area_certified:       { label: 'Admin Area Certified',  color: 'bg-violet-500/20 text-violet-300' },
-    pending_national:           { label: 'At National',           color: 'bg-pink-500/20 text-pink-300' },
-    nationally_certified:       { label: 'Nationally Certified',  color: 'bg-green-500/20 text-green-300' },
+    submitted:                  { label: 'Submitted',              color: 'bg-gray-500/20 text-gray-300' },
+    pending_party_acceptance:   { label: 'Awaiting Party',         color: 'bg-yellow-500/20 text-yellow-300' },
+    pending_ward:               { label: 'Pending Ward',           color: 'bg-amber-500/20 text-amber-300' },
+    ward_certified:             { label: 'Ward Certified',         color: 'bg-teal-500/20 text-teal-300' },
+    pending_constituency:       { label: 'At Constituency',        color: 'bg-blue-500/20 text-blue-300' },
+    constituency_certified:     { label: 'Constituency Certified', color: 'bg-cyan-500/20 text-cyan-300' },
+    pending_admin_area:         { label: 'At Admin Area',          color: 'bg-purple-500/20 text-purple-300' },
+    admin_area_certified:       { label: 'Admin Area Certified',   color: 'bg-violet-500/20 text-violet-300' },
+    pending_national:           { label: 'At National',            color: 'bg-pink-500/20 text-pink-300' },
+    nationally_certified:       { label: 'Nationally Certified',   color: 'bg-green-500/20 text-green-300' },
 };
 
 const PARTY_STATUS_CONFIG = {
-    accepted:                 { label: 'Accepted',              color: 'bg-green-500/20 text-green-300', icon: '✓' },
-    accepted_with_reservation:{ label: 'Accepted (Reserved)',   color: 'bg-yellow-500/20 text-yellow-300', icon: '⚠' },
-    rejected:                 { label: 'Rejected',              color: 'bg-red-500/20 text-red-300', icon: '✗' },
-    pending:                  { label: 'Pending',               color: 'bg-gray-500/20 text-gray-300', icon: '…' },
+    accepted:                 { label: 'Accepted',             color: 'bg-green-500/20 text-green-300',   icon: '✓' },
+    accepted_with_reservation:{ label: 'Accepted (Reserved)',  color: 'bg-yellow-500/20 text-yellow-300', icon: '⚠' },
+    rejected:                 { label: 'Rejected',             color: 'bg-red-500/20 text-red-300',       icon: '✗' },
+    pending:                  { label: 'Pending',              color: 'bg-gray-500/20 text-gray-300',     icon: '…' },
 };
 
 export default function WardApprovalQueue({ auth, ward, results = [], filter = 'pending', counts = {} }) {
     const [selectedResult, setSelectedResult] = useState(null);
-    const [action, setAction]                 = useState(null); // 'approve' | 'approve_reservation' | 'reject'
+    const [action, setAction]                 = useState(null);
     const [comment, setComment]               = useState('');
     const [processing, setProcessing]         = useState(false);
     const [flash, setFlash]                   = useState(null);
 
     const filterTabs = [
-        { key: 'pending',  label: 'Pending',   count: counts.pending  || 0, color: 'amber' },
-        { key: 'approved', label: 'Certified',  count: counts.approved || 0, color: 'teal' },
-        { key: 'rejected', label: 'Rejected',   count: counts.rejected || 0, color: 'red' },
-        { key: 'all',      label: 'All',        count: counts.all      || 0, color: 'slate' },
+        { key: 'pending',        label: 'Pending',        count: counts.pending        || 0, color: 'amber'  },
+        { key: 'awaiting_party', label: 'Awaiting Party', count: counts.awaiting_party || 0, color: 'yellow' },
+        { key: 'approved',       label: 'Certified',      count: counts.approved       || 0, color: 'teal'   },
+        { key: 'rejected',       label: 'Rejected',       count: counts.rejected       || 0, color: 'red'    },
+        { key: 'all',            label: 'All',            count: counts.all            || 0, color: 'slate'  },
     ];
 
     const tabColors = {
-        amber: { active: 'bg-amber-500 text-white', dot: 'bg-amber-400' },
-        teal:  { active: 'bg-teal-500 text-white',  dot: 'bg-teal-400' },
-        red:   { active: 'bg-red-500 text-white',   dot: 'bg-red-400' },
-        slate: { active: 'bg-slate-500 text-white', dot: 'bg-slate-400' },
+        amber:  { active: 'bg-amber-500 text-white',  dot: 'bg-amber-400' },
+        yellow: { active: 'bg-yellow-500 text-white', dot: 'bg-yellow-400' },
+        teal:   { active: 'bg-teal-500 text-white',   dot: 'bg-teal-400'  },
+        red:    { active: 'bg-red-500 text-white',    dot: 'bg-red-400'   },
+        slate:  { active: 'bg-slate-500 text-white',  dot: 'bg-slate-400' },
     };
 
     const handleFilterChange = (key) => {
@@ -167,19 +169,31 @@ export default function WardApprovalQueue({ auth, ward, results = [], filter = '
                     })}
                 </div>
 
+                {/* Awaiting Party info banner */}
+                {filter === 'awaiting_party' && (
+                    <div className="mb-4 p-4 bg-yellow-500/10 border border-yellow-500/30 rounded-xl">
+                        <p className="text-yellow-300 text-sm">
+                            ℹ️ These results are awaiting responses from party representatives. They will automatically move to your <strong>Pending</strong> queue once all assigned parties have responded.
+                        </p>
+                    </div>
+                )}
+
                 {/* Results List */}
                 {results.length === 0 ? (
                     <div className="bg-slate-800/40 rounded-xl p-12 border border-slate-700/50 text-center">
                         <div className="text-5xl mb-4">
-                            {filter === 'pending' ? '⏳' : filter === 'approved' ? '✅' : filter === 'rejected' ? '↩' : '📋'}
+                            {filter === 'pending'        ? '⏳'
+                            : filter === 'awaiting_party'? '🤝'
+                            : filter === 'approved'      ? '✅'
+                            : filter === 'rejected'      ? '↩'
+                            : '📋'}
                         </div>
-                        <p className="text-gray-300 text-lg">
-                            {filter === 'pending' ? 'No results pending certification' :
-                             filter === 'approved' ? 'No certified results yet' :
-                             filter === 'rejected' ? 'No rejected results' : 'No results found'}
-                        </p>
-                        <p className="text-gray-500 text-sm mt-1">
-                            {filter === 'pending' ? 'All results in your ward have been processed.' : ''}
+                        <p className="mt-4 text-gray-600">
+                            {filter === 'pending'         ? 'No results pending certification'
+                            : filter === 'awaiting_party' ? 'No results awaiting party acceptance'
+                            : filter === 'approved'       ? 'No certified results yet'
+                            : filter === 'rejected'       ? 'No rejected results'
+                            : 'No results found'}
                         </p>
                     </div>
                 ) : (
@@ -187,12 +201,15 @@ export default function WardApprovalQueue({ auth, ward, results = [], filter = '
                         {results.map(result => {
                             const statusCfg = STATUS_LABELS[result.certification_status] || { label: result.certification_status, color: 'bg-gray-500/20 text-gray-300' };
                             const isPending = result.certification_status === 'pending_ward';
+                            const isAwaitingParty = result.certification_status === 'pending_party_acceptance';
 
                             return (
                                 <div
                                     key={result.id}
                                     className={`bg-slate-800/40 rounded-xl border transition-all ${
-                                        isPending ? 'border-amber-500/30' : 'border-slate-700/50'
+                                        isPending      ? 'border-amber-500/30'
+                                        : isAwaitingParty ? 'border-yellow-500/20'
+                                        : 'border-slate-700/50'
                                     }`}
                                 >
                                     {/* Result Header */}
@@ -227,23 +244,32 @@ export default function WardApprovalQueue({ auth, ward, results = [], filter = '
                                         </div>
                                     </div>
 
+                                    {/* Awaiting party notice */}
+                                    {isAwaitingParty && (
+                                        <div className="mx-5 mb-3 p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
+                                            <p className="text-yellow-300 text-xs">
+                                                ⏳ Awaiting party representative responses — {result.party_accepted}/{result.party_total} parties have responded. This result will move to your queue once all assigned parties respond.
+                                            </p>
+                                        </div>
+                                    )}
+
                                     {/* Vote Summary */}
                                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 px-5 pb-4">
                                         <div className="bg-slate-900/50 p-3 rounded-lg">
-                                            <div className="text-xs text-gray-400 mb-1">Registered</div>
-                                            <div className="text-white font-bold">{result.total_registered_voters?.toLocaleString()}</div>
+                                            <p className="text-xs text-gray-400 mb-1">Registered</p>
+                                            <p className="text-white font-bold">{result.total_registered_voters?.toLocaleString()}</p>
                                         </div>
                                         <div className="bg-slate-900/50 p-3 rounded-lg">
-                                            <div className="text-xs text-gray-400 mb-1">Votes Cast</div>
-                                            <div className="text-white font-bold">{result.total_votes_cast?.toLocaleString()}</div>
+                                            <p className="text-xs text-gray-400 mb-1">Votes Cast</p>
+                                            <p className="text-white font-bold">{result.total_votes_cast?.toLocaleString()}</p>
                                         </div>
                                         <div className="bg-slate-900/50 p-3 rounded-lg">
-                                            <div className="text-xs text-gray-400 mb-1">Valid</div>
-                                            <div className="text-teal-300 font-bold">{result.valid_votes?.toLocaleString()}</div>
+                                            <p className="text-xs text-gray-400 mb-1">Valid</p>
+                                            <p className="text-teal-300 font-bold">{result.valid_votes?.toLocaleString()}</p>
                                         </div>
                                         <div className="bg-slate-900/50 p-3 rounded-lg">
-                                            <div className="text-xs text-gray-400 mb-1">Turnout</div>
-                                            <div className="text-white font-bold">{result.turnout}%</div>
+                                            <p className="text-xs text-gray-400 mb-1">Turnout</p>
+                                            <p className="text-white font-bold">{result.turnout}%</p>
                                         </div>
                                     </div>
 
@@ -327,7 +353,7 @@ export default function WardApprovalQueue({ auth, ward, results = [], filter = '
                                         </div>
                                     )}
 
-                                    {/* Action Buttons — only for pending results */}
+                                    {/* Action Buttons — only for pending_ward results */}
                                     {isPending && (
                                         <div className="px-5 pb-5 flex flex-wrap gap-3 border-t border-slate-700/50 pt-4 mt-2">
                                             <button
@@ -357,93 +383,65 @@ export default function WardApprovalQueue({ auth, ward, results = [], filter = '
                 )}
             </div>
 
-            {/* Action Modal / Panel */}
-            {selectedResult && action && (
-                <div className="fixed inset-0 z-50 bg-black/70 flex items-end sm:items-center justify-center p-4">
-                    <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto shadow-2xl">
+            {/* Action Modal */}
+            {selectedResult && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+                    <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl">
                         <div className="p-6">
-                            {/* Modal Header */}
-                            <div className="flex items-start justify-between mb-5">
-                                <div>
-                                    <h2 className="text-xl font-bold text-white">
-                                        {actionConfig[action].title}
-                                    </h2>
-                                    <p className="text-sm text-gray-400 mt-1">{selectedResult.polling_station}</p>
-                                </div>
-                                <button
-                                    onClick={closePanel}
-                                    disabled={processing}
-                                    className="text-gray-500 hover:text-white text-2xl leading-none"
-                                >
-                                    ×
-                                </button>
-                            </div>
+                            <h2 className="text-xl font-bold text-gray-900 mb-4 text-white">
+                                {actionConfig[action]?.title}
+                            </h2>
 
-                            {/* Description */}
                             <div className="p-4 bg-slate-800/60 rounded-lg mb-5 text-sm text-gray-300">
-                                {actionConfig[action].description}
+                                {actionConfig[action]?.description}
                             </div>
 
-                            {/* Result summary in modal */}
-                            <div className="grid grid-cols-3 gap-3 mb-5">
-                                <div className="bg-slate-800/50 p-3 rounded-lg text-center">
-                                    <div className="text-xs text-gray-400">Votes Cast</div>
-                                    <div className="text-white font-bold">{selectedResult.total_votes_cast?.toLocaleString()}</div>
-                                </div>
-                                <div className="bg-slate-800/50 p-3 rounded-lg text-center">
-                                    <div className="text-xs text-gray-400">Valid Votes</div>
-                                    <div className="text-teal-300 font-bold">{selectedResult.valid_votes?.toLocaleString()}</div>
-                                </div>
-                                <div className="bg-slate-800/50 p-3 rounded-lg text-center">
-                                    <div className="text-xs text-gray-400">Turnout</div>
-                                    <div className="text-white font-bold">{selectedResult.turnout}%</div>
-                                </div>
+                            <div className="mb-4 p-4 bg-gray-50 bg-slate-800/50 rounded-md">
+                                <p className="text-sm text-gray-300">
+                                    <strong>Station:</strong> {selectedResult.polling_station}
+                                </p>
+                                <p className="text-sm text-gray-300 mt-1">
+                                    <strong>Votes Cast:</strong> {selectedResult.total_votes_cast?.toLocaleString()}
+                                </p>
                             </div>
 
-                            {/* Flash */}
                             {flash && (
                                 <div className={`mb-4 p-3 rounded-lg text-sm ${
-                                    flash.type === 'error'
-                                        ? 'bg-red-500/20 text-red-300'
-                                        : 'bg-teal-500/20 text-teal-300'
+                                    flash.type === 'error' ? 'bg-red-500/20 text-red-300' : 'bg-teal-500/20 text-teal-300'
                                 }`}>
                                     {flash.text}
                                 </div>
                             )}
 
-                            {/* Rich Text Comment */}
-                            <div className="mb-5">
-                                <label className="block text-gray-300 font-semibold mb-2">
-                                    {actionConfig[action].commentLabel}
-                                    {actionConfig[action].commentReq && <span className="text-red-400 ml-1">*</span>}
+                            <div className="mb-4">
+                                <label className="block text-sm font-medium text-gray-300 mb-2">
+                                    {actionConfig[action]?.commentLabel}
+                                    {actionConfig[action]?.commentReq && <span className="text-red-400 ml-1">*</span>}
                                 </label>
                                 <RichTextEditor
                                     value={comment}
                                     onChange={setComment}
                                     placeholder={
-                                        action === 'reject'
-                                            ? 'Explain clearly why this result is being rejected and what the officer needs to correct...'
-                                            : action === 'approve_reservation'
-                                            ? 'Describe your reservation or concern about this result...'
-                                            : 'Add any notes or observations about this result...'
+                                        action === 'approve' ? 'Add any notes...' :
+                                        action === 'approve_reservation' ? 'Describe your reservation or concern...' :
+                                        'Explain clearly why this result is being rejected...'
                                     }
-                                    minHeight="180px"
+                                    minHeight="150px"
                                 />
                             </div>
 
-                            {/* Actions */}
                             <div className="flex gap-3">
                                 <button
                                     onClick={submitAction}
-                                    disabled={processing || (actionConfig[action].commentReq && !comment.replace(/<[^>]*>/g, '').trim())}
-                                    className={`flex-1 py-3 px-6 rounded-lg font-bold text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${actionConfig[action].confirmColor}`}
+                                    disabled={processing || (actionConfig[action]?.commentReq && !comment.replace(/<[^>]*>/g, '').trim())}
+                                    className={`flex-1 py-2 px-4 rounded-md font-medium text-white disabled:opacity-40 disabled:cursor-not-allowed ${actionConfig[action]?.confirmColor}`}
                                 >
-                                    {processing ? 'Processing…' : actionConfig[action].confirmBtn}
+                                    {processing ? 'Processing...' : actionConfig[action]?.confirmBtn}
                                 </button>
                                 <button
-                                    onClick={closePanel}
+                                    onClick={() => { setSelectedResult(null); setAction(null); }}
                                     disabled={processing}
-                                    className="px-6 py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-semibold"
+                                    className="px-4 py-2 border border-gray-600 rounded-md text-gray-300 hover:bg-slate-700"
                                 >
                                     Cancel
                                 </button>

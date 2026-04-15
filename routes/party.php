@@ -32,7 +32,8 @@ Route::middleware(['auth', 'role:party-representative'])
         $rep            = $getRep();
         $activeElection = $getActiveElection();
 
-        if (!$rep) {
+        // Guard: no rep record OR the linked party has been soft-deleted
+        if (!$rep || !$rep->politicalParty) {
             return Inertia::render('Party/Dashboard', [
                 'auth'             => ['user' => Auth::user()],
                 'party'            => null,
@@ -54,7 +55,7 @@ Route::middleware(['auth', 'role:party-representative'])
             return Inertia::render('Party/Dashboard', [
                 'auth'             => ['user' => Auth::user()],
                 'party'            => [
-                    'id'           => $rep->politicalParty->id,
+                    'id'           => $rep->political_party_id,
                     'name'         => $rep->politicalParty->name,
                     'abbreviation' => $rep->politicalParty->abbreviation,
                     'color'        => $rep->politicalParty->color,
@@ -123,7 +124,7 @@ Route::middleware(['auth', 'role:party-representative'])
         $rep            = $getRep();
         $activeElection = $getActiveElection();
 
-        if (!$rep) {
+        if (!$rep || !$rep->politicalParty) {
             return Inertia::render('Party/Stations', [
                 'auth'     => ['user' => Auth::user()],
                 'stations' => [],
@@ -184,16 +185,24 @@ Route::middleware(['auth', 'role:party-representative'])
         $rep            = $getRep();
         $activeElection = $getActiveElection();
 
-        if (!$rep || !$activeElection) {
+        if (!$rep || !$rep->politicalParty) {
             return Inertia::render('Party/PendingAcceptance', [
                 'auth'           => ['user' => Auth::user()],
                 'pendingResults' => [],
-                'party'          => $rep ? [
+                'party'          => null,
+            ]);
+        }
+
+        if (!$activeElection) {
+            return Inertia::render('Party/PendingAcceptance', [
+                'auth'           => ['user' => Auth::user()],
+                'pendingResults' => [],
+                'party'          => [
                     'id'           => $rep->political_party_id,
                     'name'         => $rep->politicalParty->name,
                     'abbreviation' => $rep->politicalParty->abbreviation,
                     'color'        => $rep->politicalParty->color,
-                ] : null,
+                ],
             ]);
         }
 
@@ -277,7 +286,7 @@ Route::middleware(['auth', 'role:party-representative'])
         $rep            = $getRep();
         $activeElection = $getActiveElection();
 
-        if (!$rep) abort(403, 'No party representative record found.');
+        if (!$rep || !$rep->politicalParty) abort(403, 'No party representative record found.');
 
         // Ensure this result belongs to the active election
         if (!$activeElection || $result->election_id !== $activeElection->id) {
@@ -365,7 +374,7 @@ Route::middleware(['auth', 'role:party-representative'])
         $rep            = $getRep();
         $activeElection = $getActiveElection();
 
-        if (!$rep) abort(403, 'No party representative record found.');
+        if (!$rep || !$rep->politicalParty) abort(403, 'No party representative record found.');
 
         if (!$activeElection || $result->election_id !== $activeElection->id) {
             return back()->withErrors(['error' => 'This result is not part of the active election.']);
@@ -402,7 +411,7 @@ Route::middleware(['auth', 'role:party-representative'])
                     'status' => $request->status, 'outcome' => 'success']
         );
 
-        // Advance to pending_ward when all assigned party reps have responded
+        // Advance to pending_ward when all assigned party reps for this station have responded
         $assignedPartyIds = DB::table('party_representative_polling_station')
             ->join('party_representatives', 'party_representatives.id', '=',
                 'party_representative_polling_station.party_representative_id')
@@ -445,7 +454,7 @@ Route::middleware(['auth', 'role:party-representative'])
         $rep = $getRep();
         return Inertia::render('Party/DashboardOverview', [
             'auth'  => ['user' => Auth::user()],
-            'party' => $rep ? [
+            'party' => ($rep && $rep->politicalParty) ? [
                 'name'         => $rep->politicalParty->name,
                 'abbreviation' => $rep->politicalParty->abbreviation,
                 'color'        => $rep->politicalParty->color,

@@ -1,5 +1,6 @@
 import AppLayout from '@/Layouts/AppLayout';
 import { Link, router } from '@inertiajs/react';
+import { useState } from 'react';
 
 function ColorStripe({ colorsArray }) {
     if (!colorsArray || colorsArray.length === 0) {
@@ -30,8 +31,24 @@ function ColorDots({ colorsArray }) {
 }
 
 export default function Parties({ auth, parties = [], flash, activeElection }) {
+    const [deletingId, setDeletingId] = useState(null);
+
     const handleRegister = () => router.visit('/admin/parties/create');
     const handleEdit = (id) => router.visit(`/admin/parties/${id}/edit`);
+
+    const handleDelete = (party) => {
+        if (!window.confirm(`DELETE party "${party.name}"?\n\nThis will permanently remove the party, all its candidates, and related data. This cannot be undone.`)) return;
+        setDeletingId(party.id);
+        router.delete(`/admin/parties/${party.id}`, {
+            preserveScroll: true,
+            onSuccess: () => setDeletingId(null),
+            onError: (errors) => {
+                setDeletingId(null);
+                alert(errors?.error || 'Failed to delete party.');
+            },
+            onFinish: () => setDeletingId(null),
+        });
+    };
 
     return (
         <AppLayout user={auth?.user}>
@@ -97,13 +114,10 @@ export default function Parties({ auth, parties = [], flash, activeElection }) {
                                     key={party.id}
                                     className="bg-slate-800/40 rounded-xl overflow-hidden border border-slate-700/50 flex flex-col"
                                 >
-                                    {/* Color stripe at top */}
                                     <ColorStripe colorsArray={party.colors_array} />
 
                                     <div className="p-6 flex-1 flex flex-col">
-                                        {/* Header row: symbol + name + abbr */}
                                         <div className="flex items-start gap-4 mb-4">
-                                            {/* Party symbol / logo */}
                                             <div className="flex-shrink-0">
                                                 {party.symbol_url ? (
                                                     <img
@@ -130,13 +144,11 @@ export default function Parties({ auth, parties = [], flash, activeElection }) {
                                             </div>
                                         </div>
 
-                                        {/* Party colors */}
                                         <div className="mb-4">
                                             <p className="text-gray-500 text-xs uppercase tracking-wide mb-1">Party Colors</p>
                                             <ColorDots colorsArray={party.colors_array} />
                                         </div>
 
-                                        {/* Leader section */}
                                         {(party.leader_name || party.leader_photo_url) && (
                                             <div className="flex items-center gap-3 mb-4 p-3 bg-slate-900/50 rounded-lg border border-slate-700/30">
                                                 {party.leader_photo_url ? (
@@ -161,7 +173,6 @@ export default function Parties({ auth, parties = [], flash, activeElection }) {
                                             </div>
                                         )}
 
-                                        {/* Candidates — scoped to active election */}
                                         <div className="mb-4">
                                             <p className="text-gray-500 text-xs uppercase tracking-wide mb-2">
                                                 Candidates ({party.candidates?.length ?? 0})
@@ -205,7 +216,6 @@ export default function Parties({ auth, parties = [], flash, activeElection }) {
                                             )}
                                         </div>
 
-                                        {/* Extra info */}
                                         <div className="space-y-1 mb-4 text-sm">
                                             {party.headquarters && (
                                                 <p className="text-gray-400">
@@ -222,13 +232,20 @@ export default function Parties({ auth, parties = [], flash, activeElection }) {
                                             )}
                                         </div>
 
-                                        {/* Action */}
-                                        <div className="mt-auto">
+                                        {/* Action Buttons */}
+                                        <div className="mt-auto flex gap-2">
                                             <button
                                                 onClick={() => handleEdit(party.id)}
-                                                className="w-full px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition-colors"
+                                                className="flex-1 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition-colors text-sm"
                                             >
-                                                Edit Party & Manage Candidates
+                                                Edit Party & Candidates
+                                            </button>
+                                            <button
+                                                onClick={() => handleDelete(party)}
+                                                disabled={deletingId === party.id}
+                                                className="px-4 py-2.5 bg-red-600/80 hover:bg-red-600 disabled:opacity-50 text-white rounded-lg font-semibold transition-colors text-sm"
+                                            >
+                                                {deletingId === party.id ? '…' : '🗑'}
                                             </button>
                                         </div>
                                     </div>

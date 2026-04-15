@@ -9,6 +9,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 class ProcessResultSubmission implements ShouldQueue
@@ -27,7 +28,7 @@ class ProcessResultSubmission implements ShouldQueue
                 return;
             }
 
-            // Only process if still in initial SUBMITTED state (not already advanced)
+            // Only process if still in initial SUBMITTED state
             if ($result->certification_status !== Result::STATUS_SUBMITTED) {
                 Log::info('ProcessResultSubmission: result already advanced, skipping', [
                     'id'     => $result->id,
@@ -36,12 +37,19 @@ class ProcessResultSubmission implements ShouldQueue
                 return;
             }
 
-            // Advance from SUBMITTED → PENDING_PARTY_ACCEPTANCE
-            // This makes the result visible to party representatives
-            $result->update([
-                'certification_status' => Result::STATUS_PENDING_PARTY_ACCEPTANCE,
-                'processing_started_at' => now(),
-            ]);
+            // Check if any ACTIVE party representatives are assigned to this polling station.
+            // If none are assigned, skip party acceptance entirely and go straight to ward review.
+            $hasPartyReps = DB::table('party_representative_polling_station as prps')
+                ->join('party_representatives as pr', 'pr.id', '=', 'prps.party_representative_id')
+                ->where('prps.polling_station_id', $result->polling_station_id)
+                ->where('pr.is_active', true)
+                ->exists();
+
+            $nextStatus = $hasPartyReps
+                ? Result::STATUS_PENDING_PARTY_ACCEPTANCE
+                : Result::STATUS_PENDING_WARD;
+
+            $result->update(['certification_status' => $nextStatus]);
 
             AuditLog::record(
                 action: 'result.processing.completed',
@@ -49,14 +57,17 @@ class ProcessResultSubmission implements ShouldQueue
                 module: 'Results',
                 auditable: $result,
                 extra: [
-                    'outcome'    => 'success',
-                    'new_status' => Result::STATUS_PENDING_PARTY_ACCEPTANCE,
+                    'outcome'                  => 'success',
+                    'new_status'               => $nextStatus,
+                    'skipped_party_acceptance' => !$hasPartyReps,
                 ]
             );
 
-            Log::info('ProcessResultSubmission: advanced to PENDING_PARTY_ACCEPTANCE', [
-                'result_id'  => $result->id,
-                'station_id' => $result->polling_station_id,
+            Log::info('ProcessResultSubmission: advanced', [
+                'result_id'      => $result->id,
+                'station_id'     => $result->polling_station_id,
+                'new_status'     => $nextStatus,
+                'has_party_reps' => $hasPartyReps,
             ]);
 
         } catch (\Exception $e) {

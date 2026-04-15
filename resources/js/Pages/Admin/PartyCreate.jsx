@@ -171,7 +171,7 @@ export default function PartyCreate({ auth, activeElectionId }) {
                 </div>
 
                 {/* Info banner about candidates */}
-                <div className="mb-6 p-4 bg-blue-500/10 border border-blue-500/30 rounded-xl flex items-start gap-3">
+                {/* <div className="mb-6 p-4 bg-blue-500/10 border border-blue-500/30 rounded-xl flex items-start gap-3">
                     <span className="text-blue-400 text-lg flex-shrink-0">ℹ️</span>
                     <div>
                         <p className="text-blue-300 font-semibold text-sm">Candidate Management</p>
@@ -183,7 +183,7 @@ export default function PartyCreate({ auth, activeElectionId }) {
                                 : ' No active election found — activate an election first to add candidates.'}
                         </p>
                     </div>
-                </div>
+                </div> */}
 
                 <div className="bg-slate-800/40 rounded-xl p-6 border border-slate-700/50">
                     <form onSubmit={handleSubmit} className="space-y-6">
@@ -207,7 +207,7 @@ export default function PartyCreate({ auth, activeElectionId }) {
                                 <input type="text" value={data.abbreviation}
                                     onChange={(e) => setData('abbreviation', e.target.value.toUpperCase().slice(0, 10))}
                                     className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white font-mono"
-                                    placeholder="e.g., UDP" maxLength={10} required />
+                                    placeholder="e.g. IEC" maxLength={10} required />
                                 {errors.abbreviation && <p className="text-red-400 text-sm mt-1">{errors.abbreviation}</p>}
                             </div>
                         </div>
