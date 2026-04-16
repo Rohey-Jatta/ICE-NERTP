@@ -47,9 +47,9 @@ services:
       # - ./:/var/www
       - .:/var/www:cached
       - ./docker/php/php.ini:/usr/local/etc/php/conf.d/custom.ini
-    dns:
-    - 8.8.8.8
-    - 8.8.4.4
+    # dns:
+    # - 8.8.8.8
+    # - 8.8.4.4
     depends_on:
       postgres:
         condition: service_healthy

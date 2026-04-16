@@ -2,7 +2,7 @@ import AppLayout from '@/Layouts/AppLayout';
 import { useForm, Link } from '@inertiajs/react';
 import { useState } from 'react';
 
-export default function PollingStationCreate({ auth, wards = [], officers = [], election }) {
+export default function PollingStationCreate({ auth, wards = [], officers = [], election, hasActiveElection = true }) {
     const { data, setData, post, processing, errors } = useForm({
         code: '',
         name: '',
@@ -39,6 +39,7 @@ export default function PollingStationCreate({ auth, wards = [], officers = [], 
 
     const handleSubmit = (e) => {
         e.preventDefault();
+        if (!hasActiveElection) return;
         post('/admin/polling-stations');
     };
 
@@ -54,6 +55,30 @@ export default function PollingStationCreate({ auth, wards = [], officers = [], 
                         <p className="text-gray-400 mt-1">Election: <span className="text-teal-300">{election.name}</span></p>
                     )}
                 </div>
+
+                {/* FIX: Show backend error prominently */}
+                {errors.error && (
+                    <div className="mb-6 p-4 bg-red-500/20 border border-red-500/50 rounded-xl flex items-start gap-3">
+                        <span className="text-red-400 text-lg flex-shrink-0">⚠</span>
+                        <p className="text-red-300">{errors.error}</p>
+                    </div>
+                )}
+
+                {/* FIX: Warn when no active election */}
+                {!hasActiveElection && (
+                    <div className="mb-6 p-4 bg-amber-500/20 border border-amber-500/50 rounded-xl flex items-start gap-3">
+                        <span className="text-amber-400 text-lg flex-shrink-0">⚠</span>
+                        <div>
+                            <p className="text-amber-300 font-semibold">No active election found</p>
+                            <p className="text-amber-400 text-sm mt-1">
+                                You must create and activate an election before registering polling stations.{' '}
+                                <Link href="/admin/elections/create" className="underline hover:text-amber-200">
+                                    Create an election →
+                                </Link>
+                            </p>
+                        </div>
+                    </div>
+                )}
 
                 <div className="bg-slate-800/40 rounded-xl p-6 border border-slate-700/50">
                     <form onSubmit={handleSubmit} className="space-y-6">
@@ -235,10 +260,11 @@ export default function PollingStationCreate({ auth, wards = [], officers = [], 
                         <div className="flex gap-4">
                             <button
                                 type="submit"
-                                disabled={processing}
-                                className="flex-1 px-6 py-3 bg-teal-600 hover:bg-teal-700 disabled:opacity-50 text-white font-bold rounded-lg"
+                                disabled={processing || !hasActiveElection}
+                                title={!hasActiveElection ? 'Create an election first' : ''}
+                                className="flex-1 px-6 py-3 bg-teal-600 hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold rounded-lg"
                             >
-                                {processing ? 'Registering…' : 'Register Polling Station'}
+                                {processing ? 'Registering…' : !hasActiveElection ? 'No Active Election' : 'Register Polling Station'}
                             </button>
                             <Link href="/admin/polling-stations" className="flex-1 px-6 py-3 bg-slate-700 hover:bg-slate-600 text-white font-bold rounded-lg text-center">
                                 Cancel

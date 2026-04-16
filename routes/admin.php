@@ -227,7 +227,12 @@ Route::middleware(['auth', 'role:iec-administrator'])
             'designation'           => 'nullable|string|max:255',
         ]);
         try {
-            $election = Election::where('status', 'active')->firstOrFail();
+            // FIX: Use first() with explicit error instead of firstOrFail() to provide better message
+            $election = Election::where('status', 'active')->first();
+            if (!$election) {
+                return back()->withErrors(['error' => 'No active election found. Please create and activate an election before adding party representatives.']);
+            }
+
             $rep = \App\Models\PartyRepresentative::create([
                 'user_id'              => $request->user_id,
                 'political_party_id'   => $request->political_party_id,
@@ -277,7 +282,12 @@ Route::middleware(['auth', 'role:iec-administrator'])
             'polling_station_ids.*' => 'exists:polling_stations,id',
         ]);
         try {
-            $election = Election::where('status', 'active')->firstOrFail();
+            // FIX: Use first() with explicit error instead of firstOrFail()
+            $election = Election::where('status', 'active')->first();
+            if (!$election) {
+                return back()->withErrors(['error' => 'No active election found. Please create and activate an election before adding election monitors.']);
+            }
+
             $monitor  = \App\Models\ElectionMonitor::create([
                 'user_id'              => $request->user_id,
                 'election_id'          => $election->id,
@@ -344,10 +354,12 @@ Route::middleware(['auth', 'role:iec-administrator'])
         ]);
     })->name('elections');
 
-    Route::get('/elections/create', fn() => Inertia::render('Admin/ElectionCreate', [
-        'auth'      => ['user' => Auth::user()],
-        'allParties' => PoliticalParty::select('id', 'name', 'abbreviation', 'color')->orderBy('name')->get(),
-    ]))->name('elections.create');
+    Route::get('/elections/create', function () {
+        return Inertia::render('Admin/ElectionCreate', [
+            'auth'       => ['user' => Auth::user()],
+            'allParties' => PoliticalParty::select('id', 'name', 'abbreviation', 'color')->orderBy('name')->get(),
+        ]);
+    })->name('elections.create');
 
     Route::post('/elections', function (Request $request) {
         $request->validate([
@@ -419,7 +431,6 @@ Route::middleware(['auth', 'role:iec-administrator'])
 
     Route::delete('/elections/{election}', function (Election $election) {
         try {
-            // Prevent deleting elections that have results
             if ($election->results()->exists()) {
                 return redirect()->route('admin.elections')
                     ->with('error', 'Cannot delete: this election has submitted results. Archive it instead.');
@@ -459,13 +470,16 @@ Route::middleware(['auth', 'role:iec-administrator'])
     })->name('polling-stations');
 
     Route::get('/polling-stations/create', function () {
+        // FIX: Pass active election context so frontend can warn if none exists
+        $activeElection = Election::where('status', 'active')->latest()->first();
         return Inertia::render('Admin/PollingStationCreate', [
-            'auth'     => ['user' => Auth::user()],
-            'wards'    => AdministrativeHierarchy::where('level', 'ward')->get(['id', 'name']),
-            'officers' => User::role('polling-officer')
+            'auth'             => ['user' => Auth::user()],
+            'hasActiveElection'=> $activeElection !== null,
+            'wards'            => AdministrativeHierarchy::where('level', 'ward')->get(['id', 'name']),
+            'officers'         => User::role('polling-officer')
                 ->whereDoesntHave('assignedStation')
                 ->select('id', 'name', 'email')->get(),
-            'election' => Election::where('status', 'active')->first(['id', 'name']),
+            'election'         => $activeElection ? ['id' => $activeElection->id, 'name' => $activeElection->name] : null,
         ]);
     })->name('polling-stations.create');
 
@@ -482,14 +496,20 @@ Route::middleware(['auth', 'role:iec-administrator'])
             'is_active'           => 'boolean',
             'is_test_station'     => 'boolean',
         ]);
+
+        // FIX: Guard against missing election instead of falling back to ID 1
+        $election = Election::where('status', 'active')->first();
+        if (!$election) {
+            return back()->withErrors(['error' => 'No active election found. Please create and activate an election before registering polling stations.']);
+        }
+
         try {
-            $election = Election::where('status', 'active')->first();
             PollingStation::create([
                 'code'                => strtoupper($request->code),
                 'name'                => $request->name,
                 'address'             => $request->address,
                 'ward_id'             => $request->ward_id,
-                'election_id'         => $election?->id ?? 1,
+                'election_id'         => $election->id,
                 'latitude'            => $request->latitude,
                 'longitude'           => $request->longitude,
                 'registered_voters'   => $request->registered_voters,
@@ -509,7 +529,6 @@ Route::middleware(['auth', 'role:iec-administrator'])
             'auth'     => ['user' => Auth::user()],
             'station'  => $station,
             'wards'    => AdministrativeHierarchy::where('level', 'ward')->get(['id', 'name']),
-            // Include ALL polling officers (not just unassigned) so current assignment shows
             'officers' => User::role('polling-officer')->select('id', 'name', 'email')->get(),
             'election' => Election::where('status', 'active')->first(['id', 'name']),
         ]);
@@ -567,14 +586,11 @@ Route::middleware(['auth', 'role:iec-administrator'])
     Route::get('/parties', function () {
         $activeElection = Election::where('status', 'active')->latest()->first();
 
-        // Fetch ALL parties system-wide, not scoped to active election
         $parties = PoliticalParty::withTrashed(false)
             ->with(['candidates', 'elections'])
             ->orderBy('name')
             ->get()
             ->map(function ($party) use ($activeElection) {
-                // Get candidates from the active election if available,
-                // otherwise get all candidates for this party
                 $candidates = $activeElection
                     ? Candidate::where('political_party_id', $party->id)
                         ->where('election_id', $activeElection->id)
@@ -617,7 +633,6 @@ Route::middleware(['auth', 'role:iec-administrator'])
                 ];
             });
 
-        // All elections for the "Add to Election" dropdown
         $allElections = Election::whereNotIn('status', ['archived'])
             ->orderByDesc('created_at')
             ->get(['id', 'name', 'status']);
@@ -633,9 +648,82 @@ Route::middleware(['auth', 'role:iec-administrator'])
         ]);
     })->name('parties');
 
-    Route::get('/parties/create', fn() => Inertia::render('Admin/PartyCreate', [
-        'auth' => ['user' => Auth::user()],
-    ]))->name('parties.create');
+    // FIX: Pass activeElectionId so the create page can warn/block if no election
+    Route::get('/parties/create', function () {
+        $activeElection = Election::where('status', 'active')->latest()->first();
+        return Inertia::render('Admin/PartyCreate', [
+            'auth'             => ['user' => Auth::user()],
+            'activeElectionId' => $activeElection?->id,
+        ]);
+    })->name('parties.create');
+
+    // FIX: Guard missing election + fix color array handling from Inertia
+    Route::post('/parties', function (Request $request) {
+        $request->validate([
+            'name'         => 'required|string|max:255',
+            'abbreviation' => 'required|string|max:10',
+            'leader_name'  => 'nullable|string|max:255',
+            'leader_photo' => 'nullable|image|max:5120',
+            'symbol'       => 'nullable|image|max:5120',
+            'motto'        => 'nullable|string|max:500',
+            'headquarters' => 'nullable|string|max:255',
+            'website'      => 'nullable|url|max:255',
+        ]);
+
+        // GUARD: Require an active election — no silent fallback to ID 1
+        $election = Election::where('status', 'active')->first();
+        if (!$election) {
+            return back()->withErrors([
+                'error' => 'No active election found. Please create and activate an election before registering parties.',
+            ]);
+        }
+
+        try {
+            $leaderPhotoPath = null;
+            if ($request->hasFile('leader_photo') && $request->file('leader_photo')->isValid()) {
+                $leaderPhotoPath = $request->file('leader_photo')->store('party-photos/leaders', 'public');
+            }
+            $symbolPath = null;
+            if ($request->hasFile('symbol') && $request->file('symbol')->isValid()) {
+                $symbolPath = $request->file('symbol')->store('party-photos/symbols', 'public');
+            }
+
+            // FIX: Handle colors sent as colors[0], colors[1]... (Inertia forceFormData)
+            // AND fallback to color_0, color_1... (hidden input method)
+            $colorsArr = $request->input('colors', []);
+            if (is_array($colorsArr) && count(array_filter($colorsArr)) > 0) {
+                $colorParts = array_filter($colorsArr);
+            } else {
+                $colorParts = array_filter([
+                    $request->input('color_0'),
+                    $request->input('color_1'),
+                    $request->input('color_2'),
+                ]);
+            }
+            $colorString = implode(',', array_values($colorParts)) ?: '#3b82f6';
+
+            $party = PoliticalParty::create([
+                'election_id'       => $election->id,
+                'name'              => $request->name,
+                'abbreviation'      => strtoupper($request->abbreviation),
+                'slug'              => Str::slug($request->name),
+                'color'             => $colorString,
+                'leader_name'       => $request->leader_name,
+                'leader_photo_path' => $leaderPhotoPath,
+                'symbol_path'       => $symbolPath,
+                'motto'             => $request->motto,
+                'headquarters'      => $request->headquarters,
+                'website'           => $request->website,
+            ]);
+
+            // Auto-add to active election's participating parties
+            $election->participatingParties()->syncWithoutDetaching([$party->id]);
+
+            return redirect()->route('admin.parties.edit', $party->id)->with('success', 'Party registered! Now add candidates.');
+        } catch (\Exception $e) {
+            return back()->withErrors(['error' => 'Failed to register party: '.$e->getMessage()]);
+        }
+    })->name('parties.store');
 
     Route::get('/parties/{id}/edit', function ($id) {
         $party          = PoliticalParty::findOrFail($id);
@@ -650,6 +738,7 @@ Route::middleware(['auth', 'role:iec-administrator'])
                     'name'          => $c->name,
                     'ballot_number' => $c->ballot_number,
                     'photo_url'     => $c->photo_path ? asset('storage/' . $c->photo_path) : null,
+                    'election_name' => $activeElection->name,
                 ])
                 ->values()
                 ->toArray()
@@ -664,9 +753,11 @@ Route::middleware(['auth', 'role:iec-administrator'])
             ]),
             'candidates'       => $candidates,
             'activeElectionId' => $activeElection?->id,
+            'flash'            => session()->only(['success', 'error']),
         ]);
     })->name('parties.edit');
 
+    // FIX: Consistent color handling in update (same as create)
     Route::post('/parties/{id}/update', function (Request $request, $id) {
         $party = PoliticalParty::findOrFail($id);
 
@@ -682,9 +773,10 @@ Route::middleware(['auth', 'role:iec-administrator'])
         ]);
 
         try {
-            $colorParts = [];
-            if ($request->has('colors') && is_array($request->colors)) {
-                $colorParts = array_filter($request->colors);
+            // FIX: Handle colors from Inertia (colors[0]...) AND hidden inputs (color_0...)
+            $colorsArr = $request->input('colors', []);
+            if (is_array($colorsArr) && count(array_filter($colorsArr)) > 0) {
+                $colorParts = array_filter($colorsArr);
             } else {
                 $colorParts = array_filter([
                     $request->input('color_0'),
@@ -730,60 +822,6 @@ Route::middleware(['auth', 'role:iec-administrator'])
         }
     })->name('parties.update-post');
 
-    Route::post('/parties', function (Request $request) {
-        $request->validate([
-            'name'         => 'required|string|max:255',
-            'abbreviation' => 'required|string|max:10',
-            'leader_name'  => 'nullable|string|max:255',
-            'leader_photo' => 'nullable|image|max:5120',
-            'symbol'       => 'nullable|image|max:5120',
-            'motto'        => 'nullable|string|max:500',
-            'headquarters' => 'nullable|string|max:255',
-            'website'      => 'nullable|url|max:255',
-        ]);
-        try {
-            $election        = Election::where('status', 'active')->first();
-            $leaderPhotoPath = null;
-            if ($request->hasFile('leader_photo') && $request->file('leader_photo')->isValid()) {
-                $leaderPhotoPath = $request->file('leader_photo')->store('party-photos/leaders', 'public');
-            }
-            $symbolPath = null;
-            if ($request->hasFile('symbol') && $request->file('symbol')->isValid()) {
-                $symbolPath = $request->file('symbol')->store('party-photos/symbols', 'public');
-            }
-
-            $colorParts = array_filter([
-                $request->input('color_0'),
-                $request->input('color_1'),
-                $request->input('color_2'),
-            ]);
-            $colorString = implode(',', array_values($colorParts)) ?: '#3b82f6';
-
-            $party = PoliticalParty::create([
-                'election_id'       => $election?->id ?? 1,
-                'name'              => $request->name,
-                'abbreviation'      => strtoupper($request->abbreviation),
-                'slug'              => Str::slug($request->name),
-                'color'             => $colorString,
-                'leader_name'       => $request->leader_name,
-                'leader_photo_path' => $leaderPhotoPath,
-                'symbol_path'       => $symbolPath,
-                'motto'             => $request->motto,
-                'headquarters'      => $request->headquarters,
-                'website'           => $request->website,
-            ]);
-
-            // Auto-add to active election's participating parties if one exists
-            if ($election) {
-                $election->participatingParties()->syncWithoutDetaching([$party->id]);
-            }
-
-            return redirect()->route('admin.parties.edit', $party->id)->with('success', 'Party registered! Now add candidates.');
-        } catch (\Exception $e) {
-            return back()->withErrors(['error' => 'Failed: '.$e->getMessage()]);
-        }
-    })->name('parties.store');
-
     // ── Add party to an election ──────────────────────────────────────────────
     Route::post('/parties/{id}/add-to-election', function (Request $request, $id) {
         $request->validate(['election_id' => 'required|exists:elections,id']);
@@ -799,7 +837,6 @@ Route::middleware(['auth', 'role:iec-administrator'])
         }
     })->name('parties.add-to-election');
 
-    // ── Remove party from an election ─────────────────────────────────────────
     Route::delete('/parties/{partyId}/remove-from-election/{electionId}', function ($partyId, $electionId) {
         try {
             $party    = PoliticalParty::findOrFail($partyId);
@@ -811,32 +848,27 @@ Route::middleware(['auth', 'role:iec-administrator'])
         }
     })->name('parties.remove-from-election');
 
-    // ── Delete party ──────────────────────────────────────────────────────────
     Route::delete('/parties/{id}', function ($id) {
         try {
             $party = PoliticalParty::findOrFail($id);
 
-            // Check if party has results linked to it
-            $hasResults = \App\Models\ResultCandidateVote::whereHas('candidate', fn($q) =>
-                $q->where('political_party_id', $id)
-            )->exists();
+            $candidateIds = Candidate::where('political_party_id', $party->id)->pluck('id');
+            \App\Models\ResultCandidateVote::whereIn('candidate_id', $candidateIds)->delete();
+            \App\Models\PartyAcceptance::where('political_party_id', $party->id)->delete();
+            Candidate::where('political_party_id', $party->id)->forceDelete();
 
-            if ($hasResults) {
-                return back()->withErrors(['error' => 'Cannot delete: this party has election results. Archive the election first.']);
-            }
+            $repIds = \App\Models\PartyRepresentative::where('political_party_id', $party->id)->pluck('id');
+            DB::table('party_representative_polling_station')->whereIn('party_representative_id', $repIds)->delete();
+            \App\Models\PartyRepresentative::where('political_party_id', $party->id)->delete();
 
-            // Remove from all elections
             DB::table('election_political_party')->where('political_party_id', $id)->delete();
 
-            // Soft-delete candidates
-            Candidate::where('political_party_id', $id)->delete();
-
             AuditLog::record(action: 'party.deleted', event: 'deleted', module: 'PartyManagement', auditable: $party);
-            $party->delete();
+            $party->forceDelete();
 
             return redirect()->route('admin.parties')->with('success', 'Party deleted successfully.');
         } catch (\Exception $e) {
-            return back()->withErrors(['error' => 'Failed: ' . $e->getMessage()]);
+            return back()->withErrors(['error' => 'Failed to delete party: ' . $e->getMessage()]);
         }
     })->name('parties.destroy');
 
@@ -945,7 +977,6 @@ Route::middleware(['auth', 'role:iec-administrator'])
         }
     })->name('hierarchy.admin-areas.store');
 
-    // ── FIXED: renders dedicated AdminAreaEdit component with existing data ──
     Route::get('/hierarchy/admin-areas/{id}/edit', function ($id) {
         $adminArea = AdministrativeHierarchy::findOrFail($id);
         return Inertia::render('Admin/Hierarchy/AdminAreaEdit', [
@@ -1028,7 +1059,6 @@ Route::middleware(['auth', 'role:iec-administrator'])
         }
     })->name('hierarchy.constituencies.store');
 
-    // ── FIXED: renders dedicated ConstituencyEdit component with existing data ──
     Route::get('/hierarchy/constituencies/{id}/edit', function ($id) {
         $constituency = AdministrativeHierarchy::findOrFail($id);
         return Inertia::render('Admin/Hierarchy/ConstituencyEdit', [
@@ -1118,7 +1148,6 @@ Route::middleware(['auth', 'role:iec-administrator'])
         }
     })->name('hierarchy.wards.store');
 
-    // ── FIXED: renders dedicated WardEdit component with existing data ──
     Route::get('/hierarchy/wards/{id}/edit', function ($id) {
         $ward = AdministrativeHierarchy::findOrFail($id);
         $constituencies = AdministrativeHierarchy::where('level', 'constituency')
@@ -1159,65 +1188,6 @@ Route::middleware(['auth', 'role:iec-administrator'])
             return back()->withErrors(['error' => 'Failed: ' . $e->getMessage()]);
         }
     })->name('hierarchy.wards.destroy');
-
-    // ── Delete Party ──────────────────────────────────────────────────────────
-    Route::delete('/parties/{id}', function ($id) {
-        try {
-            $party = PoliticalParty::findOrFail($id);
-            $candidateIds = Candidate::where('political_party_id', $party->id)->pluck('id');
-            \App\Models\ResultCandidateVote::whereIn('candidate_id', $candidateIds)->delete();
-            \App\Models\PartyAcceptance::where('political_party_id', $party->id)->delete();
-            Candidate::where('political_party_id', $party->id)->forceDelete();
-            $repIds = \App\Models\PartyRepresentative::where('political_party_id', $party->id)->pluck('id');
-            DB::table('party_representative_polling_station')->whereIn('party_representative_id', $repIds)->delete();
-            \App\Models\PartyRepresentative::where('political_party_id', $party->id)->delete();
-            $party->forceDelete();
-            AuditLog::record(action: 'party.deleted', event: 'deleted', module: 'PartyManagement', auditable: $party);
-            return redirect()->route('admin.parties')->with('success', 'Party deleted successfully.');
-        } catch (\Exception $e) {
-            return back()->withErrors(['error' => 'Failed to delete party: ' . $e->getMessage()]);
-        }
-    })->name('parties.destroy');
-
-    // ── Delete Election (wipes all related data) ──────────────────────────────
-    Route::delete('/elections/{id}', function ($id) {
-        try {
-            $election = Election::findOrFail($id);
-
-            DB::transaction(function () use ($election) {
-                $resultIds = \App\Models\Result::where('election_id', $election->id)->pluck('id');
-                \App\Models\ResultCandidateVote::whereIn('result_id', $resultIds)->delete();
-                \App\Models\ResultCertification::whereIn('result_id', $resultIds)->delete();
-                \App\Models\PartyAcceptance::whereIn('result_id', $resultIds)->delete();
-                DB::table('result_versions')->whereIn('result_id', $resultIds)->delete();
-                \App\Models\Result::where('election_id', $election->id)->forceDelete();
-
-                $repIds = \App\Models\PartyRepresentative::where('election_id', $election->id)->pluck('id');
-                DB::table('party_representative_polling_station')->whereIn('party_representative_id', $repIds)->delete();
-                \App\Models\PartyRepresentative::where('election_id', $election->id)->delete();
-
-                $monitorIds = \App\Models\ElectionMonitor::where('election_id', $election->id)->pluck('id');
-                DB::table('election_monitor_polling_station')->whereIn('election_monitor_id', $monitorIds)->delete();
-                DB::table('monitor_observations')->whereIn('election_monitor_id', $monitorIds)->delete();
-                \App\Models\ElectionMonitor::where('election_id', $election->id)->delete();
-
-                \App\Models\PollingStation::where('election_id', $election->id)->forceDelete();
-                Candidate::where('election_id', $election->id)->forceDelete();
-
-                DB::table('election_political_party')->where('election_id', $election->id)->delete();
-                PoliticalParty::where('election_id', $election->id)->forceDelete();
-
-                \App\Models\AdministrativeHierarchy::where('election_id', $election->id)->delete();
-                \App\Models\AuditLog::where('election_id', $election->id)->delete();
-
-                $election->forceDelete();
-            });
-
-            return redirect()->route('admin.elections')->with('success', 'Election and all related data deleted successfully.');
-        } catch (\Exception $e) {
-            return back()->withErrors(['error' => 'Failed to delete election: ' . $e->getMessage()]);
-        }
-    })->name('elections.destroy');
 
     // ── Audit Logs ────────────────────────────────────────────────────────────
     Route::get('/audit-logs', function (Request $request) {
@@ -1308,89 +1278,43 @@ Route::middleware(['auth', 'role:iec-administrator'])
         return response()->download($path);
     })->name('backups.download');
 
-    // ── Delete Party (force) ──────────────────────────────────────────────────
-Route::delete('/parties/{id}', function ($id) {
-    try {
-        $party = PoliticalParty::findOrFail($id);
+    // ── Force-delete election and all related data ────────────────────────────
+    Route::delete('/elections/{id}/force', function ($id) {
+        try {
+            $election = Election::findOrFail($id);
 
-        // Delete in correct order to respect FK constraints
-        $candidateIds = Candidate::where('political_party_id', $party->id)->pluck('id');
+            DB::transaction(function () use ($election) {
+                $resultIds = \App\Models\Result::where('election_id', $election->id)->pluck('id');
+                \App\Models\ResultCandidateVote::whereIn('result_id', $resultIds)->delete();
+                \App\Models\ResultCertification::whereIn('result_id', $resultIds)->delete();
+                \App\Models\PartyAcceptance::whereIn('result_id', $resultIds)->delete();
+                DB::table('result_versions')->whereIn('result_id', $resultIds)->delete();
+                \App\Models\Result::where('election_id', $election->id)->forceDelete();
 
-        // Remove candidate votes
-        \App\Models\ResultCandidateVote::whereIn('candidate_id', $candidateIds)->delete();
+                $repIds = \App\Models\PartyRepresentative::where('election_id', $election->id)->pluck('id');
+                DB::table('party_representative_polling_station')->whereIn('party_representative_id', $repIds)->delete();
+                \App\Models\PartyRepresentative::where('election_id', $election->id)->delete();
 
-        // Remove party acceptances
-        \App\Models\PartyAcceptance::where('political_party_id', $party->id)->delete();
+                $monitorIds = \App\Models\ElectionMonitor::where('election_id', $election->id)->pluck('id');
+                DB::table('election_monitor_polling_station')->whereIn('election_monitor_id', $monitorIds)->delete();
+                DB::table('monitor_observations')->whereIn('election_monitor_id', $monitorIds)->delete();
+                \App\Models\ElectionMonitor::where('election_id', $election->id)->delete();
 
-        // Remove candidates
-        Candidate::where('political_party_id', $party->id)->forceDelete();
+                \App\Models\PollingStation::where('election_id', $election->id)->forceDelete();
+                Candidate::where('election_id', $election->id)->forceDelete();
 
-        // Remove party representatives pivot + records
-        $repIds = \App\Models\PartyRepresentative::where('political_party_id', $party->id)->pluck('id');
-        DB::table('party_representative_polling_station')->whereIn('party_representative_id', $repIds)->delete();
-        \App\Models\PartyRepresentative::where('political_party_id', $party->id)->delete();
+                DB::table('election_political_party')->where('election_id', $election->id)->delete();
+                PoliticalParty::where('election_id', $election->id)->forceDelete();
 
-        $party->forceDelete();
+                \App\Models\AdministrativeHierarchy::where('election_id', $election->id)->delete();
+                \App\Models\AuditLog::where('election_id', $election->id)->delete();
 
-        AuditLog::record(action: 'party.deleted', event: 'deleted', module: 'PartyManagement', auditable: $party);
-        return redirect()->route('admin.parties')->with('success', 'Party deleted successfully.');
-    } catch (\Exception $e) {
-        return back()->withErrors(['error' => 'Failed to delete party: ' . $e->getMessage()]);
-    }
-})->name('parties.destroy');
+                $election->forceDelete();
+            });
 
-// ── Delete Election (force) ───────────────────────────────────────────────
-Route::delete('/elections/{id}', function ($id) {
-    try {
-        $election = Election::findOrFail($id);
-
-        // Wipe everything scoped to this election in correct FK order
-
-        // 1. Result versions, certifications, candidate votes, party acceptances
-        $resultIds = \App\Models\Result::where('election_id', $election->id)->pluck('id');
-
-        \App\Models\ResultCandidateVote::whereIn('result_id', $resultIds)->delete();
-        \App\Models\ResultCertification::whereIn('result_id', $resultIds)->delete();
-        \App\Models\PartyAcceptance::whereIn('result_id', $resultIds)->delete();
-        DB::table('result_versions')->whereIn('result_id', $resultIds)->delete();
-        \App\Models\Result::where('election_id', $election->id)->forceDelete();
-
-        // 2. Party representatives
-        $repIds = \App\Models\PartyRepresentative::where('election_id', $election->id)->pluck('id');
-        DB::table('party_representative_polling_station')->whereIn('party_representative_id', $repIds)->delete();
-        \App\Models\PartyRepresentative::where('election_id', $election->id)->delete();
-
-        // 3. Election monitors
-        $monitorIds = \App\Models\ElectionMonitor::where('election_id', $election->id)->pluck('id');
-        DB::table('election_monitor_polling_station')->whereIn('election_monitor_id', $monitorIds)->delete();
-        DB::table('monitor_observations')->whereIn('election_monitor_id', $monitorIds)->delete();
-        \App\Models\ElectionMonitor::where('election_id', $election->id)->delete();
-
-        // 4. Polling stations
-        \App\Models\PollingStation::where('election_id', $election->id)->forceDelete();
-
-        // 5. Candidates
-        Candidate::where('election_id', $election->id)->forceDelete();
-
-        // 6. Parties
-        $partyIds = PoliticalParty::where('election_id', $election->id)->pluck('id');
-        DB::table('election_political_party')->where('election_id', $election->id)->delete();
-        PoliticalParty::where('election_id', $election->id)->forceDelete();
-
-        // 7. Hierarchy
-        \App\Models\AdministrativeHierarchy::where('election_id', $election->id)->delete();
-
-        // 8. Audit logs for this election
-        \App\Models\AuditLog::where('election_id', $election->id)->delete();
-
-        // 9. The election itself
-        $election->forceDelete();
-
-        AuditLog::record(action: 'election.deleted', event: 'deleted', module: 'ElectionManagement');
-        return redirect()->route('admin.elections')->with('success', 'Election and all related data deleted successfully.');
-    } catch (\Exception $e) {
-        return back()->withErrors(['error' => 'Failed to delete election: ' . $e->getMessage()]);
-    }
-})->name('elections.destroy');
-
+            return redirect()->route('admin.elections')->with('success', 'Election and all related data deleted successfully.');
+        } catch (\Exception $e) {
+            return back()->withErrors(['error' => 'Failed to delete election: ' . $e->getMessage()]);
+        }
+    })->name('elections.force-destroy');
 });

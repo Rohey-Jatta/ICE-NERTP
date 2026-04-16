@@ -157,8 +157,11 @@ export default function PartyCreate({ auth, activeElectionId }) {
 
     const handleSubmit = (e) => {
         e.preventDefault();
+        if (!activeElectionId) return;
         post('/admin/parties', { forceFormData: true });
     };
+
+    const canSubmit = !!activeElectionId && !processing;
 
     return (
         <AppLayout user={auth?.user}>
@@ -170,20 +173,29 @@ export default function PartyCreate({ auth, activeElectionId }) {
                     <h1 className="text-3xl font-bold text-white">Register New Political Party</h1>
                 </div>
 
-                {/* Info banner about candidates */}
-                {/* <div className="mb-6 p-4 bg-blue-500/10 border border-blue-500/30 rounded-xl flex items-start gap-3">
-                    <span className="text-blue-400 text-lg flex-shrink-0">ℹ️</span>
-                    <div>
-                        <p className="text-blue-300 font-semibold text-sm">Candidate Management</p>
-                        <p className="text-blue-400 text-xs mt-0.5">
-                            After saving the party details, you will be taken directly to the edit page
-                            where you can <strong className="text-blue-300">add candidates</strong> for this party.
-                            {activeElectionId
-                                ? ' Candidates will be linked to the currently active election.'
-                                : ' No active election found — activate an election first to add candidates.'}
-                        </p>
+                {/* FIX: Show backend error (e.g., no election) */}
+                {errors.error && (
+                    <div className="mb-6 p-4 bg-red-500/20 border border-red-500/50 rounded-xl flex items-start gap-3">
+                        <span className="text-red-400 text-lg flex-shrink-0">⚠</span>
+                        <p className="text-red-300">{errors.error}</p>
                     </div>
-                </div> */}
+                )}
+
+                {/* FIX: Warn when no active election — and block submission */}
+                {!activeElectionId && (
+                    <div className="mb-6 p-4 bg-amber-500/20 border border-amber-500/50 rounded-xl flex items-start gap-3">
+                        <span className="text-amber-400 text-lg flex-shrink-0">⚠</span>
+                        <div>
+                            <p className="text-amber-300 font-semibold">No active election found</p>
+                            <p className="text-amber-400 text-sm mt-1">
+                                You must create and activate an election before registering parties.{' '}
+                                <Link href="/admin/elections/create" className="underline hover:text-amber-200">
+                                    Create an election →
+                                </Link>
+                            </p>
+                        </div>
+                    </div>
+                )}
 
                 <div className="bg-slate-800/40 rounded-xl p-6 border border-slate-700/50">
                     <form onSubmit={handleSubmit} className="space-y-6">
@@ -207,7 +219,7 @@ export default function PartyCreate({ auth, activeElectionId }) {
                                 <input type="text" value={data.abbreviation}
                                     onChange={(e) => setData('abbreviation', e.target.value.toUpperCase().slice(0, 10))}
                                     className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white font-mono"
-                                    placeholder="e.g. IEC" maxLength={10} required />
+                                    placeholder="e.g. UDP" maxLength={10} required />
                                 {errors.abbreviation && <p className="text-red-400 text-sm mt-1">{errors.abbreviation}</p>}
                             </div>
                         </div>
@@ -223,9 +235,6 @@ export default function PartyCreate({ auth, activeElectionId }) {
                                 onChange={(newColors) => setData('colors', newColors)}
                                 max={3}
                             />
-                            {data.colors.map((c, i) => (
-                                <input key={i} type="hidden" name={`color_${i}`} value={c} />
-                            ))}
                             {errors.color && <p className="text-red-400 text-sm mt-1">{errors.color}</p>}
                         </div>
 
@@ -311,12 +320,13 @@ export default function PartyCreate({ auth, activeElectionId }) {
 
                         {/* Submit */}
                         <div className="flex gap-4">
-                            <button type="submit" disabled={processing}
-                                className="flex-1 px-6 py-3 bg-teal-600 hover:bg-teal-700 disabled:opacity-50 text-white font-bold rounded-lg">
-                                {processing ? 'Registering…' : '✓ Register Party & Add Candidates →'}
+                            <button type="submit" disabled={!canSubmit}
+                                title={!activeElectionId ? 'Create an election first' : ''}
+                                className="flex-1 px-6 py-3 bg-teal-600 hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold rounded-lg transition-colors">
+                                {processing ? 'Registering…' : !activeElectionId ? 'No Active Election' : '✓ Register Party & Add Candidates →'}
                             </button>
                             <Link href="/admin/parties"
-                                className="flex-1 px-6 py-3 bg-slate-700 hover:bg-slate-600 text-white font-bold rounded-lg text-center">
+                                className="flex-1 px-6 py-3 bg-slate-700 hover:bg-slate-600 text-white font-bold rounded-lg text-center transition-colors">
                                 Cancel
                             </Link>
                         </div>
