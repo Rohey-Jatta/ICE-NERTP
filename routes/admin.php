@@ -187,10 +187,14 @@ Route::middleware(['auth', 'role:iec-administrator'])
         ]);
     })->name('party-representatives');
 
+    // FIXED: Only load users with 'party-representative' role who don't already have a rep record
     Route::get('/party-representatives/create', function () {
         return Inertia::render('Admin/PartyRepresentativeCreate', [
             'auth'            => ['user' => Auth::user()],
-            'users'           => User::whereDoesntHave('partyRepresentative')->select('id', 'name', 'email')->get(),
+            'users'           => User::role('party-representative')
+                ->whereDoesntHave('partyRepresentative')
+                ->select('id', 'name', 'email')
+                ->get(),
             'parties'         => PoliticalParty::select('id', 'name')->get(),
             'pollingStations' => PollingStation::select('id', 'name', 'code')->get(),
         ]);
@@ -247,7 +251,6 @@ Route::middleware(['auth', 'role:iec-administrator'])
             'designation'           => 'nullable|string|max:255',
         ]);
         try {
-            // FIX: Use first() with explicit error instead of firstOrFail() to provide better message
             $election = Election::where('status', 'active')->first();
             if (!$election) {
                 return back()->withErrors(['error' => 'No active election found. Please create and activate an election before adding party representatives.']);
@@ -302,7 +305,6 @@ Route::middleware(['auth', 'role:iec-administrator'])
             'polling_station_ids.*' => 'exists:polling_stations,id',
         ]);
         try {
-            // FIX: Use first() with explicit error instead of firstOrFail()
             $election = Election::where('status', 'active')->first();
             if (!$election) {
                 return back()->withErrors(['error' => 'No active election found. Please create and activate an election before adding election monitors.']);
@@ -490,7 +492,6 @@ Route::middleware(['auth', 'role:iec-administrator'])
     })->name('polling-stations');
 
     Route::get('/polling-stations/create', function () {
-        // FIX: Pass active election context so frontend can warn if none exists
         $activeElection = Election::where('status', 'active')->latest()->first();
         return Inertia::render('Admin/PollingStationCreate', [
             'auth'             => ['user' => Auth::user()],
@@ -517,7 +518,6 @@ Route::middleware(['auth', 'role:iec-administrator'])
             'is_test_station'     => 'boolean',
         ]);
 
-        // FIX: Guard against missing election instead of falling back to ID 1
         $election = Election::where('status', 'active')->first();
         if (!$election) {
             return back()->withErrors(['error' => 'No active election found. Please create and activate an election before registering polling stations.']);
@@ -668,7 +668,6 @@ Route::middleware(['auth', 'role:iec-administrator'])
         ]);
     })->name('parties');
 
-    // FIX: Pass activeElectionId so the create page can warn/block if no election
     Route::get('/parties/create', function () {
         $activeElection = Election::where('status', 'active')->latest()->first();
         return Inertia::render('Admin/PartyCreate', [
@@ -677,7 +676,6 @@ Route::middleware(['auth', 'role:iec-administrator'])
         ]);
     })->name('parties.create');
 
-    // FIX: Guard missing election + fix color array handling from Inertia
     Route::post('/parties', function (Request $request) {
         $request->validate([
             'name'         => 'required|string|max:255',
@@ -690,7 +688,6 @@ Route::middleware(['auth', 'role:iec-administrator'])
             'website'      => 'nullable|url|max:255',
         ]);
 
-        // GUARD: Require an active election — no silent fallback to ID 1
         $election = Election::where('status', 'active')->first();
         if (!$election) {
             return back()->withErrors([
@@ -708,8 +705,6 @@ Route::middleware(['auth', 'role:iec-administrator'])
                 $symbolPath = $request->file('symbol')->store('party-photos/symbols', 'public');
             }
 
-            // FIX: Handle colors sent as colors[0], colors[1]... (Inertia forceFormData)
-            // AND fallback to color_0, color_1... (hidden input method)
             $colorsArr = $request->input('colors', []);
             if (is_array($colorsArr) && count(array_filter($colorsArr)) > 0) {
                 $colorParts = array_filter($colorsArr);
@@ -736,7 +731,6 @@ Route::middleware(['auth', 'role:iec-administrator'])
                 'website'           => $request->website,
             ]);
 
-            // Auto-add to active election's participating parties
             $election->participatingParties()->syncWithoutDetaching([$party->id]);
 
             return redirect()->route('admin.parties.edit', $party->id)->with('success', 'Party registered! Now add candidates.');
@@ -777,7 +771,6 @@ Route::middleware(['auth', 'role:iec-administrator'])
         ]);
     })->name('parties.edit');
 
-    // FIX: Consistent color handling in update (same as create)
     Route::post('/parties/{id}/update', function (Request $request, $id) {
         $party = PoliticalParty::findOrFail($id);
 
@@ -793,7 +786,6 @@ Route::middleware(['auth', 'role:iec-administrator'])
         ]);
 
         try {
-            // FIX: Handle colors from Inertia (colors[0]...) AND hidden inputs (color_0...)
             $colorsArr = $request->input('colors', []);
             if (is_array($colorsArr) && count(array_filter($colorsArr)) > 0) {
                 $colorParts = array_filter($colorsArr);
@@ -842,7 +834,6 @@ Route::middleware(['auth', 'role:iec-administrator'])
         }
     })->name('parties.update-post');
 
-    // ── Add party to an election ──────────────────────────────────────────────
     Route::post('/parties/{id}/add-to-election', function (Request $request, $id) {
         $request->validate(['election_id' => 'required|exists:elections,id']);
         try {

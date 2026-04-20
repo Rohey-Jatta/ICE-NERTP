@@ -146,23 +146,34 @@ export default function UserCreate({ auth, pollingStations = [], wards = [], con
                 </div>
 
                 <div className="bg-slate-800/40 rounded-xl p-6 border border-slate-700/50">
-                    <form onSubmit={handleSubmit} className="space-y-6">
+                    {/* autocomplete="off" on form prevents browser from autofilling fields */}
+                    <form onSubmit={handleSubmit} className="space-y-6" autoComplete="off">
 
                         <div>
                             <label className="block text-gray-300 mb-2 font-semibold">Name <span className="text-red-400">*</span></label>
-                            <input type="text" value={data.name}
+                            <input
+                                type="text"
+                                value={data.name}
                                 onChange={(e) => setData('name', e.target.value)}
+                                autoComplete="off"
                                 className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white"
-                                placeholder="Full Name" required />
+                                placeholder="Full Name"
+                                required
+                            />
                             {errors.name && <p className="text-red-400 text-sm mt-1">{errors.name}</p>}
                         </div>
 
                         <div>
                             <label className="block text-gray-300 mb-2 font-semibold">Email <span className="text-red-400">*</span></label>
-                            <input type="email" value={data.email}
+                            <input
+                                type="email"
+                                value={data.email}
                                 onChange={(e) => setData('email', e.target.value)}
+                                autoComplete="off"
                                 className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white"
-                                placeholder="user@iec.gm" required />
+                                placeholder="user@iec.gm"
+                                required
+                            />
                             {errors.email && <p className="text-red-400 text-sm mt-1">{errors.email}</p>}
                         </div>
 
@@ -171,10 +182,15 @@ export default function UserCreate({ auth, pollingStations = [], wards = [], con
                             <label className="block text-gray-300 mb-2 font-semibold">
                                 Phone Number <span className="text-red-400">*</span>
                             </label>
-                            <input type="tel" value={data.phone}
+                            <input
+                                type="tel"
+                                value={data.phone}
                                 onChange={(e) => setData('phone', e.target.value)}
+                                autoComplete="off"
                                 className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white"
-                                placeholder="+220XXXXXXX" required />
+                                placeholder="+220XXXXXXX"
+                                required
+                            />
                             <p className="text-gray-500 text-xs mt-1">
                                 Used for 2FA verification code delivery. Include country code (e.g., +220 for Gambia).
                             </p>
@@ -183,18 +199,25 @@ export default function UserCreate({ auth, pollingStations = [], wards = [], con
 
                         <div>
                             <label className="block text-gray-300 mb-2 font-semibold">Password <span className="text-red-400">*</span></label>
-                            <input type="password" value={data.password}
+                            <input
+                                type="password"
+                                value={data.password}
                                 onChange={(e) => setData('password', e.target.value)}
+                                autoComplete="new-password"
                                 className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white"
-                                placeholder="••••••••" required />
+                                placeholder="••••••••"
+                                required
+                            />
                             {errors.password && <p className="text-red-400 text-sm mt-1">{errors.password}</p>}
                         </div>
 
                         <div>
                             <label className="block text-gray-300 mb-2 font-semibold">Role <span className="text-red-400">*</span></label>
-                            <select value={data.role}
+                            <select
+                                value={data.role}
                                 onChange={(e) => handleRoleChange(e.target.value)}
-                                className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white">
+                                className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white"
+                            >
                                 <option value="polling-officer">Polling Station Officer</option>
                                 <option value="ward-approver">Ward Approver</option>
                                 <option value="constituency-approver">Constituency Approver</option>

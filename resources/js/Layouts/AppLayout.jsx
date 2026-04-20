@@ -1,7 +1,6 @@
 import { useState, useCallback } from 'react';
 import { Link, router } from '@inertiajs/react';
 
-
 export default function AppLayout({ user, children }) {
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const [isLoggingOut, setIsLoggingOut]     = useState(false);
@@ -27,8 +26,13 @@ export default function AppLayout({ user, children }) {
     return (
         <div className="iec-layout">
 
-            {/* Static CSS background — no JS, no re-renders */}
-            <div className="iec-bg" aria-hidden="true" />
+            {/* Static CSS background with particle stars — same across all pages */}
+            <div className="iec-bg" aria-hidden="true">
+                {/* Pure CSS particle stars — 20 particles matching login page */}
+                {Array.from({ length: 30 }).map((_, i) => (
+                    <div key={i} className="particle" />
+                ))}
+            </div>
 
             {/* Header */}
             <header className="iec-header">

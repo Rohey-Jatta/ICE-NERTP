@@ -95,15 +95,36 @@
 
 /* ─── Instant navigation — remove all transition delays on links ─────────── */
 
-/* Inertia replaces page content synchronously — no transition needed */
 * {
-    /* Don't animate layout shifts between pages */
     scroll-behavior: auto !important;
 }
 
 /* Only keep hover transitions on interactive elements */
 a, button {
     transition: color 0.15s, background-color 0.15s, border-color 0.15s, opacity 0.15s;
+}
+
+/* ─── Browser autofill dark theme override ───────────────────────────────── */
+/*
+ * Prevents the browser from applying a white/light background to autofilled
+ * inputs on dark-themed forms (e.g., User Create, Login).
+ * The 5000s transition trick delays background revert effectively forever.
+ */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active {
+    -webkit-box-shadow: 0 0 0px 1000px #0f172a inset !important;
+    -webkit-text-fill-color: white !important;
+    caret-color: white;
+    transition: background-color 5000s ease-in-out 0s !important;
+    border-color: rgba(100, 116, 139, 0.8) !important;
+}
+
+/* For inputs with slightly lighter backgrounds (bg-slate-900/50) */
+.bg-slate-900\/50 input:-webkit-autofill,
+input.bg-slate-900\/50:-webkit-autofill {
+    -webkit-box-shadow: 0 0 0px 1000px rgba(15, 23, 42, 0.5) inset !important;
 }
 
 /* ─── Login page floating particles (CSS-only, no JS) ───────────────────── */
@@ -121,7 +142,7 @@ a, button {
     }
 }
 
-/* Used on login/2FA pages via .particle class */
+/* Used on all pages via AppLayout .iec-bg and login/2FA pages */
 .particle {
     position: absolute;
     width: 2px;
@@ -131,22 +152,27 @@ a, button {
     animation: float-up linear infinite;
 }
 
-/* Generate 20 particles with staggered delays using CSS only */
-.particle:nth-child(1)  { left: 5%;  animation-duration: 45s; animation-delay:  0s; }
+/* 20 particles with staggered delays and positions */
+.particle:nth-child(1)  { left: 95%;  animation-duration: 45s; animation-delay:  0s; }
 .particle:nth-child(2)  { left: 10%; animation-duration: 38s; animation-delay:  3s; }
 .particle:nth-child(3)  { left: 18%; animation-duration: 52s; animation-delay:  7s; }
-.particle:nth-child(4)  { left: 25%; animation-duration: 41s; animation-delay:  1s; }
+.particle:nth-child(4)  { left: 25%; animation-duration: 59s; animation-delay:  0s; }
 .particle:nth-child(5)  { left: 33%; animation-duration: 48s; animation-delay:  5s; }
 .particle:nth-child(6)  { left: 40%; animation-duration: 35s; animation-delay:  9s; }
 .particle:nth-child(7)  { left: 47%; animation-duration: 55s; animation-delay:  2s; }
 .particle:nth-child(8)  { left: 54%; animation-duration: 43s; animation-delay:  6s; }
-.particle:nth-child(9)  { left: 61%; animation-duration: 39s; animation-delay:  4s; }
-.particle:nth-child(10) { left: 68%; animation-duration: 50s; animation-delay:  8s; }
+.particle:nth-child(9)  { right: 61%; animation-duration: 369s; animation-delay:  0s; }
+.particle:nth-child(10) { top: 68%; animation-duration: 50s; animation-delay:  1s; }
 .particle:nth-child(11) { left: 74%; animation-duration: 46s; animation-delay:  0s; }
 .particle:nth-child(12) { left: 80%; animation-duration: 37s; animation-delay:  3s; }
 .particle:nth-child(13) { left: 86%; animation-duration: 53s; animation-delay:  7s; }
 .particle:nth-child(14) { left: 92%; animation-duration: 42s; animation-delay:  1s; }
-.particle:nth-child(15) { left: 97%; animation-duration: 47s; animation-delay:  5s; }
+.particle:nth-child(15) { top: 97%; animation-duration: 47s; animation-delay:  0s; }
+.particle:nth-child(16) { left: 15%; animation-duration: 44s; animation-delay: 11s; }
+.particle:nth-child(17) { left: 30%; animation-duration: 56s; animation-delay: 13s; }
+.particle:nth-child(18) { left: 55%; animation-duration: 36s; animation-delay: 15s; }
+.particle:nth-child(19) { left: 72%; animation-duration: 49s; animation-delay: 17s; }
+.particle:nth-child(20) { left: 88%; animation-duration: 40s; animation-delay: 19s; }
 
 /* ─── Slow-pulse (used on login orb) ────────────────────────────────────── */
 
@@ -156,13 +182,13 @@ a, button {
 }
 
 .animate-slow-pulse {
-    animation: slow-pulse 8s ease-in-out infinite;
+    animation: slow-pulse 5s ease-in-out infinite;
 }
 
 /* ─── Page content fade-in (instant feel, no layout shift) ──────────────── */
 
 .iec-main > * {
-    animation: page-in 0.15s ease-out;
+    animation: page-in 01.15s ease-out;
 }
 
 @keyframes page-in {
