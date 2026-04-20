@@ -7,35 +7,26 @@ use App\Models\PartyAcceptance;
 use App\Models\Result;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 /**
  * AcceptanceController - Party representatives accept/reject results.
- *
- * From architecture: app/Http/Controllers/AcceptanceController.php
- *
- * Party reps can:
- * - View results from their assigned polling stations
- * - Accept, accept with reservation, or reject
- * - Add comments (required for reservation/rejection)
  */
 class AcceptanceController extends Controller
 {
     /**
      * Submit acceptance decision.
-     * Route: POST /api/acceptance
-     * Middleware: auth:sanctum, role:party-representative
      */
     public function submit(Request $request): JsonResponse
     {
         $validated = $request->validate([
             'result_id' => ['required', 'exists:results,id'],
-            'status' => ['required', 'in:accepted,accepted_with_reservation,rejected'],
-            'comments' => ['required_if:status,accepted_with_reservation,rejected', 'nullable', 'string', 'max:1000'],
+            'status'    => ['required', 'in:accepted,accepted_with_reservation,rejected'],
+            'comments'  => ['required_if:status,accepted_with_reservation,rejected', 'nullable', 'string', 'max:1000'],
         ]);
 
         $result = Result::findOrFail($validated['result_id']);
 
-        // Get party rep record
         $partyRep = $request->user()->partyRepresentatives()
             ->where('election_id', $result->election_id)
             ->first();
@@ -46,7 +37,6 @@ class AcceptanceController extends Controller
             ], 403);
         }
 
-        // Verify party rep is assigned to this station
         $isAssigned = $partyRep->pollingStations()
             ->where('polling_station_id', $result->polling_station_id)
             ->exists();
@@ -57,7 +47,6 @@ class AcceptanceController extends Controller
             ], 403);
         }
 
-        // Check if already submitted
         $existing = PartyAcceptance::where('result_id', $result->id)
             ->where('political_party_id', $partyRep->political_party_id)
             ->first();
@@ -68,41 +57,38 @@ class AcceptanceController extends Controller
             ], 422);
         }
 
-        // Create or update acceptance
         $acceptance = PartyAcceptance::updateOrCreate(
             [
-                'result_id' => $result->id,
+                'result_id'          => $result->id,
                 'political_party_id' => $partyRep->political_party_id,
             ],
             [
                 'party_representative_id' => $partyRep->id,
-                'election_id' => $result->election_id,
-                'status' => $validated['status'],
-                'comments' => $validated['comments'],
-                'decided_at' => now(),
-                'is_final' => true,
+                'election_id'             => $result->election_id,
+                'status'                  => $validated['status'],
+                'comments'                => $validated['comments'],
+                'decided_at'              => now(),
+                'is_final'                => true,
             ]
         );
 
-        // Audit log
         AuditLog::record(
-            action: 'party_acceptance.submitted',
-            event: 'created',
-            module: 'PartyAcceptance',
+            action:    'party_acceptance.submitted',
+            event:     'created',
+            module:    'PartyAcceptance',
             auditable: $acceptance,
-            extra: [
+            extra:     [
                 'election_id' => $result->election_id,
-                'result_id' => $result->id,
-                'status' => $validated['status'],
-                'outcome' => 'success',
+                'result_id'   => $result->id,
+                'status'      => $validated['status'],
+                'outcome'     => 'success',
             ]
         );
 
-        // Check if all parties have responded
         $this->checkIfAllPartiesResponded($result);
 
         return response()->json([
-            'message' => 'Acceptance recorded successfully.',
+            'message'    => 'Acceptance recorded successfully.',
             'acceptance' => $acceptance,
         ], 201);
     }
@@ -118,27 +104,52 @@ class AcceptanceController extends Controller
             return response()->json(['results' => []]);
         }
 
-        // Get results from assigned stations that are pending acceptance
         $results = Result::with(['pollingStation', 'candidateVotes.candidate', 'partyAcceptances'])
             ->whereIn('polling_station_id', $partyRep->pollingStations()->pluck('polling_station_id'))
             ->where('certification_status', Result::STATUS_PENDING_PARTY_ACCEPTANCE)
             ->get();
 
-        return response()->json([
-            'results' => $results,
-        ]);
+        return response()->json(['results' => $results]);
     }
 
+    /**
+     * Advance result to PENDING_WARD when all station-assigned party reps have responded.
+     *
+     * Uses the same station-specific check as ProcessResultSubmission and party.php routes
+     * to ensure consistency in the certification pipeline.
+     */
     private function checkIfAllPartiesResponded(Result $result): void
     {
-        $totalParties = $result->election->politicalParties()->count();
-        $acceptedParties = $result->partyAcceptances()->where('is_final', true)->count();
+        // ── Get the parties that actually have reps assigned to THIS station ──
+        // This matches the logic in ProcessResultSubmission::handle() and party.php
+        $assignedPartyIds = DB::table('party_representative_polling_station')
+            ->join('party_representatives', 'party_representatives.id', '=',
+                   'party_representative_polling_station.party_representative_id')
+            ->where('party_representative_polling_station.polling_station_id', $result->polling_station_id)
+            ->where('party_representatives.is_active', true)
+            ->pluck('party_representatives.political_party_id')
+            ->unique();
 
-        if ($acceptedParties >= $totalParties) {
-            // All parties responded - transition to pending ward
-            $result->update([
-                'certification_status' => Result::STATUS_PENDING_WARD,
-            ]);
+        $totalAssignedParties = $assignedPartyIds->count();
+
+        // No party reps for this station — advance immediately
+        if ($totalAssignedParties === 0) {
+            if ($result->certification_status === Result::STATUS_PENDING_PARTY_ACCEPTANCE) {
+                $result->update(['certification_status' => Result::STATUS_PENDING_WARD]);
+            }
+            return;
+        }
+
+        // Check how many of the assigned parties have submitted a final decision
+        $respondedParties = PartyAcceptance::where('result_id', $result->id)
+            ->where('is_final', true)
+            ->whereIn('political_party_id', $assignedPartyIds)
+            ->count();
+
+        if ($respondedParties >= $totalAssignedParties) {
+            if ($result->certification_status === Result::STATUS_PENDING_PARTY_ACCEPTANCE) {
+                $result->update(['certification_status' => Result::STATUS_PENDING_WARD]);
+            }
         }
     }
 }

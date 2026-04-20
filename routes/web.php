@@ -8,8 +8,11 @@ use App\Http\Controllers\Public\ResultsStationsController;
 use App\Http\Controllers\Auth\TwoFactorController;
 use App\Http\Controllers\ReportController;
 
-// ─── Public routes ────────────────────────────────────────────────────────────
-Route::get('/', fn() => Inertia::render('Welcome'))->name('home');
+// ─── Home — Public Results Page ───────────────────────────────────────────────
+// The home page IS the public results page.
+Route::get('/', [ResultsSummaryController::class, 'index'])->name('home');
+
+// ─── Public Results ───────────────────────────────────────────────────────────
 Route::get('/results', [ResultsSummaryController::class, 'index'])->name('results');
 Route::get('/results/map', [ResultsMapController::class, 'index'])->name('results.map');
 Route::get('/results/stations', [ResultsStationsController::class, 'index'])->name('results.stations');

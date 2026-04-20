@@ -8,6 +8,7 @@ use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 
@@ -26,21 +27,14 @@ class AuthenticatedSessionController extends Controller
     }
 
     /**
-     * Handle login form submission.
-     *
-     * We intentionally do NOT call Auth::attempt() here because that would
-     * log the user in immediately.  Instead we validate credentials manually,
-     * store the pending user ID in the session, and redirect to 2FA.
-     *
-     * We also do NOT call Auth::logout() / session()->invalidate() here
-     * because that regenerates the CSRF token and causes 419 errors on
-     * the subsequent 2FA form submission.
+     * Handle login. Code is stored in cache BEFORE SMS is attempted.
+     * SMS failure is caught and logged — it NEVER blocks the redirect.
      */
     public function store(Request $request)
     {
-        // Raise the time limit for this request only so a slow SMS gateway
-        // cannot kill the login flow.
-        set_time_limit(60);
+        if (function_exists('set_time_limit')) {
+            set_time_limit(60);
+        }
 
         $request->validate([
             'email'    => 'required|email',
@@ -64,15 +58,22 @@ class AuthenticatedSessionController extends Controller
         // Store pending user ID for the 2FA step
         $request->session()->put('2fa_user_id', $user->id);
 
-        // Generate + send 2FA code (non-blocking in local env)
+        // ── Generate & STORE the code in cache BEFORE attempting SMS ──────────
+        // This ensures the user can always verify, even if SMS fails.
         $code      = $this->twoFactorService->generateCode($user);
         $expiresAt = now()->addMinutes(10);
 
         $request->session()->put('2fa_sms_sent',   true);
         $request->session()->put('2fa_expires_at', $expiresAt->timestamp);
 
-        // Send asynchronously — failure is logged but never fatal
-        $this->twoFactorService->sendCode($user, $code);
+        // ── Send SMS — wrapped in try/catch so it NEVER blocks login ──────────
+        try {
+            $this->twoFactorService->sendCode($user, $code);
+        } catch (\Throwable $e) {
+            // Log the failure but continue — code is in cache, user can resend
+            Log::error('[Auth] 2FA SMS dispatch failed: ' . $e->getMessage());
+            Log::info("[Auth] Fallback 2FA code for {$user->email}: {$code}");
+        }
 
         return to_route('two-factor.show');
     }

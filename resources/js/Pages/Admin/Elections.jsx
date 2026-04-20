@@ -31,8 +31,8 @@ function PartySelector({ allParties, selectedIds, onChange }) {
     return (
         <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
             {allParties.map((party) => {
-                const selected = selectedIds.includes(party.id);
-                const colors = parseColors(party.color);
+                const selected    = selectedIds.includes(party.id);
+                const colors      = parseColors(party.color);
                 const primaryColor = colors[0] || '#6b7280';
 
                 return (
@@ -50,14 +50,9 @@ function PartySelector({ allParties, selectedIds, onChange }) {
                             onChange={() => toggle(party.id)}
                             className="h-4 w-4 text-teal-600 bg-slate-900 border-slate-600 rounded"
                         />
-                        {/* Color swatch(es) */}
                         <div className="flex gap-0.5 flex-shrink-0">
                             {colors.length > 0 ? colors.map((c, i) => (
-                                <span
-                                    key={i}
-                                    className="w-4 h-4 rounded-sm border border-white/20"
-                                    style={{ backgroundColor: c }}
-                                />
+                                <span key={i} className="w-4 h-4 rounded-sm border border-white/20" style={{ backgroundColor: c }} />
                             )) : (
                                 <span className="w-4 h-4 rounded-sm bg-gray-500 border border-white/20" />
                             )}
@@ -66,9 +61,7 @@ function PartySelector({ allParties, selectedIds, onChange }) {
                             <div className="text-white text-sm font-medium truncate">{party.name}</div>
                             <div className="text-gray-400 text-xs">{party.abbreviation}</div>
                         </div>
-                        {selected && (
-                            <span className="text-teal-400 text-xs font-semibold flex-shrink-0">✓ Selected</span>
-                        )}
+                        {selected && <span className="text-teal-400 text-xs font-semibold flex-shrink-0">✓ Selected</span>}
                     </label>
                 );
             })}
@@ -76,7 +69,6 @@ function PartySelector({ allParties, selectedIds, onChange }) {
     );
 }
 
-// Inline party badges for the election card
 function PartyBadges({ parties }) {
     if (!parties || parties.length === 0) {
         return <span className="text-gray-500 text-xs italic">No parties assigned</span>;
@@ -90,7 +82,7 @@ function PartyBadges({ parties }) {
     return (
         <div className="flex flex-wrap gap-2 mt-2">
             {parties.map((party) => {
-                const colors = parseColors(party.color);
+                const colors       = parseColors(party.color);
                 const primaryColor = colors[0] || '#6b7280';
                 return (
                     <span
@@ -98,10 +90,7 @@ function PartyBadges({ parties }) {
                         className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-semibold border border-white/10"
                         style={{ backgroundColor: primaryColor + '22', color: primaryColor }}
                     >
-                        <span
-                            className="w-2 h-2 rounded-full flex-shrink-0"
-                            style={{ backgroundColor: primaryColor }}
-                        />
+                        <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: primaryColor }} />
                         {party.abbreviation}
                     </span>
                 );
@@ -110,9 +99,30 @@ function PartyBadges({ parties }) {
     );
 }
 
+const STATUS_COLORS = {
+    active:          'bg-teal-500/20 text-teal-300 border-teal-500/30',
+    draft:           'bg-gray-500/20 text-gray-300 border-gray-500/30',
+    certified:       'bg-green-500/20 text-green-300 border-green-500/30',
+    results_pending: 'bg-amber-500/20 text-amber-300 border-amber-500/30',
+    certifying:      'bg-blue-500/20 text-blue-300 border-blue-500/30',
+    archived:        'bg-slate-500/20 text-slate-400 border-slate-500/30',
+};
+
+const TYPE_OPTIONS = [
+    { value: 'presidential',  label: 'Presidential' },
+    { value: 'parliamentary', label: 'Parliamentary' },
+    { value: 'local',         label: 'Local Council' },
+    { value: 'referendum',    label: 'By-Election / Referendum' },
+];
+
+const STATUS_OPTIONS = [
+    'draft', 'configured', 'active', 'results_pending', 'certifying', 'certified', 'archived',
+];
+
 export default function Elections({ auth, elections = [], allParties = [], flash }) {
-    const [editingElection, setEditingElection] = useState(null);
+    const [editingElection, setEditingElection]           = useState(null);
     const [showDeactivateConfirm, setShowDeactivateConfirm] = useState(null);
+    const [deletingId, setDeletingId]                     = useState(null);
 
     const { data, setData, put, processing, errors, reset } = useForm({
         name:      '',
@@ -122,6 +132,7 @@ export default function Elections({ auth, elections = [], allParties = [], flash
         party_ids: [],
     });
 
+    // ── Open Edit Modal ───────────────────────────────────────────────────────
     const openEdit = (election) => {
         setData({
             name:      election.name,
@@ -145,124 +156,130 @@ export default function Elections({ auth, elections = [], allParties = [], flash
         });
     };
 
+    // ── Delete Election ───────────────────────────────────────────────────────
+    const handleElectionDelete = (id, name) => {
+        if (!window.confirm(
+            `Force-delete election "${name}"?\n\n⚠ This PERMANENTLY removes ALL related data including results, parties, candidates, polling stations, and certifications.\n\nThis cannot be undone.`
+        )) return;
+
+        setDeletingId(id);
+        router.delete(`/admin/elections/${id}/force`, {
+            onSuccess: () => setDeletingId(null),
+            onError: (errs) => {
+                setDeletingId(null);
+                alert(errs?.error || 'Failed to delete election.');
+            },
+            onFinish: () => setDeletingId(null),
+        });
+    };
+
+    // ── Toggle Active/Archived ────────────────────────────────────────────────
     const handleDeactivate = (election) => {
         router.patch(`/admin/elections/${election.id}/toggle-status`, {}, {
             onSuccess: () => setShowDeactivateConfirm(null),
         });
     };
 
-    const statusColors = {
-        active:          'bg-teal-500/20 text-teal-300 border-teal-500/30',
-        draft:           'bg-gray-500/20 text-gray-300 border-gray-500/30',
-        certified:       'bg-green-500/20 text-green-300 border-green-500/30',
-        results_pending: 'bg-amber-500/20 text-amber-300 border-amber-500/30',
-        certifying:      'bg-blue-500/20 text-blue-300 border-blue-500/30',
-        archived:        'bg-slate-500/20 text-slate-400 border-slate-500/30',
-    };
-
-    const typeOptions = [
-        { value: 'presidential',  label: 'Presidential' },
-        { value: 'parliamentary', label: 'Parliamentary' },
-        { value: 'local',         label: 'Local Council' },
-        { value: 'referendum',    label: 'Referendum' },
-    ];
-
     return (
         <AppLayout user={auth?.user}>
             <div className="container mx-auto px-4 py-8">
+
                 {/* Header */}
-                <div className="flex justify-between items-center mb-6">
+                <div className="flex flex-wrap justify-between items-start gap-4 mb-6">
                     <div>
                         <Link href="/admin/dashboard" className="text-gray-400 hover:text-white text-sm mb-2 inline-block">
                             ← Back to Dashboard
                         </Link>
                         <h1 className="text-3xl font-bold text-white">Election Management</h1>
+                        <p className="text-gray-400 text-sm mt-1">Create and configure elections, assign participating parties.</p>
                     </div>
-                    <Link href="/admin/elections/create" className="px-6 py-3 bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-lg">
+                    <Link href="/admin/elections/create"
+                          className="px-6 py-3 bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-lg">
                         + Create New Election
                     </Link>
                 </div>
 
                 {/* Flash messages */}
                 {flash?.success && (
-                    <div className="mb-6 p-4 bg-pink-500/20 border border-pink-500/50 rounded-lg text-pink-300">
-                        {flash.success}
+                    <div className="mb-6 p-4 bg-teal-500/20 border border-teal-500/50 rounded-lg text-teal-300">
+                        ✓ {flash.success}
                     </div>
                 )}
                 {flash?.error && (
                     <div className="mb-6 p-4 bg-red-500/20 border border-red-500/50 rounded-lg text-red-300">
-                        {flash.error}
+                        ⚠ {flash.error}
                     </div>
                 )}
 
                 {/* Elections list */}
                 <div className="space-y-4">
-                    {elections.length > 0 ? (
-                        elections.map((election) => (
-                            <div
-                                key={election.id}
-                                className={`bg-slate-800/40 rounded-xl p-6 border transition-colors ${
-                                    election.status === 'archived'
-                                        ? 'border-slate-700/30 opacity-60'
-                                        : 'border-slate-700/50'
-                                }`}
-                            >
-                                <div className="flex justify-between items-start">
-                                    {/* Info */}
-                                    <div className="flex-1">
-                                        <h3 className="text-xl font-bold text-white mb-1">{election.name}</h3>
-                                        <p className="text-gray-400 capitalize text-sm">
-                                            {election.type?.replace(/_/g, ' ')} &bull; {election.date}
-                                        </p>
-                                        {/* Participating parties */}
-                                        <div className="mt-3">
-                                            <p className="text-gray-500 text-xs mb-1 uppercase tracking-wide">
-                                                Participating Parties ({election.participating_parties?.length || 0})
-                                            </p>
-                                            <PartyBadges parties={election.participating_parties} />
-                                        </div>
+                    {elections.length > 0 ? elections.map((election) => (
+                        <div
+                            key={election.id}
+                            className={`bg-slate-800/40 rounded-xl p-6 border transition-colors ${
+                                election.status === 'archived'
+                                    ? 'border-slate-700/30 opacity-70'
+                                    : election.status === 'active'
+                                    ? 'border-teal-500/30'
+                                    : 'border-slate-700/50'
+                            }`}
+                        >
+                            <div className="flex flex-wrap justify-between items-start gap-4">
+
+                                {/* Info */}
+                                <div className="flex-1 min-w-0">
+                                    <div className="flex flex-wrap items-center gap-3 mb-1">
+                                        <h3 className="text-xl font-bold text-white">{election.name}</h3>
+                                        <span className={`px-3 py-1 rounded-full text-xs font-semibold border ${
+                                            STATUS_COLORS[election.status] || STATUS_COLORS.draft
+                                        }`}>
+                                            {election.status?.replace(/_/g, ' ')}
+                                        </span>
                                     </div>
+                                    <p className="text-gray-400 capitalize text-sm">
+                                        {election.type?.replace(/_/g, ' ')} · {election.date}
+                                    </p>
 
-                                    {/* Status badge */}
-                                    <span className={`px-3 py-1 rounded-full text-xs font-semibold border mr-4 flex-shrink-0 ${
-                                        statusColors[election.status] || statusColors.draft
-                                    }`}>
-                                        {election.status?.replace(/_/g, ' ')}
-                                    </span>
-
-                                    {/* Actions */}
-                                    <div className="flex gap-2 flex-shrink-0">
-                                        <button
-                                            onClick={() => openEdit(election)}
-                                            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold transition-colors"
-                                        >
-                                            Edit
-                                        </button>
-
-                                        <button
-                                            onClick={() => onDelete(election.id, election.name)}
-                                            className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-red-600/40 text-red-400 hover:bg-red-600/20 transition-colors">
-                                            Delete
-                                        </button>
-
-                                        {/* {election.status !== 'certified' && (
-                                            <button
-                                                onClick={() => setShowDeactivateConfirm(election)}
-                                                className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
-                                                    election.status === 'archived'
-                                                        ? 'bg-teal-600 hover:bg-teal-700 text-white'
-                                                        : 'bg-red-600/80 hover:bg-red-700 text-white'
-                                                }`}
-                                            >
-                                                {election.status === 'archived' ? '✅ Activate' : '🚫 Deactivate'}
-                                            </button>
-                                        )} */}
+                                    {/* Participating parties */}
+                                    <div className="mt-3">
+                                        <p className="text-gray-500 text-xs uppercase tracking-wide mb-1">
+                                            Participating Parties ({election.participating_parties?.length || 0})
+                                        </p>
+                                        <PartyBadges parties={election.participating_parties} />
                                     </div>
                                 </div>
+
+                                {/* Actions */}
+                                <div className="flex gap-2 flex-shrink-0 flex-wrap">
+                                    <button
+                                        onClick={() => openEdit(election)}
+                                        className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold transition-colors"
+                                    >
+                                        ✏ Edit
+                                    </button>
+                                    <button
+                                        onClick={() => setShowDeactivateConfirm(election)}
+                                        className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
+                                            election.status === 'archived'
+                                                ? 'bg-teal-600/80 hover:bg-teal-600 text-white'
+                                                : 'bg-amber-600/80 hover:bg-amber-600 text-white'
+                                        }`}
+                                    >
+                                        {election.status === 'archived' ? '✅ Activate' : '🚫 Archive'}
+                                    </button>
+                                    <button
+                                        onClick={() => handleElectionDelete(election.id, election.name)}
+                                        disabled={deletingId === election.id}
+                                        className="px-4 py-2 bg-red-700/80 hover:bg-red-700 disabled:opacity-50 text-white rounded-lg text-sm font-semibold transition-colors"
+                                    >
+                                        {deletingId === election.id ? 'Deleting…' : '🗑 Delete'}
+                                    </button>
+                                </div>
                             </div>
-                        ))
-                    ) : (
+                        </div>
+                    )) : (
                         <div className="bg-slate-800/40 rounded-xl p-12 border border-slate-700/50 text-center">
+                            <div className="text-5xl mb-4">🗳️</div>
                             <p className="text-gray-400 mb-4">No elections configured yet.</p>
                             <Link href="/admin/elections/create"
                                   className="px-6 py-3 bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-lg inline-block">
@@ -273,79 +290,88 @@ export default function Elections({ auth, elections = [], allParties = [], flash
                 </div>
             </div>
 
-            {/* ── Edit Modal ───────────────────────────────────────────────── */}
+            {/* ── Edit Modal ─────────────────────────────────────────────────── */}
             {editingElection && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-                    <div className="bg-slate-800 rounded-2xl border border-slate-700 w-full max-w-2xl shadow-2xl max-h-[90vh] overflow-y-auto">
-                        <div className="flex items-center justify-between p-6 border-b border-slate-700">
-                            <h2 className="text-xl font-bold text-white">Edit Election</h2>
-                            <button onClick={closeEdit} className="text-gray-400 hover:text-white text-2xl leading-none">×</button>
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+                    <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-2xl shadow-2xl flex flex-col"
+                         style={{ maxHeight: '90vh' }}>
+
+                        {/* Modal Header */}
+                        <div className="flex items-center justify-between px-6 py-5 border-b border-slate-700 flex-shrink-0">
+                            <div>
+                                <h2 className="text-xl font-bold text-white">Edit Election</h2>
+                                <p className="text-gray-400 text-sm mt-0.5">{editingElection.name}</p>
+                            </div>
+                            <button onClick={closeEdit} className="text-gray-400 hover:text-white text-2xl leading-none w-8 h-8 flex items-center justify-center">
+                                ×
+                            </button>
                         </div>
 
-                        <form onSubmit={handleUpdate} className="p-6 space-y-5">
+                        {/* Modal Body — scrollable */}
+                        <div className="overflow-y-auto flex-1 px-6 py-5 space-y-5">
+
                             {/* Name */}
                             <div>
-                                <label className="block text-gray-300 mb-1 text-sm font-semibold">Election Name</label>
+                                <label className="block text-gray-300 mb-1.5 text-sm font-semibold">
+                                    Election Name <span className="text-red-400">*</span>
+                                </label>
                                 <input
                                     type="text"
                                     value={data.name}
                                     onChange={(e) => setData('name', e.target.value)}
-                                    className="w-full px-4 py-3 bg-slate-900/60 border border-slate-600 rounded-lg text-white text-sm"
+                                    className="w-full px-4 py-3 bg-slate-800 border border-slate-600 rounded-lg text-white text-sm focus:outline-none focus:border-teal-500"
                                     required
                                 />
                                 {errors.name && <p className="text-red-400 text-xs mt-1">{errors.name}</p>}
                             </div>
 
-                            {/* Type */}
-                            <div>
-                                <label className="block text-gray-300 mb-1 text-sm font-semibold">Election Type</label>
-                                <select
-                                    value={data.type}
-                                    onChange={(e) => setData('type', e.target.value)}
-                                    className="w-full px-4 py-3 bg-slate-900/60 border border-slate-600 rounded-lg text-white text-sm"
-                                >
-                                    {typeOptions.map(o => (
-                                        <option key={o.value} value={o.value}>{o.label}</option>
-                                    ))}
-                                </select>
-                                {errors.type && <p className="text-red-400 text-xs mt-1">{errors.type}</p>}
-                            </div>
-
-                            {/* Date */}
-                            <div>
-                                <label className="block text-gray-300 mb-1 text-sm font-semibold">Election Date</label>
-                                <input
-                                    type="date"
-                                    value={data.date}
-                                    onChange={(e) => setData('date', e.target.value)}
-                                    className="w-full px-4 py-3 bg-slate-900/60 border border-slate-600 rounded-lg text-white text-sm"
-                                    required
-                                />
-                                {errors.date && <p className="text-red-400 text-xs mt-1">{errors.date}</p>}
+                            {/* Type + Date */}
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-gray-300 mb-1.5 text-sm font-semibold">
+                                        Election Type <span className="text-red-400">*</span>
+                                    </label>
+                                    <select
+                                        value={data.type}
+                                        onChange={(e) => setData('type', e.target.value)}
+                                        className="w-full px-4 py-3 bg-slate-800 border border-slate-600 rounded-lg text-white text-sm focus:outline-none focus:border-teal-500"
+                                    >
+                                        {TYPE_OPTIONS.map(o => (
+                                            <option key={o.value} value={o.value}>{o.label}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-gray-300 mb-1.5 text-sm font-semibold">
+                                        Election Date <span className="text-red-400">*</span>
+                                    </label>
+                                    <input
+                                        type="date"
+                                        value={data.date}
+                                        onChange={(e) => setData('date', e.target.value)}
+                                        className="w-full px-4 py-3 bg-slate-800 border border-slate-600 rounded-lg text-white text-sm focus:outline-none focus:border-teal-500"
+                                        required
+                                    />
+                                </div>
                             </div>
 
                             {/* Status */}
                             <div>
-                                <label className="block text-gray-300 mb-1 text-sm font-semibold">Status</label>
+                                <label className="block text-gray-300 mb-1.5 text-sm font-semibold">Status</label>
                                 <select
                                     value={data.status}
                                     onChange={(e) => setData('status', e.target.value)}
-                                    className="w-full px-4 py-3 bg-slate-900/60 border border-slate-600 rounded-lg text-white text-sm"
+                                    className="w-full px-4 py-3 bg-slate-800 border border-slate-600 rounded-lg text-white text-sm focus:outline-none focus:border-teal-500"
                                 >
-                                    <option value="draft">Draft</option>
-                                    <option value="configured">Configured</option>
-                                    <option value="active">Active</option>
-                                    <option value="results_pending">Results Pending</option>
-                                    <option value="certifying">Certifying</option>
-                                    <option value="certified">Certified</option>
-                                    <option value="archived">Archived</option>
+                                    {STATUS_OPTIONS.map(s => (
+                                        <option key={s} value={s}>{s.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</option>
+                                    ))}
                                 </select>
-                                {errors.status && <p className="text-red-400 text-xs mt-1">{errors.status}</p>}
                             </div>
 
                             {/* Participating Parties */}
                             <div>
-                                <label className="block text-gray-300 mb-2 text-sm font-semibold">
+                                <label className="block text-gray-300 mb-1.5 text-sm font-semibold">
                                     Participating Parties
                                     <span className="ml-2 text-gray-500 font-normal text-xs">
                                         ({data.party_ids.length} selected)
@@ -358,40 +384,41 @@ export default function Elections({ auth, elections = [], allParties = [], flash
                                 />
                                 {errors.party_ids && <p className="text-red-400 text-xs mt-1">{errors.party_ids}</p>}
                             </div>
+                        </div>
 
-                            {/* Buttons */}
-                            <div className="flex gap-3 pt-2">
-                                <button
-                                    type="submit"
-                                    disabled={processing}
-                                    className="flex-1 py-3 bg-teal-600 hover:bg-teal-700 disabled:opacity-50 text-white font-bold rounded-lg text-sm"
-                                >
-                                    {processing ? 'Saving…' : 'Save Changes'}
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={closeEdit}
-                                    className="flex-1 py-3 bg-slate-700 hover:bg-slate-600 text-white font-bold rounded-lg text-sm"
-                                >
-                                    Cancel
-                                </button>
-                            </div>
-                        </form>
+                        {/* Modal Footer */}
+                        <div className="flex gap-3 px-6 py-4 border-t border-slate-700 flex-shrink-0">
+                            <button
+                                type="button"
+                                onClick={handleUpdate}
+                                disabled={processing}
+                                className="flex-1 py-3 bg-teal-600 hover:bg-teal-700 disabled:opacity-50 text-white font-bold rounded-lg text-sm transition-colors"
+                            >
+                                {processing ? 'Saving…' : '✓ Save Changes'}
+                            </button>
+                            <button
+                                type="button"
+                                onClick={closeEdit}
+                                className="flex-1 py-3 bg-slate-700 hover:bg-slate-600 text-white font-bold rounded-lg text-sm transition-colors"
+                            >
+                                Cancel
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}
 
-            {/* ── Deactivate Confirm Modal ─────────────────────────────────── */}
+            {/* ── Archive / Activate Confirm ─────────────────────────────────── */}
             {showDeactivateConfirm && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-                    <div className="bg-slate-800 rounded-2xl border border-slate-700 w-full max-w-md shadow-2xl p-6">
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+                    <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-md shadow-2xl p-6">
                         <h2 className="text-xl font-bold text-white mb-3">
-                            {showDeactivateConfirm.status === 'archived' ? 'Activate Election' : 'Deactivate Election'}
+                            {showDeactivateConfirm.status === 'archived' ? '✅ Activate Election' : '🚫 Archive Election'}
                         </h2>
                         <p className="text-gray-300 mb-6 text-sm leading-relaxed">
                             {showDeactivateConfirm.status === 'archived'
                                 ? <>Are you sure you want to <strong className="text-teal-300">activate</strong> <em>{showDeactivateConfirm.name}</em>?</>
-                                : <>Are you sure you want to <strong className="text-red-300">deactivate</strong> <em>{showDeactivateConfirm.name}</em>?</>
+                                : <>Are you sure you want to <strong className="text-amber-300">archive</strong> <em>{showDeactivateConfirm.name}</em>? Results will still be visible.</>
                             }
                         </p>
                         <div className="flex gap-3">
@@ -400,10 +427,10 @@ export default function Elections({ auth, elections = [], allParties = [], flash
                                 className={`flex-1 py-3 font-bold rounded-lg text-white text-sm ${
                                     showDeactivateConfirm.status === 'archived'
                                         ? 'bg-teal-600 hover:bg-teal-700'
-                                        : 'bg-red-600 hover:bg-red-700'
+                                        : 'bg-amber-600 hover:bg-amber-700'
                                 }`}
                             >
-                                {showDeactivateConfirm.status === 'archived' ? 'Yes, Activate' : 'Yes, Deactivate'}
+                                {showDeactivateConfirm.status === 'archived' ? 'Yes, Activate' : 'Yes, Archive'}
                             </button>
                             <button
                                 onClick={() => setShowDeactivateConfirm(null)}
