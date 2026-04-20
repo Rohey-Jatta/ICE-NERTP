@@ -51,7 +51,7 @@ export default function PartyRepresentativeCreate({ auth, users, parties, pollin
                                     required
                                 >
                                     <option value="">Choose a user</option>
-                                    {users.map((user) => (
+                                    {users.filter(user => user.role === 'party_representative').map((user) => (
                                         <option key={user.id} value={user.id}>
                                             {user.name} ({user.email})
                                         </option>

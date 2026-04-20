@@ -219,7 +219,7 @@ export default function PartyCreate({ auth, activeElectionId }) {
                                 <input type="text" value={data.abbreviation}
                                     onChange={(e) => setData('abbreviation', e.target.value.toUpperCase().slice(0, 10))}
                                     className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white font-mono"
-                                    placeholder="e.g. UDP" maxLength={10} required />
+                                    placeholder="e.g. IEC" maxLength={10} required />
                                 {errors.abbreviation && <p className="text-red-400 text-sm mt-1">{errors.abbreviation}</p>}
                             </div>
                         </div>
@@ -323,7 +323,7 @@ export default function PartyCreate({ auth, activeElectionId }) {
                             <button type="submit" disabled={!canSubmit}
                                 title={!activeElectionId ? 'Create an election first' : ''}
                                 className="flex-1 px-6 py-3 bg-teal-600 hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold rounded-lg transition-colors">
-                                {processing ? 'Registering…' : !activeElectionId ? 'No Active Election' : '✓ Register Party & Add Candidates →'}
+                                {processing ? 'Registering…' : !activeElectionId ? 'No Active Election' : 'Register Party & Add Candidates'}
                             </button>
                             <Link href="/admin/parties"
                                 className="flex-1 px-6 py-3 bg-slate-700 hover:bg-slate-600 text-white font-bold rounded-lg text-center transition-colors">

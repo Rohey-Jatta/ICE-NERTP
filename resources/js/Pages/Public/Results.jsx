@@ -27,7 +27,21 @@ function ResultsNav({ active = 'summary' }) {
     );
 }
 
-
+// ── Hero Banner ───────────────────────────────────────────────────────────────
+function HeroBanner() {
+    return (
+        <div className="py-12 text-center">
+            <div className="container mx-auto px-4">
+                <h2 className="text-3xl font-bold text-white mb-2">
+                    Election Results
+                </h2>
+                <p className="text-gray-400">
+                    Independent Electoral Commission of The Gambia — Official Results Portal
+                </p>
+            </div>
+        </div>
+    );
+}
 
 // ── Main export ───────────────────────────────────────────────────────────────
 export default function Results({ election, stats, candidates, message }) {

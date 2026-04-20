@@ -38,9 +38,29 @@ Route::middleware(['auth', 'role:iec-administrator'])
 
     // ── Users ─────────────────────────────────────────────────────────────────
     Route::get('/users', function () {
+        $users = User::with('roles')
+            ->leftJoin('model_has_roles', function ($join) {
+                $join->on('users.id', '=', 'model_has_roles.model_id')
+                    ->where('model_has_roles.model_type', '=', 'App\\Models\\User');
+            })
+            ->leftJoin('roles', 'model_has_roles.role_id', '=', 'roles.id')
+            ->select('users.*')
+            ->orderByRaw("CASE roles.name
+                WHEN 'iec-administrator'     THEN 1
+                WHEN 'iec-chairman'          THEN 2
+                WHEN 'admin-area-approver'   THEN 3
+                WHEN 'constituency-approver' THEN 4
+                WHEN 'ward-approver'         THEN 5
+                WHEN 'polling-officer'       THEN 6
+                WHEN 'party-representative'  THEN 7
+                WHEN 'election-monitor'      THEN 8
+                ELSE 9 END")
+            ->orderBy('users.name')
+            ->paginate(20);
+
         return Inertia::render('Admin/Users', [
             'auth'  => ['user' => Auth::user()],
-            'users' => User::with('roles')->paginate(20),
+            'users' => $users,
         ]);
     })->name('users');
 

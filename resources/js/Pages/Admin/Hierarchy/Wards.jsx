@@ -59,8 +59,8 @@ export default function Wards({ auth, wards = [], flash }) {
                                         <tr key={ward.id} className="border-b border-slate-700/50 hover:bg-slate-700/20">
                                             <td className="py-4 px-5 text-white font-mono">{ward.code || '—'}</td>
                                             <td className="py-4 px-5 text-white font-semibold">{ward.name}</td>
-                                            <td className="py-4 px-5 text-gray-400">{ward.parent_name || '—'}</td>
-                                            <td className="py-4 px-5 text-gray-500 text-sm">{ward.grandparent_name || '—'}</td>
+                                            <td className="py-4 px-5 text-white">{ward.parent_name || '—'}</td>
+                                            <td className="py-4 px-5 text-white text-sm">{ward.grandparent_name || '—'}</td>
                                             <td className="py-4 px-5 text-right text-white">{ward.stations_count ?? 0}</td>
                                             <td className="py-4 px-5">
                                                 <div className="flex items-center justify-center gap-2">
