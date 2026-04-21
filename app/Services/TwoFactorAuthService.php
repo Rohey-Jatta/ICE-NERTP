@@ -17,6 +17,7 @@ class TwoFactorAuthService
 
     /**
      * Generate a 6-digit 2FA code and store it in cache for 10 minutes.
+     * Always stores in cache FIRST before any attempt to send.
      */
     public function generateCode(User $user): string
     {
@@ -24,25 +25,27 @@ class TwoFactorAuthService
         $cacheKey = "2fa_code_{$user->id}";
         Cache::put($cacheKey, $code, now()->addMinutes(10));
 
+        // Always log the code so it's accessible during development/testing
+        Log::info("[2FA] Code generated for {$user->email}: {$code}");
+
         return $code;
     }
 
     /**
-     * Send the generated code to the user's phone number via SMS.
-     * Always logs the code so developers can use it even without SMS configured.
+     * Send the code via SMS. Never throws — always returns bool.
      */
     public function sendCode(User $user, string $code): bool
     {
-        // Always log so the code is accessible during development
-        Log::info("[2FA] Code for {$user->email} ({$user->phone}): {$code}");
-
-        // Send via SMS — SmsService handles dev/prod branching internally
-        // and will never block on a network call in local environments
-        return $this->smsService->send2FACode($user->phone, $code);
+        try {
+            return $this->smsService->send2FACode($user->phone, $code);
+        } catch (\Throwable $e) {
+            Log::error("[2FA] sendCode failed for {$user->email}: " . $e->getMessage());
+            return false;
+        }
     }
 
     /**
-     * Alias used by some controllers.
+     * Alias used by some controllers — generates and sends in one call.
      */
     public function sendSmsOtp(User $user): bool
     {

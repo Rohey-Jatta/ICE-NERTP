@@ -27,6 +27,7 @@ const ACTION_CONFIG = {
         btnColor:    'bg-teal-600 hover:bg-teal-700',
         commentReq:  false,
         placeholder: 'Add any notes or observations (optional)…',
+        commentLabel:'Additional Comments (optional)',
     },
     approve_reservation: {
         title:       'Certify with Reservation',
@@ -35,6 +36,7 @@ const ACTION_CONFIG = {
         btnColor:    'bg-amber-600 hover:bg-amber-700',
         commentReq:  true,
         placeholder: 'Describe your reservation or concern…',
+        commentLabel:'Reservation Note (required)',
     },
     reject: {
         title:       'Reject & Return to Ward',
@@ -43,6 +45,7 @@ const ACTION_CONFIG = {
         btnColor:    'bg-red-600 hover:bg-red-700',
         commentReq:  true,
         placeholder: 'Explain clearly why this result is being rejected and what needs to be corrected…',
+        commentLabel:'Rejection Reason (required)',
     },
 };
 
@@ -58,21 +61,20 @@ export default function ConstituencyApprovalQueue({
     const [comment, setComment]               = useState('');
     const [processing, setProcessing]         = useState(false);
     const [flash, setFlash]                   = useState(null);
-    // Anomaly flag state per result
     const [flagged, setFlagged]               = useState({});
 
     const filterTabs = [
         { key: 'pending',   label: 'Pending',   count: counts.pending   || 0, color: 'amber' },
-        { key: 'certified', label: 'Certified', count: counts.certified || 0, color: 'teal' },
-        { key: 'rejected',  label: 'Rejected',  count: counts.rejected  || 0, color: 'red' },
+        { key: 'certified', label: 'Certified', count: counts.certified || 0, color: 'teal'  },
+        { key: 'rejected',  label: 'Rejected',  count: counts.rejected  || 0, color: 'red'   },
         { key: 'all',       label: 'All',       count: counts.all       || 0, color: 'slate' },
     ];
 
     const tabColors = {
-        amber: { active: 'bg-amber-500 text-white',  dot: 'bg-amber-400' },
-        teal:  { active: 'bg-teal-500 text-white',   dot: 'bg-teal-400' },
-        red:   { active: 'bg-red-500 text-white',    dot: 'bg-red-400' },
-        slate: { active: 'bg-slate-500 text-white',  dot: 'bg-slate-400' },
+        amber: { active: 'bg-amber-500 text-white', dot: 'bg-amber-400' },
+        teal:  { active: 'bg-teal-500 text-white',  dot: 'bg-teal-400' },
+        red:   { active: 'bg-red-500 text-white',   dot: 'bg-red-400' },
+        slate: { active: 'bg-slate-500 text-white', dot: 'bg-slate-400' },
     };
 
     const handleFilterChange = (key) => {
@@ -86,24 +88,16 @@ export default function ConstituencyApprovalQueue({
         setFlash(null);
     };
 
-    const closePanel = () => {
-        setSelectedResult(null);
-        setAction(null);
-        setComment('');
-    };
+    const closePanel = () => { setSelectedResult(null); setAction(null); setComment(''); };
 
-    const toggleFlag = (resultId) => {
-        setFlagged(prev => ({ ...prev, [resultId]: !prev[resultId] }));
-    };
+    const toggleFlag = (resultId) => setFlagged(prev => ({ ...prev, [resultId]: !prev[resultId] }));
 
     const submitAction = async () => {
         if (!selectedResult || !action) return;
-        const cfg = ACTION_CONFIG[action];
-        if (cfg.commentReq && !comment.trim()) {
+        if (ACTION_CONFIG[action].commentReq && !comment.trim()) {
             setFlash({ type: 'error', text: 'A comment is required for this action.' });
             return;
         }
-
         setProcessing(true);
         setFlash(null);
 
@@ -128,25 +122,18 @@ export default function ConstituencyApprovalQueue({
         }
     };
 
-    // Detect anomalies for a result
     const detectAnomalies = (result) => {
-        const anomalies = [];
-        if (result.turnout < 30) anomalies.push(`Low turnout: ${result.turnout}%`);
-        if (result.total_votes_cast > 0) {
-            const rejPct = (result.rejected_votes / result.total_votes_cast) * 100;
-            if (rejPct > 5) anomalies.push(`High rejected votes: ${rejPct.toFixed(1)}%`);
-        }
-        if (result.rejected_votes > 0 && result.rejection_count > 0) {
-            anomalies.push(`Previously rejected ${result.rejection_count} time${result.rejection_count > 1 ? 's' : ''}`);
-        }
-        return anomalies;
+        const a = [];
+        if (result.turnout < 30) a.push(`Low turnout: ${result.turnout}%`);
+        if (result.total_votes_cast > 0 && (result.rejected_votes / result.total_votes_cast) * 100 > 5)
+            a.push(`High rejected votes: ${((result.rejected_votes / result.total_votes_cast) * 100).toFixed(1)}%`);
+        if (result.rejection_count > 0) a.push(`Previously rejected ${result.rejection_count}×`);
+        return a;
     };
 
     return (
         <AppLayout user={auth?.user}>
             <div className="container mx-auto px-4 py-8">
-
-                {/* Header with back link */}
                 <div className="mb-6">
                     <Link href="/constituency/dashboard" className="text-gray-400 hover:text-white text-sm mb-2 inline-flex items-center gap-1">
                         Back to Constituency Dashboard
@@ -155,12 +142,9 @@ export default function ConstituencyApprovalQueue({
                     {constituency?.name && <p className="text-teal-300 mt-1">{constituency.name}</p>}
                 </div>
 
-                {/* Flash banner */}
                 {flash && (
                     <div className={`mb-4 p-4 rounded-xl border ${
-                        flash.type === 'error'
-                            ? 'bg-red-500/20 border-red-500/50 text-red-300'
-                            : 'bg-teal-500/20 border-teal-500/50 text-teal-300'
+                        flash.type === 'error' ? 'bg-red-500/20 border-red-500/50 text-red-300' : 'bg-teal-500/20 border-teal-500/50 text-teal-300'
                     }`}>
                         {flash.text}
                     </div>
@@ -189,53 +173,44 @@ export default function ConstituencyApprovalQueue({
                     })}
                 </div>
 
-                {/* Results */}
                 {results.length === 0 ? (
                     <div className="bg-slate-800/40 rounded-xl p-12 border border-slate-700/50 text-center">
                         <div className="text-5xl mb-4">
                             {filter === 'pending' ? '⏳' : filter === 'certified' ? '✅' : filter === 'rejected' ? '↩' : '📋'}
                         </div>
                         <p className="text-gray-300 text-lg">
-                            {filter === 'pending' ? 'No ward-certified results awaiting constituency certification' :
-                             filter === 'certified' ? 'No constituency-certified results yet' :
-                             filter === 'rejected' ? 'No rejected results' : 'No results found'}
+                            {filter === 'pending' ? 'No ward-certified results awaiting constituency certification'
+                            : filter === 'certified' ? 'No constituency-certified results yet'
+                            : filter === 'rejected' ? 'No rejected results' : 'No results found'}
                         </p>
                     </div>
                 ) : (
                     <div className="space-y-4">
                         {results.map(result => {
-                            const statusCfg  = STATUS_LABELS[result.certification_status] || { label: result.certification_status, color: 'bg-gray-500/20 text-gray-300' };
-                            const isPending  = result.certification_status === 'pending_constituency';
-                            const anomalies  = detectAnomalies(result);
-                            const isFlagged  = flagged[result.id] || anomalies.length > 0;
+                            const statusCfg = STATUS_LABELS[result.certification_status] || { label: result.certification_status, color: 'bg-gray-500/20 text-gray-300' };
+                            const isPending = result.certification_status === 'pending_constituency';
+                            const anomalies = detectAnomalies(result);
+                            const isFlagged = flagged[result.id] || anomalies.length > 0;
 
                             return (
                                 <div key={result.id} className={`bg-slate-800/40 rounded-xl border transition-all ${
-                                    isPending
-                                        ? isFlagged ? 'border-orange-500/50' : 'border-amber-500/30'
-                                        : 'border-slate-700/50'
+                                    isPending ? (isFlagged ? 'border-orange-500/50' : 'border-amber-500/30') : 'border-slate-700/50'
                                 }`}>
-                                    {/* Result Header */}
+                                    {/* Header */}
                                     <div className="p-5 flex flex-wrap gap-4 justify-between items-start">
                                         <div className="flex-1 min-w-0">
                                             <div className="flex items-center gap-3 mb-1 flex-wrap">
                                                 <h3 className="text-lg font-bold text-white">{result.polling_station}</h3>
                                                 <span className="text-xs font-mono text-gray-500">{result.polling_station_code}</span>
-                                                <span className="text-xs text-gray-400 bg-slate-700/50 px-2 py-0.5 rounded">
-                                                    Ward: {result.ward_name}
-                                                </span>
-                                                <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${statusCfg.color}`}>
-                                                    {statusCfg.label}
-                                                </span>
+                                                <span className="text-xs text-gray-400 bg-slate-700/50 px-2 py-0.5 rounded">Ward: {result.ward_name}</span>
+                                                <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${statusCfg.color}`}>{statusCfg.label}</span>
                                                 {result.rejection_count > 0 && (
                                                     <span className="px-2 py-0.5 rounded-full text-xs bg-orange-500/20 text-orange-300">
                                                         Rejected {result.rejection_count}×
                                                     </span>
                                                 )}
                                                 {isFlagged && (
-                                                    <span className="px-2 py-0.5 rounded-full text-xs bg-orange-500/20 text-orange-300">
-                                                        ⚠ Anomaly Flagged
-                                                    </span>
+                                                    <span className="px-2 py-0.5 rounded-full text-xs bg-orange-500/20 text-orange-300">⚠ Anomaly Flagged</span>
                                                 )}
                                             </div>
                                             <p className="text-gray-400 text-sm">Submitted: {result.submitted_at}</p>
@@ -244,12 +219,11 @@ export default function ConstituencyApprovalQueue({
                                             <div className="text-gray-400">Party Status</div>
                                             <div className={`font-semibold ${
                                                 result.party_acceptances.length === 0 ? 'text-gray-500' :
-                                                result.party_acceptances.every(p => p.status === 'accepted' || p.status === 'accepted_with_reservation')
+                                                result.party_acceptances.every(p => ['accepted','accepted_with_reservation'].includes(p.status))
                                                     ? 'text-green-300' : 'text-amber-300'
                                             }`}>
                                                 {result.party_acceptances.length === 0 ? 'N/A' :
-                                                    `${result.party_acceptances.filter(p => p.status !== 'pending').length}/${result.party_acceptances.length} Responded`
-                                                }
+                                                    `${result.party_acceptances.filter(p => p.status !== 'pending').length}/${result.party_acceptances.length} Responded`}
                                             </div>
                                         </div>
                                     </div>
@@ -258,9 +232,7 @@ export default function ConstituencyApprovalQueue({
                                     {anomalies.length > 0 && (
                                         <div className="mx-5 mb-4 p-3 bg-orange-500/10 border border-orange-500/30 rounded-lg">
                                             <div className="text-xs text-orange-400 font-semibold mb-1">⚠ Anomalies Detected</div>
-                                            {anomalies.map((a, i) => (
-                                                <div key={i} className="text-orange-300 text-sm">{a}</div>
-                                            ))}
+                                            {anomalies.map((a, i) => <div key={i} className="text-orange-300 text-sm">{a}</div>)}
                                         </div>
                                     )}
 
@@ -271,10 +243,10 @@ export default function ConstituencyApprovalQueue({
                                             { label: 'Votes Cast', value: result.total_votes_cast?.toLocaleString(), color: 'text-white' },
                                             { label: 'Valid',      value: result.valid_votes?.toLocaleString(), color: 'text-teal-300' },
                                             { label: 'Turnout',    value: `${result.turnout}%`, color: 'text-white' },
-                                        ].map(stat => (
-                                            <div key={stat.label} className="bg-slate-900/50 p-3 rounded-lg">
-                                                <div className="text-xs text-gray-400 mb-1">{stat.label}</div>
-                                                <div className={`font-bold ${stat.color}`}>{stat.value}</div>
+                                        ].map(s => (
+                                            <div key={s.label} className="bg-slate-900/50 p-3 rounded-lg">
+                                                <div className="text-xs text-gray-400 mb-1">{s.label}</div>
+                                                <div className={`font-bold ${s.color}`}>{s.value}</div>
                                             </div>
                                         ))}
                                     </div>
@@ -300,29 +272,38 @@ export default function ConstituencyApprovalQueue({
                                         </div>
                                     )}
 
-                                    {/* Party Acceptance Status */}
+                                    {/* ── Party Acceptance Status WITH inline comments ── */}
                                     {result.party_acceptances?.length > 0 && (
                                         <div className="px-5 pb-4">
                                             <div className="text-xs text-gray-500 mb-2 uppercase tracking-wide">Party Representative Status</div>
-                                            <div className="flex flex-wrap gap-2">
+                                            <div className="space-y-2">
                                                 {result.party_acceptances.map((pa, idx) => {
                                                     const cfg = PARTY_STATUS[pa.status] || PARTY_STATUS.pending;
                                                     return (
-                                                        <span key={idx} className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold ${cfg.color}`}>
-                                                            {cfg.icon} {pa.abbr} — {cfg.label}
-                                                            {pa.comments && <span className="ml-1 opacity-70" title={pa.comments}>💬</span>}
-                                                        </span>
+                                                        <div key={idx}>
+                                                            <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold ${cfg.color}`}>
+                                                                {cfg.icon} {pa.abbr} — {cfg.label}
+                                                            </span>
+                                                            {pa.comments && (
+                                                                <p className="text-xs text-gray-400 italic mt-0.5 ml-2 pl-2 border-l border-gray-600/50">
+                                                                    "{pa.comments}"
+                                                                </p>
+                                                            )}
+                                                        </div>
                                                     );
                                                 })}
                                             </div>
                                         </div>
                                     )}
 
-                                    {/* Ward certification comments */}
+                                    {/* Ward certification note — rendered HTML */}
                                     {result.ward_cert_comments && (
                                         <div className="mx-5 mb-4 p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg">
                                             <div className="text-xs text-blue-400 font-semibold mb-1">Ward Approver Note</div>
-                                            <div className="text-blue-200 text-sm">{result.ward_cert_comments}</div>
+                                            <div
+                                                className="text-blue-200 text-sm"
+                                                dangerouslySetInnerHTML={{ __html: result.ward_cert_comments }}
+                                            />
                                         </div>
                                     )}
 
@@ -344,10 +325,9 @@ export default function ConstituencyApprovalQueue({
                                         </div>
                                     )}
 
-                                    {/* Action Buttons — only for pending results */}
+                                    {/* Action Buttons */}
                                     {isPending && (
                                         <div className="px-5 pb-5 flex flex-wrap gap-3 border-t border-slate-700/50 pt-4 mt-2">
-                                            {/* Flag for review button */}
                                             {anomalies.length > 0 && (
                                                 <button
                                                     onClick={() => toggleFlag(result.id)}
@@ -360,23 +340,14 @@ export default function ConstituencyApprovalQueue({
                                                     {flagged[result.id] ? '⚑ Flagged' : '⚐ Flag Anomaly'}
                                                 </button>
                                             )}
-                                            <button
-                                                onClick={() => openAction(result, 'approve')}
-                                                className="flex-1 min-w-[140px] px-4 py-3 bg-teal-600 hover:bg-teal-500 text-white font-bold rounded-lg transition-colors"
-                                            >
+                                            <button onClick={() => openAction(result, 'approve')} className="flex-1 min-w-[140px] px-4 py-3 bg-teal-600 hover:bg-teal-500 text-white font-bold rounded-lg">
                                                 ✓ Certify
                                             </button>
-                                            <button
-                                                onClick={() => openAction(result, 'approve_reservation')}
-                                                className="flex-1 min-w-[160px] px-4 py-3 bg-amber-600 hover:bg-amber-500 text-white font-bold rounded-lg transition-colors"
-                                            >
+                                            <button onClick={() => openAction(result, 'approve_reservation')} className="flex-1 min-w-[160px] px-4 py-3 bg-amber-600 hover:bg-amber-500 text-white font-bold rounded-lg">
                                                 ⚠ Certify with Reservation
                                             </button>
-                                            <button
-                                                onClick={() => openAction(result, 'reject')}
-                                                className="flex-1 min-w-[140px] px-4 py-3 bg-red-700 hover:bg-red-600 text-white font-bold rounded-lg transition-colors"
-                                            >
-                                                ✗ Reject & Return to Ward
+                                            <button onClick={() => openAction(result, 'reject')} className="flex-1 min-w-[140px] px-4 py-3 bg-red-700 hover:bg-red-600 text-white font-bold rounded-lg">
+                                                ✗ Reject &amp; Return to Ward
                                             </button>
                                         </div>
                                     )}
@@ -387,12 +358,11 @@ export default function ConstituencyApprovalQueue({
                 )}
             </div>
 
-            {/* Action Modal */}
+            {/* ── Action Modal ──────────────────────────────────────────────── */}
             {selectedResult && action && (
                 <div className="fixed inset-0 z-50 bg-black/70 flex items-end sm:items-center justify-center p-4">
                     <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl">
                         <div className="p-6">
-                            {/* Modal Header */}
                             <div className="flex items-start justify-between mb-5">
                                 <div>
                                     <h2 className="text-xl font-bold text-white">{ACTION_CONFIG[action].title}</h2>
@@ -401,65 +371,53 @@ export default function ConstituencyApprovalQueue({
                                 <button onClick={closePanel} disabled={processing} className="text-gray-500 hover:text-white text-2xl leading-none">×</button>
                             </div>
 
-                            {/* Description */}
                             <div className="p-4 bg-slate-800/60 rounded-lg mb-5 text-sm text-gray-300">
                                 {ACTION_CONFIG[action].description}
                             </div>
 
-                            {/* Result summary */}
                             <div className="grid grid-cols-3 gap-3 mb-5">
-                                <div className="bg-slate-800/50 p-3 rounded-lg text-center">
-                                    <div className="text-xs text-gray-400">Votes Cast</div>
-                                    <div className="text-white font-bold">{selectedResult.total_votes_cast?.toLocaleString()}</div>
-                                </div>
-                                <div className="bg-slate-800/50 p-3 rounded-lg text-center">
-                                    <div className="text-xs text-gray-400">Valid Votes</div>
-                                    <div className="text-teal-300 font-bold">{selectedResult.valid_votes?.toLocaleString()}</div>
-                                </div>
-                                <div className="bg-slate-800/50 p-3 rounded-lg text-center">
-                                    <div className="text-xs text-gray-400">Turnout</div>
-                                    <div className="text-white font-bold">{selectedResult.turnout}%</div>
-                                </div>
+                                {[
+                                    { label: 'Votes Cast', value: selectedResult.total_votes_cast?.toLocaleString(), color: 'text-white' },
+                                    { label: 'Valid Votes', value: selectedResult.valid_votes?.toLocaleString(), color: 'text-teal-300' },
+                                    { label: 'Turnout', value: `${selectedResult.turnout}%`, color: 'text-white' },
+                                ].map(s => (
+                                    <div key={s.label} className="bg-slate-800/50 p-3 rounded-lg text-center">
+                                        <div className="text-xs text-gray-400">{s.label}</div>
+                                        <div className={`font-bold ${s.color}`}>{s.value}</div>
+                                    </div>
+                                ))}
                             </div>
 
-                            {/* Flash */}
                             {flash && (
                                 <div className={`mb-4 p-3 rounded-lg text-sm ${flash.type === 'error' ? 'bg-red-500/20 text-red-300' : 'bg-teal-500/20 text-teal-300'}`}>
                                     {flash.text}
                                 </div>
                             )}
 
-                            {/* Comment */}
-                            <div className="mb-5">
-                                <label className="block text-gray-300 font-semibold mb-2">
-                                    {action === 'approve' ? 'Additional Comments (optional)' :
-                                     action === 'approve_reservation' ? 'Reservation Note (required)' :
-                                     'Rejection Reason (required)'}
+                            {/* ── Standout comment section ── */}
+                            <div className="bg-slate-800/60 border border-slate-600/60 rounded-xl p-4 mb-5">
+                                <label className="block text-gray-200 font-semibold mb-2 text-sm">
+                                    {ACTION_CONFIG[action].commentLabel}
                                     {ACTION_CONFIG[action].commentReq && <span className="text-red-400 ml-1">*</span>}
                                 </label>
                                 <textarea
                                     value={comment}
                                     onChange={(e) => setComment(e.target.value)}
-                                    rows={4}
+                                    rows={5}
                                     placeholder={ACTION_CONFIG[action].placeholder}
-                                    className="w-full px-4 py-3 bg-slate-800 border border-slate-600 rounded-lg text-white resize-none focus:outline-none focus:border-teal-500"
+                                    className="w-full px-4 py-3 bg-slate-900/80 border-2 border-slate-600 focus:border-teal-500 rounded-xl text-white resize-none focus:outline-none transition-colors text-sm"
                                 />
                             </div>
 
-                            {/* Actions */}
                             <div className="flex gap-3">
                                 <button
                                     onClick={submitAction}
                                     disabled={processing || (ACTION_CONFIG[action].commentReq && !comment.trim())}
-                                    className={`flex-1 py-3 px-6 rounded-lg font-bold text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${ACTION_CONFIG[action].btnColor}`}
+                                    className={`flex-1 py-3 px-6 rounded-lg font-bold text-white disabled:opacity-40 disabled:cursor-not-allowed ${ACTION_CONFIG[action].btnColor}`}
                                 >
                                     {processing ? 'Processing…' : ACTION_CONFIG[action].confirmBtn}
                                 </button>
-                                <button
-                                    onClick={closePanel}
-                                    disabled={processing}
-                                    className="px-6 py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-semibold"
-                                >
+                                <button onClick={closePanel} disabled={processing} className="px-6 py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-semibold">
                                     Cancel
                                 </button>
                             </div>

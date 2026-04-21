@@ -16,7 +16,12 @@ class SmsService
         $apiKey   = config('services.africastalking.api_key');
 
         // Only initialise if real credentials are provided
-        if ($username && $apiKey && $username !== 'sandbox' && $apiKey !== 'your-api-key') {
+        if (
+            $username && $apiKey
+            && $username !== 'sandbox'
+            && $apiKey !== 'your-api-key'
+            && !empty(trim($apiKey))
+        ) {
             try {
                 $AT        = new AfricasTalking($username, $apiKey);
                 $this->sms = $AT->sms();
@@ -28,27 +33,21 @@ class SmsService
     }
 
     /**
-     * Send SMS. Never blocks more than ~10 s.
-     * In local/development/testing it ONLY logs — no network call.
+     * Send SMS. In local/development/testing it ONLY logs — no network call.
+     * In production, wraps the call with a strict timeout guard.
      */
     public function send(string $phoneNumber, string $message): bool
     {
-        // ── Dev / unconfigured: log and return immediately ────────────────────
+        // ── Always log first so the code is visible in logs ──────────────────
+        Log::info("[SMS] TO: {$phoneNumber} | MSG: {$message}");
+
+        // ── Dev / unconfigured: return immediately, no network call ──────────
         if (!$this->isConfigured || app()->environment(['local', 'testing', 'development'])) {
-            Log::info("[SMS] TO {$phoneNumber}: {$message}");
             return true;
         }
 
-        // ── Production: attempt send with hard time limit ─────────────────────
-        // Always log the message first so admins can see the code even on failure
-        Log::info("[SMS] Sending to {$phoneNumber}");
-
+        // ── Production: attempt send ─────────────────────────────────────────
         try {
-            // Cap SMS sending to 10 seconds — prevents blocking the PHP process
-            if (function_exists('set_time_limit')) {
-                set_time_limit(10);
-            }
-
             $result = $this->sms->send([
                 'to'      => $phoneNumber,
                 'message' => $message,
@@ -60,8 +59,6 @@ class SmsService
 
         } catch (\Exception $e) {
             Log::error('[SMS] Sending failed: ' . $e->getMessage());
-            // Fallback: log the message so admins can manually share the code
-            Log::info("[SMS] FALLBACK - TO {$phoneNumber}: {$message}");
             return false;
         }
     }

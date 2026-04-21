@@ -12,21 +12,18 @@
     overflow-x: hidden;
 }
 
-/* Pure CSS background — replaces 50-particle JS loop */
 .iec-bg {
     position: fixed;
     inset: 0;
     z-index: 0;
     pointer-events: none;
-
-    /* Deep navy gradient */
     background:
         radial-gradient(ellipse 80% 60% at 20% 30%, rgba(20, 184, 166, 0.08) 0%, transparent 60%),
         radial-gradient(ellipse 60% 50% at 80% 70%, rgba(59, 130, 246, 0.06) 0%, transparent 60%),
         linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+    overflow: hidden;
 }
 
-/* Subtle animated glow orbs — CSS only, no JS */
 .iec-bg::before,
 .iec-bg::after {
     content: '';
@@ -78,7 +75,7 @@
 .iec-main {
     position: relative;
     z-index: 10;
-    padding-top: 5rem; /* offset for fixed header */
+    padding-top: 5rem;
     min-height: calc(100vh - 80px);
 }
 
@@ -93,23 +90,18 @@
     margin-top: 5rem;
 }
 
-/* ─── Instant navigation — remove all transition delays on links ─────────── */
+/* ─── Transitions ────────────────────────────────────────────────────────── */
 
 * {
     scroll-behavior: auto !important;
 }
 
-/* Only keep hover transitions on interactive elements */
 a, button {
     transition: color 0.15s, background-color 0.15s, border-color 0.15s, opacity 0.15s;
 }
 
 /* ─── Browser autofill dark theme override ───────────────────────────────── */
-/*
- * Prevents the browser from applying a white/light background to autofilled
- * inputs on dark-themed forms (e.g., User Create, Login).
- * The 5000s transition trick delays background revert effectively forever.
- */
+
 input:-webkit-autofill,
 input:-webkit-autofill:hover,
 input:-webkit-autofill:focus,
@@ -121,13 +113,106 @@ input:-webkit-autofill:active {
     border-color: rgba(100, 116, 139, 0.8) !important;
 }
 
-/* For inputs with slightly lighter backgrounds (bg-slate-900/50) */
-.bg-slate-900\/50 input:-webkit-autofill,
-input.bg-slate-900\/50:-webkit-autofill {
-    -webkit-box-shadow: 0 0 0px 1000px rgba(15, 23, 42, 0.5) inset !important;
+/* ─── NEW STARFIELD PARTICLE SYSTEM ─────────────────────────────────────── */
+/* 8 directional float animations for multi-direction movement */
+
+@keyframes float1 {
+    0%   { transform: translate(0, 0); opacity: 0; }
+    8%   { opacity: 0.9; }
+    92%  { opacity: 0.5; }
+    100% { transform: translate(160px, -110px); opacity: 0; }
 }
 
-/* ─── Login page floating particles (CSS-only, no JS) ───────────────────── */
+@keyframes float2 {
+    0%   { transform: translate(0, 0); opacity: 0; }
+    8%   { opacity: 0.7; }
+    92%  { opacity: 0.3; }
+    100% { transform: translate(-130px, -90px); opacity: 0; }
+}
+
+@keyframes float3 {
+    0%   { transform: translate(0, 0); opacity: 0; }
+    8%   { opacity: 0.85; }
+    92%  { opacity: 0.4; }
+    100% { transform: translate(110px, 130px); opacity: 0; }
+}
+
+@keyframes float4 {
+    0%   { transform: translate(0, 0); opacity: 0; }
+    8%   { opacity: 0.65; }
+    92%  { opacity: 0.25; }
+    100% { transform: translate(-90px, 120px); opacity: 0; }
+}
+
+@keyframes float5 {
+    0%   { transform: translate(0, 0); opacity: 0; }
+    8%   { opacity: 0.9; }
+    92%  { opacity: 0.5; }
+    100% { transform: translate(30px, -150px); opacity: 0; }
+}
+
+@keyframes float6 {
+    0%   { transform: translate(0, 0); opacity: 0; }
+    8%   { opacity: 0.75; }
+    92%  { opacity: 0.35; }
+    100% { transform: translate(-25px, 140px); opacity: 0; }
+}
+
+@keyframes float7 {
+    0%   { transform: translate(0, 0); opacity: 0; }
+    8%   { opacity: 0.95; }
+    92%  { opacity: 0.55; }
+    100% { transform: translate(170px, 20px); opacity: 0; }
+}
+
+@keyframes float8 {
+    0%   { transform: translate(0, 0); opacity: 0; }
+    8%   { opacity: 0.6; }
+    92%  { opacity: 0.2; }
+    100% { transform: translate(-160px, -15px); opacity: 0; }
+}
+
+/* Twinkling glow effect */
+@keyframes twinkle {
+    0%, 100% {
+        opacity: 0.2;
+        box-shadow: 0 0 2px rgba(148, 163, 184, 0.4);
+    }
+    50% {
+        opacity: 1;
+        box-shadow: 0 0 6px rgba(148, 163, 184, 1), 0 0 14px rgba(148, 163, 184, 0.35);
+    }
+}
+
+/* Shooting star streak */
+@keyframes shootingStar {
+    0%   { transform: rotate(30deg) scaleX(1)  translateX(0);    opacity: 0; }
+    5%   { opacity: 1; }
+    85%  { opacity: 0.6; }
+    100% { transform: rotate(30deg) scaleX(0.1) translateX(600px); opacity: 0; }
+}
+
+/* Particle star base class */
+.particle-star {
+    position: absolute;
+    border-radius: 50%;
+    background: rgba(148, 163, 184, 0.85);
+    will-change: transform, opacity;
+}
+
+/* Shooting star element */
+.shooting-star {
+    position: absolute;
+    height: 2px;
+    background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.9) 50%, rgba(255,255,255,0) 100%);
+    border-radius: 2px;
+    animation: shootingStar 1.6s ease-out forwards;
+    will-change: transform, opacity;
+    box-shadow: 0 0 8px rgba(255, 255, 255, 0.7), 0 0 20px rgba(200, 220, 255, 0.4);
+    pointer-events: none;
+}
+
+/* ─── Legacy particle system (Login / TwoFactor pages) ───────────────────── */
 
 @keyframes float-up {
     0% {
@@ -142,7 +227,6 @@ input.bg-slate-900\/50:-webkit-autofill {
     }
 }
 
-/* Used on all pages via AppLayout .iec-bg and login/2FA pages */
 .particle {
     position: absolute;
     width: 2px;
@@ -152,7 +236,6 @@ input.bg-slate-900\/50:-webkit-autofill {
     animation: float-up linear infinite;
 }
 
-/* 20 particles with staggered delays and positions */
 .particle:nth-child(1)  { left: 95%;  animation-duration: 45s; animation-delay:  0s; }
 .particle:nth-child(2)  { left: 10%; animation-duration: 38s; animation-delay:  3s; }
 .particle:nth-child(3)  { left: 18%; animation-duration: 52s; animation-delay:  7s; }
@@ -168,31 +251,17 @@ input.bg-slate-900\/50:-webkit-autofill {
 .particle:nth-child(13) { left: 86%; animation-duration: 53s; animation-delay:  7s; }
 .particle:nth-child(14) { left: 92%; animation-duration: 42s; animation-delay:  1s; }
 .particle:nth-child(15) { top: 97%; animation-duration: 47s; animation-delay:  0s; }
-.particle:nth-child(16) { left: 15%; animation-duration: 44s; animation-delay: 11s; }
-.particle:nth-child(17) { left: 30%; animation-duration: 56s; animation-delay: 13s; }
-.particle:nth-child(18) { left: 55%; animation-duration: 36s; animation-delay: 15s; }
-.particle:nth-child(19) { left: 72%; animation-duration: 49s; animation-delay: 17s; }
-.particle:nth-child(20) { left: 88%; animation-duration: 40s; animation-delay: 19s; }
-.particle:nth-child(21)  { left: 95%;  animation-duration: 45s; animation-delay:  0s; }
-.particle:nth-child(22)  { left: 10%; animation-duration: 38s; animation-delay:  3s; }
-.particle:nth-child(23)  { left: 18%; animation-duration: 52s; animation-delay:  7s; }
-.particle:nth-child(24)  { left: 25%; animation-duration: 59s; animation-delay:  0s; }
-.particle:nth-child(25)  { left: 33%; animation-duration: 48s; animation-delay:  5s; }
-.particle:nth-child(26)  { left: 40%; animation-duration: 35s; animation-delay:  9s; }
-.particle:nth-child(27)  { left: 47%; animation-duration: 55s; animation-delay:  2s; }
-.particle:nth-child(28)  { left: 54%; animation-duration: 43s; animation-delay:  6s; }
-.particle:nth-child(29)  { right: 61%; animation-duration: 369s; animation-delay:  0s; }
-.particle:nth-child(30) { top: 68%; animation-duration: 50s; animation-delay:  1s; }
-.particle:nth-child(31) { left: 74%; animation-duration: 46s; animation-delay:  0s; }
-.particle:nth-child(32) { left: 80%; animation-duration: 37s; animation-delay:  3s; }
-.particle:nth-child(33) { left: 86%; animation-duration: 53s; animation-delay:  7s; }
-.particle:nth-child(34) { left: 92%; animation-duration: 42s; animation-delay:  1s; }
-.particle:nth-child(35) { top: 97%; animation-duration: 47s; animation-delay:  0s; }
-.particle:nth-child(36) { left: 15%; animation-duration: 44s; animation-delay: 11s; }
-.particle:nth-child(37) { left: 30%; animation-duration: 56s; animation-delay: 13s; }
-.particle:nth-child(38) { left: 55%; animation-duration: 36s; animation-delay: 15s; }
-.particle:nth-child(39) { left: 72%; animation-duration: 49s; animation-delay: 17s; }
-.particle:nth-child(40) { left: 88%; animation-duration: 40s; animation-delay: 19s; }
+
+/* ─── Page content fade-in ───────────────────────────────────────────────── */
+
+.iec-main > * {
+    animation: page-in 0.15s ease-out;
+}
+
+@keyframes page-in {
+    from { opacity: 0; transform: translateY(4px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
 
 /* ─── Slow-pulse (used on login orb) ────────────────────────────────────── */
 
@@ -205,13 +274,21 @@ input.bg-slate-900\/50:-webkit-autofill {
     animation: slow-pulse 5s ease-in-out infinite;
 }
 
-/* ─── Page content fade-in (instant feel, no layout shift) ──────────────── */
+/* ─── Leaflet map popup styles ───────────────────────────────────────────── */
 
-.iec-main > * {
-    animation: page-in 01.15s ease-out;
+.leaflet-popup-content-wrapper {
+    border-radius: 12px !important;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.25) !important;
+    padding: 0 !important;
+    overflow: hidden;
 }
 
-@keyframes page-in {
-    from { opacity: 0; transform: translateY(4px); }
-    to   { opacity: 1; transform: translateY(0); }
+.leaflet-popup-content {
+    margin: 0 !important;
+    padding: 0 !important;
+    width: auto !important;
+}
+
+.leaflet-popup-tip-container {
+    margin-top: -1px;
 }

@@ -53,7 +53,7 @@ export default function LeafletMap({ stations = [] }) {
                 pending_constituency:    '#f59e0b',
                 pending_ward:            '#f59e0b',
                 submitted:               '#f97316', // orange
-                not_reported:            '#6b7280', // gray
+                not_reported:            '#ff6ed4', // pink
             };
 
             const statusLabel = {
@@ -178,7 +178,7 @@ export default function LeafletMap({ stations = [] }) {
                     { color: '#10b981', label: 'Certified' },
                     { color: '#6b7280', label: 'In Review' },
                     { color: '#f97316', label: 'Submitted' },
-                    { color: '#6b7280', label: 'Not Reported' },
+                    { color: '#ff6ed4', label: 'Not Reported' },
                 ].map(({ color, label }) => (
                     <span key={label} className="flex items-center gap-1.5">
                         <span className="w-3 h-3 rounded-full inline-block flex-shrink-0"
