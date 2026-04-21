@@ -187,7 +187,6 @@ Route::middleware(['auth', 'role:iec-administrator'])
         ]);
     })->name('party-representatives');
 
-    // FIXED: Only load users with 'party-representative' role who don't already have a rep record
     Route::get('/party-representatives/create', function () {
         return Inertia::render('Admin/PartyRepresentativeCreate', [
             'auth'            => ['user' => Auth::user()],
@@ -451,13 +450,11 @@ Route::middleware(['auth', 'role:iec-administrator'])
         return redirect()->route('admin.elections')->with('success', "Election {$verb} successfully!");
     })->name('elections.toggle-status');
 
+    // ── Delete election ONLY — preserves all linked data ─────────────────────
+    // Uses soft delete so DB-level CASCADE ON DELETE is NOT triggered.
+    // Parties, polling stations, candidates, reps, monitors are all preserved.
     Route::delete('/elections/{election}', function (Election $election) {
         try {
-            if ($election->results()->exists()) {
-                return redirect()->route('admin.elections')
-                    ->with('error', 'Cannot delete: this election has submitted results. Archive it instead.');
-            }
-
             AuditLog::record(
                 action: 'election.deleted',
                 event: 'deleted',
@@ -466,15 +463,45 @@ Route::middleware(['auth', 'role:iec-administrator'])
                 extra: ['outcome' => 'success', 'election_name' => $election->name]
             );
 
+            // Soft delete — sets deleted_at only, does NOT cascade to related tables
             $election->delete();
 
             return redirect()->route('admin.elections')
-                ->with('success', "Election \"{$election->name}\" deleted successfully.");
+                ->with('success', "Election \"{$election->name}\" deleted. All related data (parties, stations, candidates) has been preserved.");
         } catch (\Exception $e) {
             return redirect()->route('admin.elections')
                 ->with('error', 'Failed to delete election: ' . $e->getMessage());
         }
     })->name('elections.destroy');
+
+    // ── Safe force-delete — ONLY removes the election record ─────────────────
+    // This route is called from the Elections.jsx delete button.
+    // Soft-deleting via the Eloquent model does NOT fire DB-level CASCADE ON DELETE,
+    // so polling stations, parties, candidates, reps and monitors remain untouched.
+    Route::delete('/elections/{id}/force', function ($id) {
+        try {
+            $election = Election::findOrFail($id);
+
+            AuditLog::record(
+                action: 'election.force_deleted',
+                event: 'deleted',
+                module: 'ElectionManagement',
+                extra: [
+                    'outcome'       => 'success',
+                    'election_id'   => $election->id,
+                    'election_name' => $election->name,
+                ]
+            );
+
+            // Soft delete only — all related data is preserved
+            $election->delete();
+
+            return redirect()->route('admin.elections')
+                ->with('success', "Election \"{$election->name}\" deleted successfully. All related data has been preserved.");
+        } catch (\Exception $e) {
+            return back()->withErrors(['error' => 'Failed to delete election: ' . $e->getMessage()]);
+        }
+    })->name('elections.force-destroy');
 
     // ── Polling Stations ──────────────────────────────────────────────────────
     Route::get('/polling-stations', function () {
@@ -1288,44 +1315,4 @@ Route::middleware(['auth', 'role:iec-administrator'])
         if (!$filename || !file_exists($path)) abort(404, 'Backup file not found.');
         return response()->download($path);
     })->name('backups.download');
-
-    // ── Force-delete election and all related data ────────────────────────────
-    Route::delete('/elections/{id}/force', function ($id) {
-        try {
-            $election = Election::findOrFail($id);
-
-            DB::transaction(function () use ($election) {
-                $resultIds = \App\Models\Result::where('election_id', $election->id)->pluck('id');
-                \App\Models\ResultCandidateVote::whereIn('result_id', $resultIds)->delete();
-                \App\Models\ResultCertification::whereIn('result_id', $resultIds)->delete();
-                \App\Models\PartyAcceptance::whereIn('result_id', $resultIds)->delete();
-                DB::table('result_versions')->whereIn('result_id', $resultIds)->delete();
-                \App\Models\Result::where('election_id', $election->id)->forceDelete();
-
-                $repIds = \App\Models\PartyRepresentative::where('election_id', $election->id)->pluck('id');
-                DB::table('party_representative_polling_station')->whereIn('party_representative_id', $repIds)->delete();
-                \App\Models\PartyRepresentative::where('election_id', $election->id)->delete();
-
-                $monitorIds = \App\Models\ElectionMonitor::where('election_id', $election->id)->pluck('id');
-                DB::table('election_monitor_polling_station')->whereIn('election_monitor_id', $monitorIds)->delete();
-                DB::table('monitor_observations')->whereIn('election_monitor_id', $monitorIds)->delete();
-                \App\Models\ElectionMonitor::where('election_id', $election->id)->delete();
-
-                \App\Models\PollingStation::where('election_id', $election->id)->forceDelete();
-                Candidate::where('election_id', $election->id)->forceDelete();
-
-                DB::table('election_political_party')->where('election_id', $election->id)->delete();
-                PoliticalParty::where('election_id', $election->id)->forceDelete();
-
-                \App\Models\AdministrativeHierarchy::where('election_id', $election->id)->delete();
-                \App\Models\AuditLog::where('election_id', $election->id)->delete();
-
-                $election->forceDelete();
-            });
-
-            return redirect()->route('admin.elections')->with('success', 'Election and all related data deleted successfully.');
-        } catch (\Exception $e) {
-            return back()->withErrors(['error' => 'Failed to delete election: ' . $e->getMessage()]);
-        }
-    })->name('elections.force-destroy');
 });

@@ -28,8 +28,8 @@ export default function AppLayout({ user, children }) {
 
             {/* Static CSS background with particle stars — same across all pages */}
             <div className="iec-bg" aria-hidden="true">
-                {/* Pure CSS particle stars — 20 particles matching login page */}
-                {Array.from({ length: 30 }).map((_, i) => (
+                {/* Pure CSS particle stars — 40 particles matching login page */}
+                {Array.from({ length: 40 }).map((_, i) => (
                     <div key={i} className="particle" />
                 ))}
             </div>

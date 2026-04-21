@@ -173,6 +173,26 @@ input.bg-slate-900\/50:-webkit-autofill {
 .particle:nth-child(18) { left: 55%; animation-duration: 36s; animation-delay: 15s; }
 .particle:nth-child(19) { left: 72%; animation-duration: 49s; animation-delay: 17s; }
 .particle:nth-child(20) { left: 88%; animation-duration: 40s; animation-delay: 19s; }
+.particle:nth-child(21)  { left: 95%;  animation-duration: 45s; animation-delay:  0s; }
+.particle:nth-child(22)  { left: 10%; animation-duration: 38s; animation-delay:  3s; }
+.particle:nth-child(23)  { left: 18%; animation-duration: 52s; animation-delay:  7s; }
+.particle:nth-child(24)  { left: 25%; animation-duration: 59s; animation-delay:  0s; }
+.particle:nth-child(25)  { left: 33%; animation-duration: 48s; animation-delay:  5s; }
+.particle:nth-child(26)  { left: 40%; animation-duration: 35s; animation-delay:  9s; }
+.particle:nth-child(27)  { left: 47%; animation-duration: 55s; animation-delay:  2s; }
+.particle:nth-child(28)  { left: 54%; animation-duration: 43s; animation-delay:  6s; }
+.particle:nth-child(29)  { right: 61%; animation-duration: 369s; animation-delay:  0s; }
+.particle:nth-child(30) { top: 68%; animation-duration: 50s; animation-delay:  1s; }
+.particle:nth-child(31) { left: 74%; animation-duration: 46s; animation-delay:  0s; }
+.particle:nth-child(32) { left: 80%; animation-duration: 37s; animation-delay:  3s; }
+.particle:nth-child(33) { left: 86%; animation-duration: 53s; animation-delay:  7s; }
+.particle:nth-child(34) { left: 92%; animation-duration: 42s; animation-delay:  1s; }
+.particle:nth-child(35) { top: 97%; animation-duration: 47s; animation-delay:  0s; }
+.particle:nth-child(36) { left: 15%; animation-duration: 44s; animation-delay: 11s; }
+.particle:nth-child(37) { left: 30%; animation-duration: 56s; animation-delay: 13s; }
+.particle:nth-child(38) { left: 55%; animation-duration: 36s; animation-delay: 15s; }
+.particle:nth-child(39) { left: 72%; animation-duration: 49s; animation-delay: 17s; }
+.particle:nth-child(40) { left: 88%; animation-duration: 40s; animation-delay: 19s; }
 
 /* ─── Slow-pulse (used on login orb) ────────────────────────────────────── */
 
