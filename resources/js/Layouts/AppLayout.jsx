@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { Link, router } from '@inertiajs/react';
+import { Link, router, usePage } from '@inertiajs/react';
 
 /* ─── Particle config ─────────────────────────────────────────────────────
    Module-level constant → runs ONCE on import, never re-computed.
@@ -15,17 +15,25 @@ const PARTICLES = Array.from({ length: 45 }, (_, i) => ({
     x: rand(i * 3.1)  * 100,
     y: rand(i * 7.3)  * 100,
     animName:        FLOAT_ANIMS[Math.floor(rand(i * 11.7) * FLOAT_ANIMS.length)],
-    duration:        15 + rand(i * 5.9)  * 10,       // 15–25 s
-    delay:           -(rand(i * 2.3)     * 20),       // stagger starts
-    size:            1  + rand(i * 17.1) * 2.2,       // 1–3.2 px
+    duration:        15 + rand(i * 5.9)  * 10,
+    delay:           -(rand(i * 2.3)     * 20),
+    size:            1  + rand(i * 17.1) * 2.2,
     twinkleDur:      1.8 + rand(i * 13.3) * 2.4,
     twinkleDelay:    rand(i * 19.7) * 3,
 }));
 
-export default function AppLayout({ user, children }) {
+export default function AppLayout({ children }) {
+    // ── FIX: Read auth state from Inertia's globally-shared page props ──────
+    // Public pages (Results, Map, Stations) don't pass a `user` prop to
+    // AppLayout, so an authenticated user would see "Staff Login" instead of
+    // "Logout". usePage() reads the auth data that HandleInertiaRequests
+    // shares on every request, giving us the correct state everywhere.
+    const { auth } = usePage().props;
+    const user = auth?.user;
+    const isAuthenticated = !!user;
+
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const [isLoggingOut, setIsLoggingOut]     = useState(false);
-    const isAuthenticated = !!user;
     const bgRef = useRef(null);
 
     const handleLogout = useCallback((e) => {
@@ -63,7 +71,6 @@ export default function AppLayout({ user, children }) {
                     star.style.width  = `${70 + Math.random() * 60}px`;
                     star.style.transform = `rotate(${22 + Math.random() * 18}deg)`;
                     bgRef.current.appendChild(star);
-                    // Clean up after animation
                     setTimeout(() => {
                         if (bgRef.current && bgRef.current.contains(star)) {
                             bgRef.current.removeChild(star);
@@ -73,7 +80,6 @@ export default function AppLayout({ user, children }) {
             }
         };
 
-        // First shooting star after 6 s, then every 60 s
         const firstTimeout = setTimeout(spawnShootingStars, 6000);
         const interval     = setInterval(spawnShootingStars, 60000);
 
@@ -125,15 +131,22 @@ export default function AppLayout({ user, children }) {
                             <Link href="/results" className="hover:text-pink-400 transition-colors font-medium">
                                 Results
                             </Link>
+
                             {isAuthenticated ? (
-                                <button
-                                    type="button"
-                                    onClick={handleLogout}
-                                    disabled={isLoggingOut}
-                                    className="px-6 py-2 bg-pink-600 hover:bg-pink-700 rounded-lg font-semibold disabled:opacity-50 transition-colors flex items-center gap-2"
-                                >
-                                    {isLoggingOut ? 'Logging out…' : 'Logout'}
-                                </button>
+                                <>
+                                    {/* Show the user's role/name for clarity */}
+                                    <span className="text-gray-300 text-sm hidden lg:block">
+                                        {user.name}
+                                    </span>
+                                    <button
+                                        type="button"
+                                        onClick={handleLogout}
+                                        disabled={isLoggingOut}
+                                        className="px-6 py-2 bg-pink-600 hover:bg-pink-700 rounded-lg font-semibold disabled:opacity-50 transition-colors flex items-center gap-2"
+                                    >
+                                        {isLoggingOut ? 'Logging out…' : 'Logout'}
+                                    </button>
+                                </>
                             ) : (
                                 <Link
                                     href="/auth/login"
@@ -177,15 +190,21 @@ export default function AppLayout({ user, children }) {
                             >
                                 Results
                             </Link>
+
                             {isAuthenticated ? (
-                                <button
-                                    type="button"
-                                    onClick={handleLogout}
-                                    disabled={isLoggingOut}
-                                    className="w-full text-left px-3 py-3 bg-pink-600 hover:bg-pink-700 text-white rounded-lg font-semibold disabled:opacity-50 flex items-center gap-2 transition-colors"
-                                >
-                                    {isLoggingOut ? 'Logging out…' : 'Logout'}
-                                </button>
+                                <>
+                                    <div className="px-3 py-2 text-gray-400 text-sm">
+                                        Signed in as <strong className="text-gray-200">{user.name}</strong>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={handleLogout}
+                                        disabled={isLoggingOut}
+                                        className="w-full text-left px-3 py-3 bg-pink-600 hover:bg-pink-700 text-white rounded-lg font-semibold disabled:opacity-50 flex items-center gap-2 transition-colors"
+                                    >
+                                        {isLoggingOut ? 'Logging out…' : 'Logout'}
+                                    </button>
+                                </>
                             ) : (
                                 <Link
                                     href="/auth/login"
