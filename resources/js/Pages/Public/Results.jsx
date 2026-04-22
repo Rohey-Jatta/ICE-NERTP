@@ -52,7 +52,7 @@ export default function Results({ election, stats, candidates, message }) {
             <AppLayout>
                 <HeroBanner />
                 <div className="container mx-auto px-4 pb-16">
-                    <div className="max-w-2xl mx-auto text-center p-10 bg-slate-800/40 rounded-xl border border-slate-700/50">
+                    <div className="max-w-2xl mx-auto text-center p-10 bg-slate-800/40 rounded-xl border border-pink-700/50">
                         <div className="text-5xl mb-4">🗳️</div>
                         <h3 className="text-2xl font-bold text-white mb-3">No Active Election</h3>
                         <p className="text-gray-400">

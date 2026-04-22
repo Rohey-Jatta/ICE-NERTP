@@ -19,10 +19,29 @@ Route::middleware(['auth', 'role:iec-chairman'])
 
     // ── Dashboard ─────────────────────────────────────────────────────────────
     Route::get('/dashboard', function () {
-        $pendingNational     = Result::where('certification_status', Result::STATUS_PENDING_NATIONAL)->count();
-        $nationallyCertified = Result::where('certification_status', Result::STATUS_NATIONALLY_CERTIFIED)->count();
-        $totalStations       = PollingStation::count();
-        $totalVoters         = PollingStation::sum('registered_voters');
+
+        // ── OPTIMISED: was 12 separate COUNT queries; now 2 ──────────────────
+        //
+        // OLD code fired individual Result::where('certification_status', X)->count()
+        // for every pipeline stage (10 calls) plus 2 extra calls for
+        // PollingStation::count() and PollingStation::sum('registered_voters').
+        // That is 12 round-trips to PostgreSQL on every chairman dashboard load.
+        //
+        // NEW: one GROUP BY query returns all status counts at once;
+        //      one selectRaw covers both station total and voter sum.
+
+        $statusCounts = Result::selectRaw('certification_status, COUNT(*) as cnt')
+            ->groupBy('certification_status')
+            ->pluck('cnt', 'certification_status');
+
+        $pendingNational     = (int) ($statusCounts[Result::STATUS_PENDING_NATIONAL] ?? 0);
+        $nationallyCertified = (int) ($statusCounts[Result::STATUS_NATIONALLY_CERTIFIED] ?? 0);
+
+        $stationAgg  = PollingStation::selectRaw(
+            'COUNT(*) as total, COALESCE(SUM(registered_voters), 0) as total_voters'
+        )->first();
+        $totalStations = (int) ($stationAgg->total ?? 0);
+        $totalVoters   = (int) ($stationAgg->total_voters ?? 0);
 
         $nationalProgress = $totalStations > 0
             ? round(($nationallyCertified / max($totalStations, 1)) * 100)
@@ -33,24 +52,24 @@ Route::middleware(['auth', 'role:iec-chairman'])
             ->latest()
             ->limit(8)
             ->get()
-            ->map(fn($a) => [
-                'action' => $a->action,
-                'user'   => $a->user?->name ?? 'System',
-                'time'   => $a->created_at?->diffForHumans(),
-                'outcome'=> $a->outcome,
+            ->map(fn ($a) => [
+                'action'  => $a->action,
+                'user'    => $a->user?->name ?? 'System',
+                'time'    => $a->created_at?->diffForHumans(),
+                'outcome' => $a->outcome,
             ]);
 
         $pipelineCounts = [
-            'submitted'               => Result::where('certification_status', Result::STATUS_SUBMITTED)->count(),
-            'pending_party'           => Result::where('certification_status', Result::STATUS_PENDING_PARTY_ACCEPTANCE)->count(),
-            'pending_ward'            => Result::where('certification_status', Result::STATUS_PENDING_WARD)->count(),
-            'ward_certified'          => Result::where('certification_status', Result::STATUS_WARD_CERTIFIED)->count(),
-            'pending_constituency'    => Result::where('certification_status', Result::STATUS_PENDING_CONSTITUENCY)->count(),
-            'constituency_certified'  => Result::where('certification_status', Result::STATUS_CONSTITUENCY_CERTIFIED)->count(),
-            'pending_admin_area'      => Result::where('certification_status', Result::STATUS_PENDING_ADMIN_AREA)->count(),
-            'admin_area_certified'    => Result::where('certification_status', Result::STATUS_ADMIN_AREA_CERTIFIED)->count(),
-            'pending_national'        => $pendingNational,
-            'nationally_certified'    => $nationallyCertified,
+            'submitted'              => (int) ($statusCounts[Result::STATUS_SUBMITTED] ?? 0),
+            'pending_party'          => (int) ($statusCounts[Result::STATUS_PENDING_PARTY_ACCEPTANCE] ?? 0),
+            'pending_ward'           => (int) ($statusCounts[Result::STATUS_PENDING_WARD] ?? 0),
+            'ward_certified'         => (int) ($statusCounts[Result::STATUS_WARD_CERTIFIED] ?? 0),
+            'pending_constituency'   => (int) ($statusCounts[Result::STATUS_PENDING_CONSTITUENCY] ?? 0),
+            'constituency_certified' => (int) ($statusCounts[Result::STATUS_CONSTITUENCY_CERTIFIED] ?? 0),
+            'pending_admin_area'     => (int) ($statusCounts[Result::STATUS_PENDING_ADMIN_AREA] ?? 0),
+            'admin_area_certified'   => (int) ($statusCounts[Result::STATUS_ADMIN_AREA_CERTIFIED] ?? 0),
+            'pending_national'       => $pendingNational,
+            'nationally_certified'   => $nationallyCertified,
         ];
 
         return Inertia::render('Chairman/Dashboard', [
@@ -67,25 +86,23 @@ Route::middleware(['auth', 'role:iec-chairman'])
         ]);
     })->name('dashboard');
 
-   // ── National Certification Queue ──────────────────────────────────────────
+    // ── National Certification Queue ──────────────────────────────────────────
     Route::get('/national-queue', function () {
         $results = Result::where('certification_status', Result::STATUS_PENDING_NATIONAL)
             ->with([
                 'pollingStation.ward',
                 'candidateVotes.candidate.politicalParty',
                 'partyAcceptances.politicalParty',
-                // Load ALL certification levels so we can surface all approver notes
-                'certifications' => fn($q) => $q->latest(),
+                'certifications' => fn ($q) => $q->latest(),
                 'submittedBy',
             ])
             ->latest('submitted_at')
             ->get()
             ->map(function ($r) {
-                // FIX: Extract per-level approver notes
-                $certs    = $r->certifications->sortByDesc('created_at');
-                $wardNote = $certs->where('certification_level', 'ward')
-                                  ->where('status', 'approved')
-                                  ->first()?->comments;
+                $certs     = $r->certifications->sortByDesc('created_at');
+                $wardNote  = $certs->where('certification_level', 'ward')
+                                   ->where('status', 'approved')
+                                   ->first()?->comments;
                 $constNote = $certs->where('certification_level', 'constituency')
                                    ->where('status', 'approved')
                                    ->first()?->comments;
@@ -109,26 +126,25 @@ Route::middleware(['auth', 'role:iec-chairman'])
                     'photo_url'               => $r->result_sheet_photo_path
                         ? asset('storage/' . $r->result_sheet_photo_path)
                         : null,
-                    'candidate_votes'         => $r->candidateVotes->map(fn($cv) => [
+                    'candidate_votes'         => $r->candidateVotes->map(fn ($cv) => [
                         'candidate_name' => $cv->candidate->name ?? 'Unknown',
                         'party_name'     => $cv->candidate->politicalParty->name ?? 'Independent',
                         'party_abbr'     => $cv->candidate->politicalParty->abbreviation ?? 'IND',
                         'party_color'    => $cv->candidate->politicalParty->color ?? '#6b7280',
                         'votes'          => $cv->votes,
                     ]),
-                    'party_acceptances'       => $r->partyAcceptances->map(fn($pa) => [
+                    'party_acceptances'       => $r->partyAcceptances->map(fn ($pa) => [
                         'party_name' => $pa->politicalParty->name ?? 'Unknown',
                         'abbr'       => $pa->politicalParty->abbreviation ?? '?',
                         'status'     => $pa->status,
                         'comments'   => $pa->comments,
                     ]),
-                    'certification_chain'     => $r->certifications->sortByDesc('created_at')->map(fn($c) => [
+                    'certification_chain'     => $r->certifications->sortByDesc('created_at')->map(fn ($c) => [
                         'level'      => $c->certification_level,
                         'status'     => $c->status,
                         'comments'   => $c->comments,
                         'decided_at' => $c->decided_at?->format('Y-m-d H:i'),
                     ])->values(),
-                    // FIX: Per-level approver notes now visible to Chairman
                     'ward_comments'         => $wardNote,
                     'constituency_comments' => $constNote,
                     'admin_area_comments'   => $areaNote,
@@ -141,6 +157,7 @@ Route::middleware(['auth', 'role:iec-chairman'])
             'pendingCount'   => $results->count(),
         ]);
     })->name('national-queue');
+
     // ── Certify nationally ────────────────────────────────────────────────────
     Route::post('/certify/{result}', function (Request $request, Result $result) {
         $request->validate([
@@ -153,14 +170,11 @@ Route::middleware(['auth', 'role:iec-chairman'])
 
         $approverId = Auth::id();
 
-        // Resolve the best available hierarchy node for national level
-        // Priority: national → admin_area (of the result's station) → any existing node → 1
         $nationalNodeId = AdministrativeHierarchy::where('level', 'national')->value('id');
         if (!$nationalNodeId) {
-            // Derive from station: ward → constituency → admin_area
-            $wardParentId   = AdministrativeHierarchy::where('id', $result->pollingStation?->ward_id)->value('parent_id');
+            $wardParentId    = AdministrativeHierarchy::where('id', $result->pollingStation?->ward_id)->value('parent_id');
             $adminAreaNodeId = AdministrativeHierarchy::where('id', $wardParentId)->value('parent_id');
-            $nationalNodeId = $adminAreaNodeId
+            $nationalNodeId  = $adminAreaNodeId
                 ?? AdministrativeHierarchy::where('level', 'admin_area')->value('id')
                 ?? AdministrativeHierarchy::orderBy('id')->value('id')
                 ?? 1;
@@ -263,7 +277,7 @@ Route::middleware(['auth', 'role:iec-chairman'])
             default => $query,
         };
 
-        $results = $query->paginate(30)->through(fn($r) => [
+        $results = $query->paginate(30)->through(fn ($r) => [
             'id'                   => $r->id,
             'polling_station_name' => $r->pollingStation->name ?? '—',
             'polling_station_code' => $r->pollingStation->code ?? '—',
@@ -276,13 +290,22 @@ Route::middleware(['auth', 'role:iec-chairman'])
             'rejection_count'      => $r->rejection_count,
         ]);
 
+        // Re-use the status counts we can compute cheaply
+        $allCounts = Result::selectRaw('certification_status, COUNT(*) as cnt')
+            ->groupBy('certification_status')
+            ->pluck('cnt', 'certification_status');
+
         $counts = [
-            'all'                  => Result::count(),
-            'pending_national'     => Result::where('certification_status', Result::STATUS_PENDING_NATIONAL)->count(),
-            'nationally_certified' => Result::where('certification_status', Result::STATUS_NATIONALLY_CERTIFIED)->count(),
-            'in_pipeline'          => Result::whereNotIn('certification_status', [
-                Result::STATUS_SUBMITTED, Result::STATUS_NATIONALLY_CERTIFIED, Result::STATUS_REJECTED,
-            ])->count(),
+            'all'                  => (int) $allCounts->sum(),
+            'pending_national'     => (int) ($allCounts[Result::STATUS_PENDING_NATIONAL] ?? 0),
+            'nationally_certified' => (int) ($allCounts[Result::STATUS_NATIONALLY_CERTIFIED] ?? 0),
+            'in_pipeline'          => (int) $allCounts->filter(function ($cnt, $status) {
+                return !in_array($status, [
+                    Result::STATUS_SUBMITTED,
+                    Result::STATUS_NATIONALLY_CERTIFIED,
+                    Result::STATUS_REJECTED,
+                ]);
+            })->sum(),
         ];
 
         return Inertia::render('Chairman/AllResults', [
@@ -319,7 +342,7 @@ Route::middleware(['auth', 'role:iec-chairman'])
             ->groupBy('candidate_id')
             ->with('candidate.politicalParty')
             ->get()
-            ->map(fn($cv) => [
+            ->map(fn ($cv) => [
                 'name'       => $cv->candidate->politicalParty->name ?? 'Independent',
                 'abbr'       => $cv->candidate->politicalParty->abbreviation ?? 'IND',
                 'color'      => $cv->candidate->politicalParty->color ?? '#6b7280',
@@ -333,7 +356,7 @@ Route::middleware(['auth', 'role:iec-chairman'])
             ->where('level', 'admin_area')
             ->get()
             ->map(function ($area) use ($election) {
-                $stationIds = PollingStation::whereHas('ward', fn($q) =>
+                $stationIds = PollingStation::whereHas('ward', fn ($q) =>
                     $q->where('parent_id', $area->id)
                 )->pluck('id');
 
@@ -388,8 +411,8 @@ Route::middleware(['auth', 'role:iec-chairman'])
                 'auditComplete'    => true,
             ],
             'summary' => [
-                'total'          => $totalStations,
-                'certified'      => $certifiedStations,
+                'total'           => $totalStations,
+                'certified'       => $certifiedStations,
                 'percentComplete' => $totalStations > 0 ? round(($certifiedStations / $totalStations) * 100) : 0,
                 'pendingNational' => $pendingNational,
                 'lastUpdated'     => now()->format('Y-m-d H:i'),
