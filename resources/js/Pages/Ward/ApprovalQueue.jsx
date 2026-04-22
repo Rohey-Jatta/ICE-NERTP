@@ -16,10 +16,40 @@ const STATUS_LABELS = {
 };
 
 const PARTY_STATUS_CONFIG = {
-    accepted:                 { label: 'Accepted',            color: 'bg-green-500/20 text-green-300',   icon: '✓' },
-    accepted_with_reservation:{ label: 'Accepted (Reserved)', color: 'bg-yellow-500/20 text-yellow-300', icon: '⚠' },
-    rejected:                 { label: 'Rejected',            color: 'bg-red-500/20 text-red-300',       icon: '✗' },
-    pending:                  { label: 'Pending',             color: 'bg-gray-500/20 text-gray-300',     icon: '…' },
+    accepted:                  { label: 'Accepted',             color: 'bg-teal-500/20 text-teal-300 border-teal-500/30',    icon: '✓' },
+    accepted_with_reservation: { label: 'Accepted (Reserved)',  color: 'bg-yellow-500/20 text-yellow-300 border-yellow-500/30', icon: '⚠' },
+    rejected:                  { label: 'Rejected',             color: 'bg-red-500/20 text-red-300 border-red-500/30',       icon: '✗' },
+    pending:                   { label: 'Pending',              color: 'bg-gray-500/20 text-gray-300 border-gray-500/30',    icon: '…' },
+};
+
+const ACTION_CONFIG = {
+    approve: {
+        title:        'Certify at Ward Level',
+        description:  'This result will be certified and automatically promoted to the Constituency approval queue.',
+        confirmBtn:   'Certify & Promote to Constituency',
+        confirmColor: 'bg-teal-600 hover:bg-teal-700',
+        commentReq:   false,
+        commentLabel: 'Additional Comments (optional)',
+        placeholder:  'Add any notes or observations…',
+    },
+    approve_reservation: {
+        title:        'Certify with Reservation',
+        description:  'Result will be certified but flagged with your reservation note. It will be promoted to the Constituency queue.',
+        confirmBtn:   'Certify with Reservation',
+        confirmColor: 'bg-amber-600 hover:bg-amber-700',
+        commentReq:   true,
+        commentLabel: 'Reservation Note (required)',
+        placeholder:  'Describe your reservation or concern…',
+    },
+    reject: {
+        title:        'Reject & Return to Polling Station',
+        description:  'This result will be returned to the polling officer for correction.',
+        confirmBtn:   'Confirm Rejection',
+        confirmColor: 'bg-red-600 hover:bg-red-700',
+        commentReq:   true,
+        commentLabel: 'Rejection Reason (required)',
+        placeholder:  'Explain clearly why this result is being rejected and what needs to be corrected…',
+    },
 };
 
 export default function WardApprovalQueue({ auth, ward, results = [], filter = 'pending', counts = {} }) {
@@ -60,25 +90,22 @@ export default function WardApprovalQueue({ auth, ward, results = [], filter = '
         setSelectedResult(null);
         setAction(null);
         setComment('');
+        setFlash(null);
     };
 
     const submitAction = async () => {
         if (!selectedResult || !action) return;
-
-        if ((action === 'approve_reservation' || action === 'reject') && !comment.trim()) {
+        if (ACTION_CONFIG[action].commentReq && !comment.trim()) {
             setFlash({ type: 'error', text: 'A comment is required for this action.' });
             return;
         }
-
         setProcessing(true);
         setFlash(null);
-
         const endpoints = {
             approve:             `/ward/approve/${selectedResult.id}`,
             approve_reservation: `/ward/approve-with-reservation/${selectedResult.id}`,
             reject:              `/ward/reject/${selectedResult.id}`,
         };
-
         try {
             await new Promise((resolve, reject) => {
                 router.post(endpoints[action], { comments: comment }, {
@@ -94,36 +121,6 @@ export default function WardApprovalQueue({ auth, ward, results = [], filter = '
         }
     };
 
-    const actionConfig = {
-        approve: {
-            title:        'Certify at Ward Level',
-            description:  'This result will be certified and automatically promoted to the Constituency approval queue.',
-            confirmBtn:   'Certify & Promote to Constituency',
-            confirmColor: 'bg-teal-600 hover:bg-teal-700',
-            commentReq:   false,
-            commentLabel: 'Additional Comments (optional)',
-            placeholder:  'Add any notes or observations…',
-        },
-        approve_reservation: {
-            title:        'Certify with Reservation',
-            description:  'Result will be certified but flagged with your reservation note. It will be promoted to the Constituency queue.',
-            confirmBtn:   'Certify with Reservation',
-            confirmColor: 'bg-amber-600 hover:bg-amber-700',
-            commentReq:   true,
-            commentLabel: 'Reservation Note (required)',
-            placeholder:  'Describe your reservation or concern…',
-        },
-        reject: {
-            title:        'Reject & Return to Polling Station',
-            description:  'This result will be returned to the polling officer for correction. They will be notified.',
-            confirmBtn:   'Confirm Rejection',
-            confirmColor: 'bg-red-600 hover:bg-red-700',
-            commentReq:   true,
-            commentLabel: 'Rejection Reason (required)',
-            placeholder:  'Explain clearly why this result is being rejected and what needs to be corrected…',
-        },
-    };
-
     return (
         <AppLayout user={auth?.user}>
             <div className="container mx-auto px-4 py-8">
@@ -137,11 +134,9 @@ export default function WardApprovalQueue({ auth, ward, results = [], filter = '
                     {ward?.name && <p className="text-teal-300 mt-1">{ward.name}</p>}
                 </div>
 
-                {flash && (
+                {flash && !selectedResult && (
                     <div className={`mb-4 p-4 rounded-xl border ${
-                        flash.type === 'error'
-                            ? 'bg-red-500/20 border-red-500/50 text-red-300'
-                            : 'bg-teal-500/20 border-teal-500/50 text-teal-300'
+                        flash.type === 'error' ? 'bg-red-500/20 border-red-500/50 text-red-300' : 'bg-teal-500/20 border-teal-500/50 text-teal-300'
                     }`}>
                         {flash.text}
                     </div>
@@ -185,7 +180,7 @@ export default function WardApprovalQueue({ auth, ward, results = [], filter = '
                         <div className="text-5xl mb-4">
                             {filter === 'pending' ? '⏳' : filter === 'awaiting_party' ? '🤝' : filter === 'approved' ? '✅' : filter === 'rejected' ? '↩' : '📋'}
                         </div>
-                        <p className="mt-4 text-gray-600">
+                        <p className="text-gray-400 mt-4">
                             {filter === 'pending' ? 'No results pending certification'
                             : filter === 'awaiting_party' ? 'No results awaiting party acceptance'
                             : filter === 'approved' ? 'No certified results yet'
@@ -226,7 +221,7 @@ export default function WardApprovalQueue({ auth, ward, results = [], filter = '
                                                 Submitted by <strong className="text-gray-300">{result.officer}</strong> · {result.submitted_at}
                                             </p>
                                         </div>
-                                        <div className="text-right text-sm">
+                                        <div className="text-right text-sm flex-shrink-0">
                                             <div className="text-gray-400">Party Status</div>
                                             <div className={`font-semibold ${
                                                 result.party_total === 0 ? 'text-gray-500' :
@@ -237,7 +232,6 @@ export default function WardApprovalQueue({ auth, ward, results = [], filter = '
                                         </div>
                                     </div>
 
-                                    {/* Awaiting party notice */}
                                     {isAwaitingPty && (
                                         <div className="mx-5 mb-3 p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
                                             <p className="text-yellow-300 text-xs">
@@ -250,12 +244,12 @@ export default function WardApprovalQueue({ auth, ward, results = [], filter = '
                                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 px-5 pb-4">
                                         {[
                                             { label: 'Registered', value: result.total_registered_voters?.toLocaleString(), color: 'text-white' },
-                                            { label: 'Votes Cast', value: result.total_votes_cast?.toLocaleString(), color: 'text-white' },
-                                            { label: 'Valid',      value: result.valid_votes?.toLocaleString(), color: 'text-teal-300' },
-                                            { label: 'Turnout',    value: `${result.turnout}%`, color: 'text-white' },
+                                            { label: 'Votes Cast', value: result.total_votes_cast?.toLocaleString(),         color: 'text-white' },
+                                            { label: 'Valid',      value: result.valid_votes?.toLocaleString(),              color: 'text-teal-300' },
+                                            { label: 'Turnout',    value: `${result.turnout}%`,                              color: 'text-white' },
                                         ].map(s => (
                                             <div key={s.label} className="bg-slate-900/50 p-3 rounded-lg">
-                                                <p className="text-xs text-gray-400 mb-1">{s.label}</p>
+                                                <p className="text-xs text-gray-400 mb-0.5">{s.label}</p>
                                                 <p className={`font-bold ${s.color}`}>{s.value}</p>
                                             </div>
                                         ))}
@@ -273,11 +267,11 @@ export default function WardApprovalQueue({ auth, ward, results = [], filter = '
                                                             <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: cv.party_color }} />
                                                             <span className="text-gray-300 text-sm w-36 truncate">{cv.candidate}</span>
                                                             <span className="text-xs text-gray-500 w-10">{cv.party}</span>
-                                                            <div className="flex-1 bg-slate-700 rounded-full h-2">
-                                                                <div className="h-2 rounded-full" style={{ width: `${pct}%`, backgroundColor: cv.party_color }} />
+                                                            <div className="flex-1 bg-slate-700 rounded-full h-1.5">
+                                                                <div className="h-1.5 rounded-full" style={{ width: `${pct}%`, backgroundColor: cv.party_color }} />
                                                             </div>
                                                             <span className="text-white text-sm font-semibold w-16 text-right">{cv.votes?.toLocaleString()}</span>
-                                                            <span className="text-gray-400 text-xs w-12 text-right">{pct}%</span>
+                                                            <span className="text-gray-400 text-xs w-10 text-right">{pct}%</span>
                                                         </div>
                                                     );
                                                 })}
@@ -285,7 +279,7 @@ export default function WardApprovalQueue({ auth, ward, results = [], filter = '
                                         </div>
                                     )}
 
-                                    {/* ── Party acceptance status WITH comments visible ── */}
+                                    {/* Party status WITH comments */}
                                     {result.party_acceptances?.length > 0 && (
                                         <div className="px-5 pb-4">
                                             <div className="text-xs text-gray-500 mb-2 uppercase tracking-wide">Party Representative Status</div>
@@ -294,11 +288,11 @@ export default function WardApprovalQueue({ auth, ward, results = [], filter = '
                                                     const cfg = PARTY_STATUS_CONFIG[pa.status] || PARTY_STATUS_CONFIG.pending;
                                                     return (
                                                         <div key={idx}>
-                                                            <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold ${cfg.color}`}>
+                                                            <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border ${cfg.color}`}>
                                                                 {cfg.icon} {pa.abbr} — {cfg.label}
                                                             </span>
                                                             {pa.comments && (
-                                                                <p className="text-xs text-gray-400 italic mt-0.5 ml-2 pl-2 border-l border-gray-600/50">
+                                                                <p className="text-xs text-gray-400 italic mt-1 ml-3 pl-2 border-l-2 border-slate-600">
                                                                     "{pa.comments}"
                                                                 </p>
                                                             )}
@@ -323,28 +317,28 @@ export default function WardApprovalQueue({ auth, ward, results = [], filter = '
                                     {result.last_rejection_reason && (
                                         <div className="mx-5 mb-4 p-3 bg-red-500/10 border border-red-500/30 rounded-lg">
                                             <div className="text-xs text-red-400 mb-1 font-semibold">Previous Rejection Reason</div>
-                                            <div className="text-red-300 text-sm" dangerouslySetInnerHTML={{ __html: result.last_rejection_reason }} />
+                                            <div className="text-red-300 text-sm">{result.last_rejection_reason}</div>
                                         </div>
                                     )}
 
-                                    {/* Ward comments (if already certified) */}
+                                    {/* Ward cert comments (if already certified — shown in approved tab) */}
                                     {result.ward_comments && (
                                         <div className="mx-5 mb-4 p-3 bg-teal-500/10 border border-teal-500/30 rounded-lg">
                                             <div className="text-xs text-teal-400 mb-1 font-semibold">Ward Certification Note</div>
-                                            <div className="text-teal-200 text-sm" dangerouslySetInnerHTML={{ __html: result.ward_comments }} />
+                                            <div className="text-teal-200 text-sm">{result.ward_comments}</div>
                                         </div>
                                     )}
 
                                     {/* Action Buttons */}
                                     {isPending && (
                                         <div className="px-5 pb-5 flex flex-wrap gap-3 border-t border-slate-700/50 pt-4 mt-2">
-                                            <button onClick={() => openAction(result, 'approve')} className="flex-1 min-w-[140px] px-4 py-3 bg-teal-600 hover:bg-teal-500 text-white font-bold rounded-lg">
+                                            <button onClick={() => openAction(result, 'approve')} className="flex-1 min-w-[140px] px-4 py-3 bg-teal-600 hover:bg-teal-500 text-white font-bold rounded-lg transition-colors">
                                                 ✓ Certify
                                             </button>
-                                            <button onClick={() => openAction(result, 'approve_reservation')} className="flex-1 min-w-[140px] px-4 py-3 bg-amber-600 hover:bg-amber-500 text-white font-bold rounded-lg">
+                                            <button onClick={() => openAction(result, 'approve_reservation')} className="flex-1 min-w-[160px] px-4 py-3 bg-amber-600 hover:bg-amber-500 text-white font-bold rounded-lg transition-colors">
                                                 ⚠ Certify with Reservation
                                             </button>
-                                            <button onClick={() => openAction(result, 'reject')} className="flex-1 min-w-[140px] px-4 py-3 bg-red-700 hover:bg-red-600 text-white font-bold rounded-lg">
+                                            <button onClick={() => openAction(result, 'reject')} className="flex-1 min-w-[140px] px-4 py-3 bg-red-700 hover:bg-red-600 text-white font-bold rounded-lg transition-colors">
                                                 ✗ Reject &amp; Return
                                             </button>
                                         </div>
@@ -356,68 +350,91 @@ export default function WardApprovalQueue({ auth, ward, results = [], filter = '
                 )}
             </div>
 
-            {/* ── Action Modal ──────────────────────────────────────────────── */}
-            {selectedResult && (
-                <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50">
-                    <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl">
-                        <div className="p-6">
-                            <h2 className="text-xl font-bold text-white mb-2">
-                                {actionConfig[action]?.title}
-                            </h2>
+            {/* ── Action Modal ── */}
+            {selectedResult && action && (
+                <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4">
+                    <div
+                        className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-lg shadow-2xl flex flex-col"
+                        style={{ maxHeight: 'min(92vh, 580px)' }}
+                    >
+                        {/* Modal Header */}
+                        <div className="px-6 pt-6 pb-4 flex-shrink-0 border-b border-slate-800">
+                            <div className="flex items-start justify-between gap-4">
+                                <div>
+                                    <h2 className="text-lg font-bold text-white">{ACTION_CONFIG[action].title}</h2>
+                                    <p className="text-gray-400 text-xs mt-0.5">
+                                        {selectedResult.polling_station} · {selectedResult.polling_station_code}
+                                    </p>
+                                </div>
+                                <button
+                                    onClick={closePanel}
+                                    disabled={processing}
+                                    className="text-gray-400 hover:text-white text-2xl leading-none flex-shrink-0 w-8 h-8 flex items-center justify-center"
+                                >
+                                    ×
+                                </button>
+                            </div>
+                        </div>
 
-                            <div className="p-4 bg-slate-800/60 rounded-lg mb-5 text-sm text-gray-300">
-                                {actionConfig[action]?.description}
+                        {/* Scrollable Content */}
+                        <div className="px-6 py-5 overflow-y-auto flex-1 space-y-4">
+                            {/* Description */}
+                            <div className="p-3 bg-slate-800/60 rounded-xl text-sm text-gray-300">
+                                {ACTION_CONFIG[action].description}
                             </div>
 
-                            <div className="grid grid-cols-2 gap-3 mb-5">
-                                <div className="bg-slate-800/50 p-3 rounded-lg">
-                                    <div className="text-xs text-gray-400 mb-1">Station</div>
-                                    <div className="text-white font-semibold text-sm">{selectedResult.polling_station}</div>
-                                </div>
-                                <div className="bg-slate-800/50 p-3 rounded-lg">
-                                    <div className="text-xs text-gray-400 mb-1">Votes Cast</div>
-                                    <div className="text-white font-bold">{selectedResult.total_votes_cast?.toLocaleString()}</div>
-                                </div>
+                            {/* Stats */}
+                            <div className="grid grid-cols-3 gap-3">
+                                {[
+                                    { label: 'Votes Cast',  value: selectedResult.total_votes_cast?.toLocaleString() },
+                                    { label: 'Valid Votes', value: selectedResult.valid_votes?.toLocaleString() },
+                                    { label: 'Turnout',     value: `${selectedResult.turnout}%` },
+                                ].map(s => (
+                                    <div key={s.label} className="bg-slate-800/50 p-3 rounded-xl text-center">
+                                        <div className="text-xs text-gray-400 mb-0.5">{s.label}</div>
+                                        <div className="text-white font-bold">{s.value}</div>
+                                    </div>
+                                ))}
                             </div>
 
                             {flash && (
-                                <div className={`mb-4 p-3 rounded-lg text-sm ${flash.type === 'error' ? 'bg-red-500/20 text-red-300' : 'bg-teal-500/20 text-teal-300'}`}>
+                                <div className={`p-3 rounded-lg text-sm ${flash.type === 'error' ? 'bg-red-500/20 text-red-300' : 'bg-teal-500/20 text-teal-300'}`}>
                                     {flash.text}
                                 </div>
                             )}
 
-                            {/* ── Comment section – styled to stand out ── */}
-                            <div className="bg-slate-800/60 border border-slate-600/60 rounded-xl p-4 mb-5">
+                            {/* Comment section */}
+                            <div className="bg-slate-800/60 border border-slate-600/60 rounded-xl p-4">
                                 <label className="block text-gray-200 font-semibold mb-2 text-sm">
-                                    {actionConfig[action]?.commentLabel}
-                                    {actionConfig[action]?.commentReq && <span className="text-red-400 ml-1">*</span>}
+                                    {ACTION_CONFIG[action].commentLabel}
+                                    {ACTION_CONFIG[action].commentReq && <span className="text-red-400 ml-1">*</span>}
                                 </label>
                                 <textarea
                                     value={comment}
                                     onChange={(e) => setComment(e.target.value)}
-                                    rows={5}
-                                    required={actionConfig[action]?.commentReq}
-                                    placeholder={actionConfig[action]?.placeholder}
+                                    rows={4}
+                                    placeholder={ACTION_CONFIG[action].placeholder}
                                     className="w-full px-4 py-3 bg-slate-900/80 border-2 border-slate-600 focus:border-teal-500 rounded-xl text-white resize-none focus:outline-none transition-colors text-sm"
                                 />
                             </div>
+                        </div>
 
-                            <div className="flex gap-3">
-                                <button
-                                    onClick={submitAction}
-                                    disabled={processing || (actionConfig[action]?.commentReq && !comment.trim())}
-                                    className={`flex-1 py-3 px-6 rounded-lg font-bold text-white disabled:opacity-40 disabled:cursor-not-allowed ${actionConfig[action]?.confirmColor}`}
-                                >
-                                    {processing ? 'Processing…' : actionConfig[action]?.confirmBtn}
-                                </button>
-                                <button
-                                    onClick={closePanel}
-                                    disabled={processing}
-                                    className="px-6 py-3 border border-gray-600 rounded-lg text-gray-300 hover:bg-slate-700"
-                                >
-                                    Cancel
-                                </button>
-                            </div>
+                        {/* Sticky Footer Buttons */}
+                        <div className="px-6 py-4 border-t border-slate-800 flex-shrink-0 flex gap-3">
+                            <button
+                                onClick={submitAction}
+                                disabled={processing || (ACTION_CONFIG[action].commentReq && !comment.trim())}
+                                className={`flex-1 py-3 rounded-xl font-bold text-white disabled:opacity-40 disabled:cursor-not-allowed transition-colors ${ACTION_CONFIG[action].confirmColor}`}
+                            >
+                                {processing ? 'Processing…' : ACTION_CONFIG[action].confirmBtn}
+                            </button>
+                            <button
+                                onClick={closePanel}
+                                disabled={processing}
+                                className="px-5 py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-xl font-semibold transition-colors"
+                            >
+                                Cancel
+                            </button>
                         </div>
                     </div>
                 </div>

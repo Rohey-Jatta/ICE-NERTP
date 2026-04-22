@@ -67,54 +67,73 @@ Route::middleware(['auth', 'role:iec-chairman'])
         ]);
     })->name('dashboard');
 
-    // ── National Certification Queue ──────────────────────────────────────────
+   // ── National Certification Queue ──────────────────────────────────────────
     Route::get('/national-queue', function () {
         $results = Result::where('certification_status', Result::STATUS_PENDING_NATIONAL)
             ->with([
                 'pollingStation.ward',
                 'candidateVotes.candidate.politicalParty',
                 'partyAcceptances.politicalParty',
+                // Load ALL certification levels so we can surface all approver notes
                 'certifications' => fn($q) => $q->latest(),
                 'submittedBy',
             ])
             ->latest('submitted_at')
             ->get()
-            ->map(fn($r) => [
-                'id'                      => $r->id,
-                'polling_station_name'    => $r->pollingStation->name ?? 'Unknown',
-                'polling_station_code'    => $r->pollingStation->code ?? '—',
-                'ward_name'               => $r->pollingStation->ward->name ?? '—',
-                'submitted_at'            => $r->submitted_at?->format('Y-m-d H:i'),
-                'submitted_by'            => $r->submittedBy->name ?? 'Unknown',
-                'total_registered_voters' => $r->total_registered_voters,
-                'total_votes_cast'        => $r->total_votes_cast,
-                'valid_votes'             => $r->valid_votes,
-                'rejected_votes'          => $r->rejected_votes,
-                'turnout_percentage'      => $r->getTurnoutPercentage(),
-                'rejection_count'         => $r->rejection_count,
-                'photo_url'               => $r->result_sheet_photo_path
-                    ? asset('storage/' . $r->result_sheet_photo_path)
-                    : null,
-                'candidate_votes'         => $r->candidateVotes->map(fn($cv) => [
-                    'candidate_name' => $cv->candidate->name ?? 'Unknown',
-                    'party_name'     => $cv->candidate->politicalParty->name ?? 'Independent',
-                    'party_abbr'     => $cv->candidate->politicalParty->abbreviation ?? 'IND',
-                    'party_color'    => $cv->candidate->politicalParty->color ?? '#6b7280',
-                    'votes'          => $cv->votes,
-                ]),
-                'party_acceptances'       => $r->partyAcceptances->map(fn($pa) => [
-                    'party_name' => $pa->politicalParty->name ?? 'Unknown',
-                    'abbr'       => $pa->politicalParty->abbreviation ?? '?',
-                    'status'     => $pa->status,
-                    'comments'   => $pa->comments,
-                ]),
-                'certification_chain'     => $r->certifications->map(fn($c) => [
-                    'level'      => $c->certification_level,
-                    'status'     => $c->status,
-                    'comments'   => $c->comments,
-                    'decided_at' => $c->decided_at?->format('Y-m-d H:i'),
-                ]),
-            ]);
+            ->map(function ($r) {
+                // FIX: Extract per-level approver notes
+                $certs    = $r->certifications->sortByDesc('created_at');
+                $wardNote = $certs->where('certification_level', 'ward')
+                                  ->where('status', 'approved')
+                                  ->first()?->comments;
+                $constNote = $certs->where('certification_level', 'constituency')
+                                   ->where('status', 'approved')
+                                   ->first()?->comments;
+                $areaNote  = $certs->where('certification_level', 'admin_area')
+                                   ->where('status', 'approved')
+                                   ->first()?->comments;
+
+                return [
+                    'id'                      => $r->id,
+                    'polling_station_name'    => $r->pollingStation->name ?? 'Unknown',
+                    'polling_station_code'    => $r->pollingStation->code ?? '—',
+                    'ward_name'               => $r->pollingStation->ward->name ?? '—',
+                    'submitted_at'            => $r->submitted_at?->format('Y-m-d H:i'),
+                    'submitted_by'            => $r->submittedBy->name ?? 'Unknown',
+                    'total_registered_voters' => $r->total_registered_voters,
+                    'total_votes_cast'        => $r->total_votes_cast,
+                    'valid_votes'             => $r->valid_votes,
+                    'rejected_votes'          => $r->rejected_votes,
+                    'turnout_percentage'      => $r->getTurnoutPercentage(),
+                    'rejection_count'         => $r->rejection_count,
+                    'photo_url'               => $r->result_sheet_photo_path
+                        ? asset('storage/' . $r->result_sheet_photo_path)
+                        : null,
+                    'candidate_votes'         => $r->candidateVotes->map(fn($cv) => [
+                        'candidate_name' => $cv->candidate->name ?? 'Unknown',
+                        'party_name'     => $cv->candidate->politicalParty->name ?? 'Independent',
+                        'party_abbr'     => $cv->candidate->politicalParty->abbreviation ?? 'IND',
+                        'party_color'    => $cv->candidate->politicalParty->color ?? '#6b7280',
+                        'votes'          => $cv->votes,
+                    ]),
+                    'party_acceptances'       => $r->partyAcceptances->map(fn($pa) => [
+                        'party_name' => $pa->politicalParty->name ?? 'Unknown',
+                        'abbr'       => $pa->politicalParty->abbreviation ?? '?',
+                        'status'     => $pa->status,
+                        'comments'   => $pa->comments,
+                    ]),
+                    'certification_chain'     => $r->certifications->sortByDesc('created_at')->map(fn($c) => [
+                        'level'      => $c->certification_level,
+                        'status'     => $c->status,
+                        'comments'   => $c->comments,
+                        'decided_at' => $c->decided_at?->format('Y-m-d H:i'),
+                    ])->values(),
+                    // FIX: Per-level approver notes now visible to Chairman
+                    'ward_comments'         => $wardNote,
+                    'constituency_comments' => $constNote,
+                    'admin_area_comments'   => $areaNote,
+                ];
+            });
 
         return Inertia::render('Chairman/NationalQueue', [
             'auth'           => ['user' => Auth::user()],
@@ -122,7 +141,6 @@ Route::middleware(['auth', 'role:iec-chairman'])
             'pendingCount'   => $results->count(),
         ]);
     })->name('national-queue');
-
     // ── Certify nationally ────────────────────────────────────────────────────
     Route::post('/certify/{result}', function (Request $request, Result $result) {
         $request->validate([

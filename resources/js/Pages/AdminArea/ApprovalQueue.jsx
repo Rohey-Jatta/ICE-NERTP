@@ -15,10 +15,40 @@ const STATUS_LABELS = {
 };
 
 const PARTY_STATUS_CONFIG = {
-    accepted:                  { label: 'Accepted',            color: 'bg-green-500/20 text-green-300',  icon: '✓' },
-    accepted_with_reservation: { label: 'Accepted (Reserved)', color: 'bg-yellow-500/20 text-yellow-300', icon: '⚠' },
-    rejected:                  { label: 'Rejected',            color: 'bg-red-500/20 text-red-300',      icon: '✗' },
-    pending:                   { label: 'Pending',             color: 'bg-gray-500/20 text-gray-300',     icon: '…' },
+    accepted:                  { label: 'Accepted',            color: 'bg-green-500/20 text-green-300 border-green-500/30',   icon: '✓' },
+    accepted_with_reservation: { label: 'Accepted (Reserved)', color: 'bg-yellow-500/20 text-yellow-300 border-yellow-500/30', icon: '⚠' },
+    rejected:                  { label: 'Rejected',            color: 'bg-red-500/20 text-red-300 border-red-500/30',         icon: '✗' },
+    pending:                   { label: 'Pending',             color: 'bg-gray-500/20 text-gray-300 border-gray-500/30',      icon: '…' },
+};
+
+const ACTION_CONFIG = {
+    approve: {
+        title:        'Certify at Admin-Area Level',
+        description:  'This result will be certified at the administrative area level and automatically promoted to the IEC Chairman queue for final national certification.',
+        confirmBtn:   'Certify & Send to Chairman',
+        confirmColor: 'bg-teal-600 hover:bg-teal-700',
+        commentReq:   false,
+        commentLabel: 'Additional Comments (optional)',
+        placeholder:  'Add any observations or notes about this result…',
+    },
+    approve_reservation: {
+        title:        'Certify with Reservation',
+        description:  'Result will be certified at admin-area level with your reservation flagged. It will be promoted to the IEC Chairman queue.',
+        confirmBtn:   'Certify with Reservation',
+        confirmColor: 'bg-amber-600 hover:bg-amber-700',
+        commentReq:   true,
+        commentLabel: 'Reservation Note (required)',
+        placeholder:  'Describe your concerns or reservations about this result…',
+    },
+    reject: {
+        title:        'Reject & Return to Constituency',
+        description:  'This result will be returned to the constituency approver with your rejection reason.',
+        confirmBtn:   'Confirm Rejection',
+        confirmColor: 'bg-red-600 hover:bg-red-700',
+        commentReq:   true,
+        commentLabel: 'Rejection Reason (required)',
+        placeholder:  'Clearly explain why this result is being rejected and what needs to be addressed…',
+    },
 };
 
 export default function AdminAreaApprovalQueue({ auth, adminArea, results = [], filter = 'pending', counts = {} }) {
@@ -29,47 +59,17 @@ export default function AdminAreaApprovalQueue({ auth, adminArea, results = [], 
     const [flash, setFlash]                   = useState(null);
 
     const filterTabs = [
-        { key: 'pending',  label: 'Pending',   count: counts.pending  || 0, color: 'amber'  },
-        { key: 'approved', label: 'Certified', count: counts.approved || 0, color: 'teal'   },
-        { key: 'rejected', label: 'Rejected',  count: counts.rejected || 0, color: 'red'    },
-        { key: 'all',      label: 'All',       count: counts.all      || 0, color: 'slate'  },
+        { key: 'pending',  label: 'Pending',   count: counts.pending  || 0, color: 'amber' },
+        { key: 'approved', label: 'Certified', count: counts.approved || 0, color: 'teal'  },
+        { key: 'rejected', label: 'Rejected',  count: counts.rejected || 0, color: 'red'   },
+        { key: 'all',      label: 'All',       count: counts.all      || 0, color: 'slate' },
     ];
 
     const tabColors = {
         amber: { active: 'bg-amber-500 text-white', dot: 'bg-amber-400' },
-        teal:  { active: 'bg-teal-500 text-white',  dot: 'bg-teal-400'  },
-        red:   { active: 'bg-red-500 text-white',   dot: 'bg-red-400'   },
+        teal:  { active: 'bg-teal-500 text-white',  dot: 'bg-teal-400' },
+        red:   { active: 'bg-red-500 text-white',   dot: 'bg-red-400' },
         slate: { active: 'bg-slate-500 text-white', dot: 'bg-slate-400' },
-    };
-
-    const actionConfig = {
-        approve: {
-            title:        'Certify at Admin-Area Level',
-            description:  'This result will be certified at the administrative area level and automatically promoted to the IEC Chairman queue for final national certification.',
-            confirmBtn:   'Certify & Send to Chairman',
-            confirmColor: 'bg-teal-600 hover:bg-teal-700',
-            commentReq:   false,
-            commentLabel: 'Additional Comments (optional)',
-            placeholder:  'Add any observations or notes about this result…',
-        },
-        approve_reservation: {
-            title:        'Certify with Reservation',
-            description:  'Result will be certified at admin-area level with your reservation flagged. It will be promoted to the IEC Chairman queue.',
-            confirmBtn:   'Certify with Reservation',
-            confirmColor: 'bg-amber-600 hover:bg-amber-700',
-            commentReq:   true,
-            commentLabel: 'Reservation Note (required)',
-            placeholder:  'Describe your concerns or reservations about this result…',
-        },
-        reject: {
-            title:        'Reject & Return to Constituency',
-            description:  'This result will be returned to the constituency approver with your rejection reason.',
-            confirmBtn:   'Confirm Rejection',
-            confirmColor: 'bg-red-600 hover:bg-red-700',
-            commentReq:   true,
-            commentLabel: 'Rejection Reason (required)',
-            placeholder:  'Clearly explain why this result is being rejected and what needs to be addressed…',
-        },
     };
 
     const handleFilterChange = (key) => {
@@ -83,23 +83,21 @@ export default function AdminAreaApprovalQueue({ auth, adminArea, results = [], 
         setFlash(null);
     };
 
-    const closePanel = () => { setSelectedResult(null); setAction(null); setComment(''); };
+    const closePanel = () => { setSelectedResult(null); setAction(null); setComment(''); setFlash(null); };
 
     const submitAction = async () => {
         if (!selectedResult || !action) return;
-        if ((action === 'approve_reservation' || action === 'reject') && !comment.trim()) {
+        if (ACTION_CONFIG[action].commentReq && !comment.trim()) {
             setFlash({ type: 'error', text: 'A comment is required for this action.' });
             return;
         }
         setProcessing(true);
         setFlash(null);
-
         const endpoints = {
             approve:             `/admin-area/approve/${selectedResult.id}`,
             approve_reservation: `/admin-area/approve-with-reservation/${selectedResult.id}`,
             reject:              `/admin-area/reject/${selectedResult.id}`,
         };
-
         try {
             await new Promise((resolve, reject) => {
                 router.post(endpoints[action], { comments: comment }, {
@@ -120,14 +118,14 @@ export default function AdminAreaApprovalQueue({ auth, adminArea, results = [], 
             <div className="container mx-auto px-4 py-8">
                 <div className="mb-6">
                     <Link href="/admin-area/dashboard" className="text-gray-400 hover:text-white text-sm mb-2 inline-flex items-center gap-1">
-                        Admin-Area Dashboard
+                        ← Admin-Area Dashboard
                     </Link>
                     <h1 className="text-3xl font-bold text-white">Admin-Area Approval Queue</h1>
                     {adminArea?.name && <p className="text-teal-300 mt-1">{adminArea.name}</p>}
                     <p className="text-gray-400 text-sm mt-1">Review constituency-certified results and certify at administrative area level</p>
                 </div>
 
-                {flash && (
+                {flash && !selectedResult && (
                     <div className={`mb-4 p-4 rounded-xl border ${
                         flash.type === 'error' ? 'bg-red-500/20 border-red-500/50 text-red-300' : 'bg-teal-500/20 border-teal-500/50 text-teal-300'
                     }`}>
@@ -141,9 +139,7 @@ export default function AdminAreaApprovalQueue({ auth, adminArea, results = [], 
                         const cfg    = tabColors[tab.color];
                         const active = filter === tab.key;
                         return (
-                            <button
-                                key={tab.key}
-                                onClick={() => handleFilterChange(tab.key)}
+                            <button key={tab.key} onClick={() => handleFilterChange(tab.key)}
                                 className={`flex items-center gap-2 px-4 py-2 rounded-lg font-semibold text-sm transition-all ${
                                     active ? cfg.active : 'bg-slate-800/40 text-gray-400 hover:bg-slate-700 border border-slate-700/50'
                                 }`}
@@ -195,7 +191,7 @@ export default function AdminAreaApprovalQueue({ auth, adminArea, results = [], 
                                                 <span>Submitted {result.submitted_at}</span>
                                             </div>
                                         </div>
-                                        <div className="text-right text-sm">
+                                        <div className="text-right text-sm flex-shrink-0">
                                             <div className="text-gray-400">Party Status</div>
                                             <div className={`font-semibold ${
                                                 result.party_total === 0 ? 'text-gray-500' :
@@ -215,13 +211,33 @@ export default function AdminAreaApprovalQueue({ auth, adminArea, results = [], 
                                             { label: 'Turnout',    value: `${result.turnout}%` },
                                         ].map(s => (
                                             <div key={s.label} className="bg-slate-900/50 p-3 rounded-lg">
-                                                <div className="text-xs text-gray-400 mb-1">{s.label}</div>
+                                                <div className="text-xs text-gray-400 mb-0.5">{s.label}</div>
                                                 <div className="font-bold text-white">{s.value}</div>
                                             </div>
                                         ))}
                                     </div>
 
-                                    {/* ── Party acceptances WITH inline comments ── */}
+                                    {/* Candidate Votes */}
+                                    {result.candidate_votes?.length > 0 && (
+                                        <div className="px-5 pb-4">
+                                            <div className="text-xs text-gray-500 mb-2 uppercase tracking-wide">Candidate Results</div>
+                                            <div className="space-y-2">
+                                                {result.candidate_votes.map((cv, idx) => (
+                                                    <div key={idx} className="flex items-center gap-3">
+                                                        <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: cv.party_color }} />
+                                                        <span className="text-gray-300 text-sm w-36 truncate">{cv.candidate}</span>
+                                                        <span className="text-xs text-gray-500 w-10">{cv.party}</span>
+                                                        <div className="flex-1 bg-slate-700 rounded-full h-1.5">
+                                                            <div className="h-1.5 rounded-full" style={{ width: `${cv.percentage || 0}%`, backgroundColor: cv.party_color }} />
+                                                        </div>
+                                                        <span className="text-white text-sm font-semibold w-16 text-right">{cv.votes?.toLocaleString()}</span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Party Acceptance Status WITH inline comments */}
                                     {result.party_acceptances?.length > 0 && (
                                         <div className="px-5 pb-4">
                                             <div className="text-xs text-gray-500 mb-2 uppercase tracking-wide">Party Representative Status</div>
@@ -230,11 +246,11 @@ export default function AdminAreaApprovalQueue({ auth, adminArea, results = [], 
                                                     const cfg = PARTY_STATUS_CONFIG[pa.status] || PARTY_STATUS_CONFIG.pending;
                                                     return (
                                                         <div key={idx}>
-                                                            <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold ${cfg.color}`}>
+                                                            <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border ${cfg.color}`}>
                                                                 {cfg.icon} {pa.abbr} — {cfg.label}
                                                             </span>
                                                             {pa.comments && (
-                                                                <p className="text-xs text-gray-400 italic mt-0.5 ml-2 pl-2 border-l border-gray-600/50">
+                                                                <p className="text-xs text-gray-400 italic mt-1 ml-3 pl-2 border-l-2 border-slate-600">
                                                                     "{pa.comments}"
                                                                 </p>
                                                             )}
@@ -242,6 +258,38 @@ export default function AdminAreaApprovalQueue({ auth, adminArea, results = [], 
                                                     );
                                                 })}
                                             </div>
+                                        </div>
+                                    )}
+
+                                    {/* ── APPROVER NOTES FROM LOWER LEVELS ── */}
+                                    {(result.ward_comments || result.constituency_comments || result.area_comments) && (
+                                        <div className="mx-5 mb-4 space-y-2">
+                                            {result.ward_comments && (
+                                                <div className="p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg">
+                                                    <div className="text-xs text-blue-400 font-semibold mb-1">📋 Ward Approver Note</div>
+                                                    <div className="text-blue-200 text-sm">{result.ward_comments}</div>
+                                                </div>
+                                            )}
+                                            {result.constituency_comments && (
+                                                <div className="p-3 bg-cyan-500/10 border border-cyan-500/30 rounded-lg">
+                                                    <div className="text-xs text-cyan-400 font-semibold mb-1">📋 Constituency Approver Note</div>
+                                                    <div className="text-cyan-200 text-sm">{result.constituency_comments}</div>
+                                                </div>
+                                            )}
+                                            {result.area_comments && (
+                                                <div className="p-3 bg-teal-500/10 border border-teal-500/30 rounded-lg">
+                                                    <div className="text-xs text-teal-400 font-semibold mb-1">📋 Admin-Area Certification Note</div>
+                                                    <div className="text-teal-200 text-sm">{result.area_comments}</div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+
+                                    {/* Prior rejection reason */}
+                                    {result.last_rejection_reason && (
+                                        <div className="mx-5 mb-4 p-3 bg-red-500/10 border border-red-500/30 rounded-lg">
+                                            <div className="text-xs text-red-400 mb-1 font-semibold">Previous Rejection Reason</div>
+                                            <div className="text-red-300 text-sm">{result.last_rejection_reason}</div>
                                         </div>
                                     )}
 
@@ -255,32 +303,16 @@ export default function AdminAreaApprovalQueue({ auth, adminArea, results = [], 
                                         </div>
                                     )}
 
-                                    {/* Prior rejection */}
-                                    {result.last_rejection_reason && (
-                                        <div className="mx-5 mb-4 p-3 bg-red-500/10 border border-red-500/30 rounded-lg">
-                                            <div className="text-xs text-red-400 mb-1 font-semibold">Previous Rejection Reason</div>
-                                            <div className="text-red-300 text-sm" dangerouslySetInnerHTML={{ __html: result.last_rejection_reason }} />
-                                        </div>
-                                    )}
-
-                                    {/* Area cert comments */}
-                                    {result.area_comments && (
-                                        <div className="mx-5 mb-4 p-3 bg-teal-500/10 border border-teal-500/30 rounded-lg">
-                                            <div className="text-xs text-teal-400 mb-1 font-semibold">Admin-Area Certification Note</div>
-                                            <div className="text-teal-200 text-sm" dangerouslySetInnerHTML={{ __html: result.area_comments }} />
-                                        </div>
-                                    )}
-
                                     {/* Action Buttons */}
                                     {isPending && (
                                         <div className="px-5 pb-5 flex flex-wrap gap-3 border-t border-slate-700/50 pt-4 mt-2">
-                                            <button onClick={() => openAction(result, 'approve')} className="flex-1 min-w-[140px] px-4 py-3 bg-teal-600 hover:bg-teal-500 text-white font-bold rounded-lg">
+                                            <button onClick={() => openAction(result, 'approve')} className="flex-1 min-w-[140px] px-4 py-3 bg-teal-600 hover:bg-teal-500 text-white font-bold rounded-lg transition-colors">
                                                 ✓ Certify
                                             </button>
-                                            <button onClick={() => openAction(result, 'approve_reservation')} className="flex-1 min-w-[140px] px-4 py-3 bg-amber-600 hover:bg-amber-500 text-white font-bold rounded-lg">
+                                            <button onClick={() => openAction(result, 'approve_reservation')} className="flex-1 min-w-[160px] px-4 py-3 bg-amber-600 hover:bg-amber-500 text-white font-bold rounded-lg transition-colors">
                                                 ⚠ Certify with Reservation
                                             </button>
-                                            <button onClick={() => openAction(result, 'reject')} className="flex-1 min-w-[140px] px-4 py-3 bg-red-700 hover:bg-red-600 text-white font-bold rounded-lg">
+                                            <button onClick={() => openAction(result, 'reject')} className="flex-1 min-w-[140px] px-4 py-3 bg-red-700 hover:bg-red-600 text-white font-bold rounded-lg transition-colors">
                                                 ✗ Reject &amp; Return
                                             </button>
                                         </div>
@@ -292,71 +324,82 @@ export default function AdminAreaApprovalQueue({ auth, adminArea, results = [], 
                 )}
             </div>
 
-            {/* ── Action Modal ──────────────────────────────────────────────── */}
+            {/* ── Action Modal ── */}
             {selectedResult && action && (
-                <div className="fixed inset-0 z-50 bg-black/70 flex items-end sm:items-center justify-center p-4">
-                    <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto shadow-2xl">
-                        <div className="p-6">
-                            <div className="flex items-start justify-between mb-5">
+                <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4">
+                    <div
+                        className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-lg shadow-2xl flex flex-col"
+                        style={{ maxHeight: 'min(92vh, 580px)' }}
+                    >
+                        {/* Header */}
+                        <div className="px-6 pt-6 pb-4 flex-shrink-0 border-b border-slate-800">
+                            <div className="flex items-start justify-between gap-4">
                                 <div>
-                                    <h2 className="text-xl font-bold text-white">{actionConfig[action].title}</h2>
-                                    <p className="text-sm text-gray-400 mt-1">
+                                    <h2 className="text-lg font-bold text-white">{ACTION_CONFIG[action].title}</h2>
+                                    <p className="text-gray-400 text-xs mt-0.5">
                                         {selectedResult.polling_station} — {selectedResult.constituency}
                                     </p>
                                 </div>
-                                <button onClick={closePanel} disabled={processing} className="text-gray-500 hover:text-white text-2xl leading-none">×</button>
+                                <button onClick={closePanel} disabled={processing}
+                                    className="text-gray-400 hover:text-white text-2xl leading-none w-8 h-8 flex items-center justify-center flex-shrink-0">
+                                    ×
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Scrollable Content */}
+                        <div className="px-6 py-5 overflow-y-auto flex-1 space-y-4">
+                            <div className="p-3 bg-slate-800/60 rounded-xl text-sm text-gray-300">
+                                {ACTION_CONFIG[action].description}
                             </div>
 
-                            <div className="p-4 bg-slate-800/60 rounded-lg mb-5 text-sm text-gray-300">
-                                {actionConfig[action].description}
-                            </div>
-
-                            <div className="grid grid-cols-3 gap-3 mb-5">
+                            <div className="grid grid-cols-3 gap-3">
                                 {[
-                                    { label: 'Votes Cast', value: selectedResult.total_votes_cast?.toLocaleString() },
+                                    { label: 'Votes Cast',  value: selectedResult.total_votes_cast?.toLocaleString() },
                                     { label: 'Valid Votes', value: selectedResult.valid_votes?.toLocaleString() },
-                                    { label: 'Turnout', value: `${selectedResult.turnout}%` },
+                                    { label: 'Turnout',     value: `${selectedResult.turnout}%` },
                                 ].map(s => (
-                                    <div key={s.label} className="bg-slate-800/50 p-3 rounded-lg text-center">
-                                        <div className="text-xs text-gray-400">{s.label}</div>
+                                    <div key={s.label} className="bg-slate-800/50 p-3 rounded-xl text-center">
+                                        <div className="text-xs text-gray-400 mb-0.5">{s.label}</div>
                                         <div className="text-white font-bold">{s.value}</div>
                                     </div>
                                 ))}
                             </div>
 
                             {flash && (
-                                <div className={`mb-4 p-3 rounded-lg text-sm ${flash.type === 'error' ? 'bg-red-500/20 text-red-300' : 'bg-teal-500/20 text-teal-300'}`}>
+                                <div className={`p-3 rounded-lg text-sm ${flash.type === 'error' ? 'bg-red-500/20 text-red-300' : 'bg-teal-500/20 text-teal-300'}`}>
                                     {flash.text}
                                 </div>
                             )}
 
-                            {/* ── Standout comment section (plain textarea) ── */}
-                            <div className="bg-slate-800/60 border border-slate-600/60 rounded-xl p-4 mb-5">
+                            <div className="bg-slate-800/60 border border-slate-600/60 rounded-xl p-4">
                                 <label className="block text-gray-200 font-semibold mb-2 text-sm">
-                                    {actionConfig[action].commentLabel}
-                                    {actionConfig[action].commentReq && <span className="text-red-400 ml-1">*</span>}
+                                    {ACTION_CONFIG[action].commentLabel}
+                                    {ACTION_CONFIG[action].commentReq && <span className="text-red-400 ml-1">*</span>}
                                 </label>
                                 <textarea
                                     value={comment}
                                     onChange={(e) => setComment(e.target.value)}
-                                    rows={5}
-                                    placeholder={actionConfig[action].placeholder}
+                                    rows={4}
+                                    placeholder={ACTION_CONFIG[action].placeholder}
                                     className="w-full px-4 py-3 bg-slate-900/80 border-2 border-slate-600 focus:border-teal-500 rounded-xl text-white resize-none focus:outline-none transition-colors text-sm"
                                 />
                             </div>
+                        </div>
 
-                            <div className="flex gap-3">
-                                <button
-                                    onClick={submitAction}
-                                    disabled={processing || (actionConfig[action].commentReq && !comment.trim())}
-                                    className={`flex-1 py-3 px-6 rounded-lg font-bold text-white disabled:opacity-40 disabled:cursor-not-allowed ${actionConfig[action].confirmColor}`}
-                                >
-                                    {processing ? 'Processing…' : actionConfig[action].confirmBtn}
-                                </button>
-                                <button onClick={closePanel} disabled={processing} className="px-6 py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-semibold">
-                                    Cancel
-                                </button>
-                            </div>
+                        {/* Sticky Footer */}
+                        <div className="px-6 py-4 border-t border-slate-800 flex-shrink-0 flex gap-3">
+                            <button
+                                onClick={submitAction}
+                                disabled={processing || (ACTION_CONFIG[action].commentReq && !comment.trim())}
+                                className={`flex-1 py-3 rounded-xl font-bold text-white disabled:opacity-40 disabled:cursor-not-allowed transition-colors ${ACTION_CONFIG[action].confirmColor}`}
+                            >
+                                {processing ? 'Processing…' : ACTION_CONFIG[action].confirmBtn}
+                            </button>
+                            <button onClick={closePanel} disabled={processing}
+                                className="px-5 py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-xl font-semibold transition-colors">
+                                Cancel
+                            </button>
                         </div>
                     </div>
                 </div>

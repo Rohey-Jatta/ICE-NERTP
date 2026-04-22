@@ -93,7 +93,8 @@ Route::middleware(['auth', 'role:admin-area-approver'])
                 'candidateVotes.candidate.politicalParty',
                 'partyAcceptances.politicalParty',
                 'submittedBy',
-                'certifications' => fn($q) => $q->where('certification_level', 'admin_area')->latest(),
+                // FIX: Load ALL certification levels so we can show ward + constituency notes
+                'certifications' => fn($q) => $q->latest(),
             ]);
             $baseQuery = $areaScope($baseQuery);
 
@@ -135,6 +136,20 @@ Route::middleware(['auth', 'role:admin-area-approver'])
                 $partyTotal    = $r->partyAcceptances->count();
                 $constituency  = $r->pollingStation?->ward?->parent;
 
+                // FIX: Extract per-level approver comments
+                $certs       = $r->certifications->sortByDesc('created_at');
+                $wardNote    = $certs->where('certification_level', 'ward')
+                                     ->where('status', 'approved')
+                                     ->first()?->comments;
+                $constNote   = $certs->where('certification_level', 'constituency')
+                                     ->where('status', 'approved')
+                                     ->first()?->comments;
+                $areaNote    = $certs->where('certification_level', 'admin_area')
+                                     ->first()?->comments;
+
+                // Compute candidate percentages
+                $totalValidVotes = $r->valid_votes ?: 0;
+
                 return [
                     'id'                      => $r->id,
                     'polling_station'         => $r->pollingStation->name ?? 'Unknown',
@@ -163,13 +178,18 @@ Route::middleware(['auth', 'role:admin-area-approver'])
                         'status'   => $pa->status,
                         'comments' => $pa->comments,
                     ]),
-                    'candidate_votes'         => $r->candidateVotes->map(fn($cv) => [
+                    'candidate_votes' => $r->candidateVotes->map(fn($cv) => [
                         'candidate'   => $cv->candidate->name ?? 'Unknown',
                         'party'       => $cv->candidate->politicalParty->abbreviation ?? 'IND',
                         'party_color' => $cv->candidate->politicalParty->color ?? '#6b7280',
                         'votes'       => $cv->votes,
+                        'percentage'  => $totalValidVotes > 0
+                            ? round(($cv->votes / $totalValidVotes) * 100, 1) : 0,
                     ]),
-                    'area_comments'           => $r->certifications->first()?->comments,
+                    // FIX: Per-level approver notes now flow up correctly
+                    'ward_comments'         => $wardNote,
+                    'constituency_comments' => $constNote,
+                    'area_comments'         => $areaNote,
                 ];
             });
         }
@@ -194,7 +214,6 @@ Route::middleware(['auth', 'role:admin-area-approver'])
         $approverId  = Auth::id();
         $adminArea   = AdministrativeHierarchy::where('assigned_approver_id', $approverId)
             ->where('level', 'admin_area')->first();
-        // Derive admin area node from station's ward → constituency → admin area
         $wardParentId      = AdministrativeHierarchy::where('id', $result->pollingStation?->ward_id)->value('parent_id');
         $adminAreaNodeId   = $adminArea?->id
             ?? AdministrativeHierarchy::where('id', $wardParentId)->value('parent_id')

@@ -3,9 +3,9 @@ import { Link, router } from '@inertiajs/react';
 import { useState } from 'react';
 
 const PARTY_STATUS_CFG = {
-    accepted:                 { color: 'bg-teal-500/20 text-teal-300',    icon: '✓', label: 'Accepted' },
-    accepted_with_reservation:{ color: 'bg-yellow-500/20 text-yellow-300', icon: '⚠', label: 'Reserved' },
-    rejected:                 { color: 'bg-red-500/20 text-red-300',      icon: '✗', label: 'Rejected' },
+    accepted:                  { color: 'bg-teal-500/20 text-teal-300 border-teal-500/30',    icon: '✓', label: 'Accepted' },
+    accepted_with_reservation: { color: 'bg-yellow-500/20 text-yellow-300 border-yellow-500/30', icon: '⚠', label: 'Reserved' },
+    rejected:                  { color: 'bg-red-500/20 text-red-300 border-red-500/30',       icon: '✗', label: 'Rejected' },
 };
 
 export default function NationalQueue({ auth, pendingResults = [], pendingCount = 0 }) {
@@ -31,7 +31,7 @@ export default function NationalQueue({ auth, pendingResults = [], pendingCount 
             <div className="container mx-auto px-4 py-8">
                 <div className="mb-6">
                     <Link href="/chairman/dashboard" className="text-gray-400 hover:text-white text-sm inline-flex items-center gap-1 mb-3">
-                        Chairman Dashboard
+                        ← Chairman Dashboard
                     </Link>
                     <div className="flex flex-wrap gap-4 items-center justify-between">
                         <div>
@@ -84,9 +84,9 @@ export default function NationalQueue({ auth, pendingResults = [], pendingCount 
                                             </div>
                                             <button
                                                 onClick={() => setExpandedId(isExpanded ? null : result.id)}
-                                                className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-gray-300 text-xs rounded-lg"
+                                                className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-gray-300 text-xs rounded-lg transition-colors"
                                             >
-                                                {isExpanded ? 'Collapse' : 'Expand Details'}
+                                                {isExpanded ? 'Collapse ▲' : 'Expand Details ▼'}
                                             </button>
                                         </div>
                                     </div>
@@ -108,7 +108,8 @@ export default function NationalQueue({ auth, pendingResults = [], pendingCount 
 
                                     {/* Expanded details */}
                                     {isExpanded && (
-                                        <div className="px-5 pb-5 space-y-4 border-t border-slate-700/30 pt-4">
+                                        <div className="px-5 pb-5 space-y-5 border-t border-slate-700/30 pt-4">
+
                                             {/* Candidate results */}
                                             {result.candidate_votes?.length > 0 && (
                                                 <div>
@@ -126,8 +127,8 @@ export default function NationalQueue({ auth, pendingResults = [], pendingCount 
                                                                             {idx === 0 && <span className="ml-1 text-teal-400 text-xs">🏆</span>}
                                                                         </span>
                                                                         <span className="text-gray-500 text-xs w-10">{cv.party_abbr}</span>
-                                                                        <div className="flex-1 bg-slate-700 rounded-full h-2">
-                                                                            <div className="h-2 rounded-full" style={{ width: `${pct}%`, backgroundColor: cv.party_color }} />
+                                                                        <div className="flex-1 bg-slate-700 rounded-full h-1.5">
+                                                                            <div className="h-1.5 rounded-full" style={{ width: `${pct}%`, backgroundColor: cv.party_color }} />
                                                                         </div>
                                                                         <span className="text-white font-semibold text-sm w-16 text-right">{cv.votes?.toLocaleString()}</span>
                                                                         <span className="text-gray-500 text-xs w-10 text-right">{pct}%</span>
@@ -138,26 +139,53 @@ export default function NationalQueue({ auth, pendingResults = [], pendingCount 
                                                 </div>
                                             )}
 
-                                            {/* ── Party acceptances WITH inline comments ── */}
+                                            {/* Party decisions WITH comments */}
                                             {result.party_acceptances?.length > 0 && (
                                                 <div>
                                                     <div className="text-xs text-gray-500 uppercase tracking-wide mb-2">Party Decisions</div>
                                                     <div className="space-y-2">
                                                         {result.party_acceptances.map((pa, idx) => {
-                                                            const cfg = PARTY_STATUS_CFG[pa.status] || { color: 'bg-gray-500/20 text-gray-300', icon: '○', label: pa.status };
+                                                            const cfg = PARTY_STATUS_CFG[pa.status] || { color: 'bg-gray-500/20 text-gray-300 border-gray-500/30', icon: '○', label: pa.status };
                                                             return (
                                                                 <div key={idx}>
-                                                                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${cfg.color}`}>
+                                                                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border ${cfg.color}`}>
                                                                         {cfg.icon} {pa.abbr} — {cfg.label}
                                                                     </span>
                                                                     {pa.comments && (
-                                                                        <p className="text-xs text-gray-400 italic mt-0.5 ml-2 pl-2 border-l border-gray-600/50">
+                                                                        <p className="text-xs text-gray-400 italic mt-1 ml-3 pl-2 border-l-2 border-slate-600">
                                                                             "{pa.comments}"
                                                                         </p>
                                                                     )}
                                                                 </div>
                                                             );
                                                         })}
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {/* ── ALL PREVIOUS APPROVER NOTES ── */}
+                                            {(result.ward_comments || result.constituency_comments || result.admin_area_comments) && (
+                                                <div>
+                                                    <div className="text-xs text-gray-500 uppercase tracking-wide mb-2">Previous Approver Notes</div>
+                                                    <div className="space-y-2">
+                                                        {result.ward_comments && (
+                                                            <div className="p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg">
+                                                                <div className="text-xs text-blue-400 font-semibold mb-1">📋 Ward Approver Note</div>
+                                                                <div className="text-blue-200 text-sm">{result.ward_comments}</div>
+                                                            </div>
+                                                        )}
+                                                        {result.constituency_comments && (
+                                                            <div className="p-3 bg-cyan-500/10 border border-cyan-500/30 rounded-lg">
+                                                                <div className="text-xs text-cyan-400 font-semibold mb-1">📋 Constituency Approver Note</div>
+                                                                <div className="text-cyan-200 text-sm">{result.constituency_comments}</div>
+                                                            </div>
+                                                        )}
+                                                        {result.admin_area_comments && (
+                                                            <div className="p-3 bg-violet-500/10 border border-violet-500/30 rounded-lg">
+                                                                <div className="text-xs text-violet-400 font-semibold mb-1">📋 Admin-Area Approver Note</div>
+                                                                <div className="text-violet-200 text-sm">{result.admin_area_comments}</div>
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 </div>
                                             )}
@@ -181,7 +209,8 @@ export default function NationalQueue({ auth, pendingResults = [], pendingCount 
                                             {result.photo_url && (
                                                 <div>
                                                     <div className="text-xs text-gray-500 uppercase tracking-wide mb-2">Result Sheet</div>
-                                                    <button onClick={() => setPhotoOpen(result.photo_url)} className="inline-flex items-center gap-2 text-blue-400 hover:text-blue-300 text-sm">
+                                                    <button onClick={() => setPhotoOpen(result.photo_url)}
+                                                        className="inline-flex items-center gap-2 text-blue-400 hover:text-blue-300 text-sm transition-colors">
                                                         📄 View Result Sheet Photo
                                                     </button>
                                                 </div>
@@ -193,13 +222,13 @@ export default function NationalQueue({ auth, pendingResults = [], pendingCount 
                                     <div className="p-5 border-t border-slate-700/50 flex flex-wrap gap-3">
                                         <button
                                             onClick={() => { setActionResult({ id: result.id, type: 'certify' }); setComment(''); }}
-                                            className="flex-1 min-w-[160px] py-3 bg-green-600 hover:bg-green-500 text-white font-bold rounded-xl"
+                                            className="flex-1 min-w-[160px] py-3 bg-green-600 hover:bg-green-500 text-white font-bold rounded-xl transition-colors"
                                         >
                                             🏛️ Certify Nationally
                                         </button>
                                         <button
                                             onClick={() => { setActionResult({ id: result.id, type: 'reject' }); setComment(''); }}
-                                            className="flex-1 min-w-[160px] py-3 bg-red-700 hover:bg-red-600 text-white font-bold rounded-xl"
+                                            className="flex-1 min-w-[160px] py-3 bg-red-700 hover:bg-red-600 text-white font-bold rounded-xl transition-colors"
                                         >
                                             ↩ Return to Admin Area
                                         </button>
@@ -211,56 +240,69 @@ export default function NationalQueue({ auth, pendingResults = [], pendingCount 
                 )}
             </div>
 
-            {/* Action Modal */}
+            {/* ── Action Modal ── */}
             {actionResult && (
                 <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4">
-                    <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-lg shadow-2xl p-6">
-                        <div className="flex items-center justify-between mb-5">
-                            <h2 className="text-xl font-bold text-white">
-                                {actionResult.type === 'certify' ? '🏛️ Confirm National Certification' : '↩ Return to Admin Area'}
-                            </h2>
-                            <button onClick={() => setActionResult(null)} className="text-gray-400 hover:text-white text-2xl">×</button>
+                    <div
+                        className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-lg shadow-2xl flex flex-col"
+                        style={{ maxHeight: 'min(92vh, 560px)' }}
+                    >
+                        {/* Header */}
+                        <div className="px-6 pt-6 pb-4 flex-shrink-0 border-b border-slate-800">
+                            <div className="flex items-start justify-between gap-4">
+                                <h2 className="text-lg font-bold text-white">
+                                    {actionResult.type === 'certify' ? '🏛️ Confirm National Certification' : '↩ Return to Admin Area'}
+                                </h2>
+                                <button onClick={() => setActionResult(null)}
+                                    className="text-gray-400 hover:text-white text-2xl w-8 h-8 flex items-center justify-center flex-shrink-0">
+                                    ×
+                                </button>
+                            </div>
                         </div>
 
-                        <div className={`p-4 rounded-xl mb-5 text-sm ${
-                            actionResult.type === 'certify'
-                                ? 'bg-green-500/10 border border-green-500/30 text-green-300'
-                                : 'bg-red-500/10 border border-red-500/30 text-red-300'
-                        }`}>
-                            {actionResult.type === 'certify'
-                                ? 'This result will be officially NATIONALLY CERTIFIED. This is the final step in the certification pipeline.'
-                                : 'This result will be returned to the Admin Area level for further review. Please provide a clear reason.'}
+                        {/* Scrollable Content */}
+                        <div className="px-6 py-5 overflow-y-auto flex-1 space-y-4">
+                            <div className={`p-4 rounded-xl text-sm ${
+                                actionResult.type === 'certify'
+                                    ? 'bg-green-500/10 border border-green-500/30 text-green-300'
+                                    : 'bg-red-500/10 border border-red-500/30 text-red-300'
+                            }`}>
+                                {actionResult.type === 'certify'
+                                    ? 'This result will be officially NATIONALLY CERTIFIED. This is the final step in the certification pipeline.'
+                                    : 'This result will be returned to the Admin Area level for further review. Please provide a clear reason.'}
+                            </div>
+
+                            <div className="bg-slate-800/60 border border-slate-600/60 rounded-xl p-4">
+                                <label className="block text-gray-200 font-semibold mb-2 text-sm">
+                                    {actionResult.type === 'certify' ? 'Certification Notes (optional)' : 'Reason for Return (required)'}
+                                    {actionResult.type === 'reject' && <span className="text-red-400 ml-1">*</span>}
+                                </label>
+                                <textarea
+                                    value={comment}
+                                    onChange={(e) => setComment(e.target.value)}
+                                    rows={4}
+                                    required={actionResult.type === 'reject'}
+                                    className="w-full px-4 py-3 bg-slate-900/80 border-2 border-slate-600 focus:border-teal-500 rounded-xl text-white resize-none focus:outline-none transition-colors text-sm"
+                                    placeholder={actionResult.type === 'certify'
+                                        ? 'Optional certification notes for the audit trail…'
+                                        : 'Clearly explain why this result is being returned…'}
+                                />
+                            </div>
                         </div>
 
-                        {/* Standout comment section */}
-                        <div className="bg-slate-800/60 border border-slate-600/60 rounded-xl p-4 mb-5">
-                            <label className="block text-gray-200 font-semibold mb-2 text-sm">
-                                {actionResult.type === 'certify' ? 'Certification Notes (optional)' : 'Reason for Return (required)'}
-                                {actionResult.type === 'reject' && <span className="text-red-400 ml-1">*</span>}
-                            </label>
-                            <textarea
-                                value={comment}
-                                onChange={(e) => setComment(e.target.value)}
-                                rows={4}
-                                required={actionResult.type === 'reject'}
-                                className="w-full px-4 py-3 bg-slate-900/80 border-2 border-slate-600 focus:border-teal-500 rounded-xl text-white resize-none focus:outline-none transition-colors text-sm"
-                                placeholder={actionResult.type === 'certify'
-                                    ? 'Optional certification notes for the audit trail…'
-                                    : 'Clearly explain why this result is being returned…'}
-                            />
-                        </div>
-
-                        <div className="flex gap-3">
+                        {/* Sticky Footer */}
+                        <div className="px-6 py-4 border-t border-slate-800 flex-shrink-0 flex gap-3">
                             <button
                                 onClick={() => submitAction(actionResult.id, actionResult.type)}
                                 disabled={processing || (actionResult.type === 'reject' && !comment.trim())}
-                                className={`flex-1 py-3 font-bold text-white rounded-xl disabled:opacity-40 disabled:cursor-not-allowed ${
+                                className={`flex-1 py-3 font-bold text-white rounded-xl disabled:opacity-40 disabled:cursor-not-allowed transition-colors ${
                                     actionResult.type === 'certify' ? 'bg-green-600 hover:bg-green-500' : 'bg-red-700 hover:bg-red-600'
                                 }`}
                             >
                                 {processing ? 'Processing…' : actionResult.type === 'certify' ? 'Confirm Certification' : 'Confirm Return'}
                             </button>
-                            <button onClick={() => setActionResult(null)} disabled={processing} className="px-5 py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-xl font-semibold">
+                            <button onClick={() => setActionResult(null)} disabled={processing}
+                                className="px-5 py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-xl font-semibold transition-colors">
                                 Cancel
                             </button>
                         </div>
