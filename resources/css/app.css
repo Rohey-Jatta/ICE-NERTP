@@ -292,3 +292,25 @@ input:-webkit-autofill:active {
 .leaflet-popup-tip-container {
     margin-top: -1px;
 }
+
+/* ── Inertia / NProgress bar overrides ───────────────────────────────────── */
+
+/* Thicker, more visible bar */
+#nprogress .bar {
+    height: 3px !important;
+    background: linear-gradient(90deg, #fa58b1, #f321bf) !important;
+    box-shadow: 0 0 8px rgba(243, 52, 163, 0.979) !important;
+}
+
+/* Remove the spinner puck — we disabled showSpinner but belt-and-suspenders */
+#nprogress .spinner {
+    display: none !important;
+}
+
+/* Show a "working" cursor on the whole page the instant a link is clicked.
+   This fires synchronously before any JS executes, giving the absolute
+   earliest possible feedback with zero render cost. */
+html.nprogress-busy,
+html.nprogress-busy * {
+    cursor: wait !important;
+}
