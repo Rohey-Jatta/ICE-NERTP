@@ -12,21 +12,24 @@ class ResultsStationsController extends Controller
 {
     public function index()
     {
-        $data = Cache::remember('results_stations', 60, function () {
-            // Include certified elections — original code only checked 'active'
-            $election = Election::where('allow_provisional_public_display', true)
-                ->whereIn('status', ['active', 'certifying', 'results_pending', 'certified'])
-                ->latest()
-                ->first();
+        $election = Election::where('allow_provisional_public_display', true)
+            ->whereIn('status', ['active', 'certifying', 'results_pending', 'certified'])
+            ->latest()
+            ->first();
 
-            if (!$election) {
-                return ['election' => null, 'stations' => [], 'isPublished' => false];
-            }
+        if (!$election) {
+            return Inertia::render('Public/ResultsStations', [
+                'election'    => null,
+                'stations'    => [],
+                'isPublished' => false,
+            ]);
+        }
 
-            // Results are "published" only when the election is officially certified
-            $isPublished = $election->status === 'certified';
+        $isPublished = $election->status === 'certified';
+        $cacheKey    = "results_stations_{$election->id}_" . ($isPublished ? 'pub' : 'prov');
 
-            // Fetch all stations with their results
+        // Increased from 60s → 300s; bust cache when results advance via observer/job
+        $data = Cache::remember($cacheKey, 300, function () use ($election, $isPublished) {
             $stations = DB::select("
                 SELECT
                     ps.id, ps.code, ps.name, ps.registered_voters,
@@ -44,7 +47,6 @@ class ResultsStationsController extends Controller
                 ORDER BY ps.code
             ", [$election->id, $election->id]);
 
-            // Collect result IDs for batch sub-queries
             $resultIds = collect($stations)
                 ->filter(fn($s) => $s->result_id !== null)
                 ->pluck('result_id')
@@ -58,7 +60,6 @@ class ResultsStationsController extends Controller
             if (!empty($resultIds)) {
                 $placeholders = implode(',', array_fill(0, count($resultIds), '?'));
 
-                // Candidate votes — always shown (published or not)
                 $cvRows = DB::select("
                     SELECT
                         rcv.result_id,
@@ -84,7 +85,6 @@ class ResultsStationsController extends Controller
                     ];
                 }
 
-                // Party acceptances + photos — only for published elections
                 if ($isPublished) {
                     $paRows = DB::select("
                         SELECT
@@ -126,7 +126,7 @@ class ResultsStationsController extends Controller
                     'total_votes_cast'  => $station->total_votes_cast,
                     'valid_votes'       => $station->valid_votes,
                     'rejected_votes'    => $station->rejected_votes,
-                    'candidate_votes'   => $resultId ? ($candidateVotesByResult[$resultId]  ?? []) : [],
+                    'candidate_votes'   => $resultId ? ($candidateVotesByResult[$resultId] ?? []) : [],
                     'party_acceptances' => ($isPublished && $resultId)
                                             ? ($partyAcceptancesByResult[$resultId] ?? [])
                                             : [],

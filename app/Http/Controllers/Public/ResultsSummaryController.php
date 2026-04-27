@@ -12,15 +12,12 @@ class ResultsSummaryController extends Controller
 {
     public function index()
     {
-        $data = Cache::remember('results_summary', 60, function () {
-            // Only show results when election is certified/published
+        $data = Cache::remember('results_summary', 300, function () {
             $election = Election::whereIn('status', ['certified'])
                 ->where('allow_provisional_public_display', true)
                 ->latest()
                 ->first();
 
-            // If no certified election, check for active with provisional display enabled
-            // but only show ward_certified and above — never raw submissions
             if (!$election) {
                 $election = Election::where('status', 'active')
                     ->where('allow_provisional_public_display', true)
@@ -32,8 +29,6 @@ class ResultsSummaryController extends Controller
                 return ['election' => null, 'stats' => null, 'candidates' => []];
             }
 
-            // Only include results that have reached at least ward_certified level
-            // Never show raw submissions or pending_party_acceptance to the public
             $publicStatuses = [
                 'ward_certified',
                 'pending_constituency',
@@ -44,7 +39,6 @@ class ResultsSummaryController extends Controller
                 'nationally_certified',
             ];
 
-            // For certified elections, show all nationally certified
             if ($election->status === 'certified') {
                 $publicStatuses = ['nationally_certified'];
             }
@@ -64,7 +58,6 @@ class ResultsSummaryController extends Controller
                 WHERE ps.election_id = ?
             ", [$election->id, '{' . implode(',', $publicStatuses) . '}', $election->id]);
 
-            // If no certified results at all, return no-data state
             if (!$stats || $stats->stations_reported == 0) {
                 return [
                     'election' => [

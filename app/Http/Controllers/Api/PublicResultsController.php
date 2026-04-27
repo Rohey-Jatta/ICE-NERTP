@@ -5,7 +5,6 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Candidate;
 use App\Models\Election;
-use App\Models\PartyAcceptance;
 use App\Models\PollingStation;
 use App\Models\Result;
 use App\Models\ResultCandidateVote;
@@ -19,9 +18,7 @@ class PublicResultsController extends Controller
     public function index()
     {
         try {
-            // Increased cache TTL from 30 s to 120 s — heavy queries should not
-            // re-run more than once every two minutes on the public home page.
-            $data = Cache::remember('public_results_data', 120, function () {
+            $data = Cache::remember('public_results_data', 300, function () {
                 return $this->getResultsData();
             });
 
@@ -30,8 +27,8 @@ class PublicResultsController extends Controller
             Log::error('Public results error: ' . $e->getMessage());
 
             return Inertia::render('Public/Results', [
-                'election' => null,
-                'aggregation' => null,
+                'election'        => null,
+                'aggregation'     => null,
                 'pollingStations' => [],
             ]);
         }
@@ -46,18 +43,18 @@ class PublicResultsController extends Controller
 
         if (!$election) {
             return [
-                'election' => null,
-                'aggregation' => null,
+                'election'        => null,
+                'aggregation'     => null,
                 'pollingStations' => [],
             ];
         }
 
-        // ── Aggregate totals (single query) ───────────────────────────────────
         $certificationStatuses = [
             'submitted', 'ward_certified', 'constituency_certified',
             'admin_area_certified', 'nationally_certified',
         ];
 
+        // Single aggregate query
         $aggregateData = Result::where('election_id', $election->id)
             ->whereIn('certification_status', $certificationStatuses)
             ->selectRaw('
@@ -72,24 +69,18 @@ class PublicResultsController extends Controller
             ->selectRaw('COUNT(*) as total_stations, COALESCE(SUM(registered_voters), 0) as total_registered')
             ->first();
 
-        $totalStations          = (int) ($stationStats->total_stations ?? 0);
-        $totalRegisteredVoters  = (int) ($stationStats->total_registered ?? 0);
-        $resultsCount           = (int) ($aggregateData->stations_reported ?? 0);
-        $totalVotesCast         = (int) ($aggregateData->total_votes_cast ?? 0);
-        $validVotes             = (int) ($aggregateData->valid_votes ?? 0);
-        $rejectedVotes          = (int) ($aggregateData->rejected_votes ?? 0);
+        $totalStations         = (int) ($stationStats->total_stations ?? 0);
+        $totalRegisteredVoters = (int) ($stationStats->total_registered ?? 0);
+        $resultsCount          = (int) ($aggregateData->stations_reported ?? 0);
+        $totalVotesCast        = (int) ($aggregateData->total_votes_cast ?? 0);
+        $validVotes            = (int) ($aggregateData->valid_votes ?? 0);
+        $rejectedVotes         = (int) ($aggregateData->rejected_votes ?? 0);
 
         $turnoutPercentage = $totalRegisteredVoters > 0
             ? ($totalVotesCast / $totalRegisteredVoters) * 100
             : 0;
 
-        // ── Candidate totals — FIXED N+1 ──────────────────────────────────────
-        // OLD (N+1): iterated over $candidateVotes and called
-        //   Candidate::with('politicalParty')->find($vote->candidate_id)
-        //   inside the loop, firing 2 queries per candidate.
-        //
-        // NEW: one query for vote aggregation, one batch query for all candidates.
-
+        // Candidate totals — 2 queries total (aggregation + batch candidate load)
         $resultIds = Result::where('election_id', $election->id)
             ->whereIn('certification_status', $certificationStatuses)
             ->pluck('id');
@@ -100,8 +91,7 @@ class PublicResultsController extends Controller
             ->orderByDesc('total_votes')
             ->get();
 
-        // Batch-load all candidates + their parties in 2 queries total
-        $candidateIds = $candidateVotes->pluck('candidate_id')->filter()->values();
+        $candidateIds  = $candidateVotes->pluck('candidate_id')->filter()->values();
         $candidatesMap = Candidate::with('politicalParty')
             ->whereIn('id', $candidateIds)
             ->get()
@@ -114,65 +104,97 @@ class PublicResultsController extends Controller
             }
 
             return [
-                'id'                  => $candidate->id,
-                'name'                => $candidate->name,
-                'party_name'          => $candidate->politicalParty->name ?? 'Independent',
-                'party_abbreviation'  => $candidate->politicalParty->abbreviation ?? 'IND',
-                'total_votes'         => (int) $vote->total_votes,
+                'id'                 => $candidate->id,
+                'name'               => $candidate->name,
+                'party_name'         => $candidate->politicalParty->name ?? 'Independent',
+                'party_abbreviation' => $candidate->politicalParty->abbreviation ?? 'IND',
+                'total_votes'        => (int) $vote->total_votes,
             ];
         })->filter()->values();
 
-        // ── Polling station list ───────────────────────────────────────────────
-        // FIXED: the original code used ->with(['result' => ...]) but PollingStation
-        // has no 'result()' relationship (only 'results()' and 'latestResult()').
-        // That silently returned null for every station. Now we use 'latestResult'
-        // with a proper eager-load, and scope the results to the active election.
-        $pollingStations = PollingStation::where('election_id', $election->id)
-            ->with([
-                'latestResult' => function ($query) use ($election, $certificationStatuses) {
-                    $query->where('election_id', $election->id)
-                          ->whereIn('certification_status', $certificationStatuses)
-                          ->with(['partyAcceptances.politicalParty']);
-                },
-            ])
-            ->get()
-            ->map(function ($station) {
-                $result = $station->latestResult;
+        // Polling stations — use a single raw query instead of Eloquent with eager loading
+        // This avoids loading all relationships into memory for potentially thousands of stations
+        $stationsRaw = DB::select("
+            SELECT
+                ps.id,
+                ps.code,
+                ps.name,
+                ps.registered_voters,
+                ps.latitude,
+                ps.longitude,
+                COALESCE(r.certification_status, 'not_reported') AS result_status,
+                r.total_votes_cast,
+                r.valid_votes,
+                r.rejected_votes,
+                r.id AS result_id
+            FROM polling_stations ps
+            LEFT JOIN results r
+                ON r.polling_station_id = ps.id
+                AND r.election_id = ?
+                AND r.certification_status = ANY(?)
+            WHERE ps.election_id = ?
+        ", [
+            $election->id,
+            '{' . implode(',', $certificationStatuses) . '}',
+            $election->id,
+        ]);
 
-                $stationData = [
-                    'id'                => $station->id,
-                    'code'              => $station->code,
-                    'name'              => $station->name,
-                    'registered_voters' => $station->registered_voters,
-                    'latitude'          => $station->latitude,
-                    'longitude'         => $station->longitude,
-                    'result_status'     => $result?->certification_status ?? 'not_reported',
-                    'result'            => null,
-                    'party_acceptances' => [],
+        // Batch-load party acceptances for results that exist
+        $resultIdsWithResults = collect($stationsRaw)
+            ->filter(fn($s) => $s->result_id !== null)
+            ->pluck('result_id')
+            ->unique()
+            ->values()
+            ->toArray();
+
+        $acceptancesByResult = [];
+        if (!empty($resultIdsWithResults)) {
+            $acceptanceRows = DB::select("
+                SELECT pa.result_id, pp.abbreviation AS party_abbreviation, pa.status, pa.comments, pa.id
+                FROM party_acceptances pa
+                JOIN political_parties pp ON pp.id = pa.political_party_id
+                WHERE pa.result_id IN (" . implode(',', array_fill(0, count($resultIdsWithResults), '?')) . ")
+            ", $resultIdsWithResults);
+
+            foreach ($acceptanceRows as $row) {
+                $acceptancesByResult[$row->result_id][] = [
+                    'id'                 => $row->id,
+                    'party_abbreviation' => $row->party_abbreviation,
+                    'status'             => $row->status,
+                    'comments'           => $row->comments,
+                ];
+            }
+        }
+
+        $pollingStations = collect($stationsRaw)->map(function ($station) use ($acceptancesByResult) {
+            $resultId    = $station->result_id;
+            $stationData = [
+                'id'                => $station->id,
+                'code'              => $station->code,
+                'name'              => $station->name,
+                'registered_voters' => $station->registered_voters,
+                'latitude'          => $station->latitude,
+                'longitude'         => $station->longitude,
+                'result_status'     => $station->result_status,
+                'result'            => null,
+                'party_acceptances' => [],
+            ];
+
+            if ($resultId) {
+                $stationData['result'] = [
+                    'total_votes_cast'   => $station->total_votes_cast,
+                    'valid_votes'        => $station->valid_votes,
+                    'rejected_votes'     => $station->rejected_votes,
+                    'turnout_percentage' => $station->registered_voters > 0
+                        ? round(($station->total_votes_cast / $station->registered_voters) * 100, 2)
+                        : 0,
                 ];
 
-                if ($result) {
-                    $stationData['result'] = [
-                        'total_votes_cast' => $result->total_votes_cast,
-                        'valid_votes'      => $result->valid_votes,
-                        'rejected_votes'   => $result->rejected_votes,
-                        'turnout_percentage' => $station->registered_voters > 0
-                            ? round(($result->total_votes_cast / $station->registered_voters) * 100, 2)
-                            : 0,
-                    ];
+                $stationData['party_acceptances'] = $acceptancesByResult[$resultId] ?? [];
+            }
 
-                    $stationData['party_acceptances'] = $result->partyAcceptances
-                        ->map(fn ($acceptance) => [
-                            'id'                => $acceptance->id,
-                            'party_abbreviation'=> $acceptance->politicalParty->abbreviation ?? 'N/A',
-                            'status'            => $acceptance->status,
-                            'comments'          => $acceptance->comments,
-                        ])
-                        ->values();
-                }
-
-                return $stationData;
-            });
+            return $stationData;
+        })->toArray();
 
         return [
             'election' => [

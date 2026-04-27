@@ -17,24 +17,39 @@ export default defineConfig({
         },
     },
     build: {
-        // Increase chunk size warning limit — the app is large
         chunkSizeWarningLimit: 2000,
         rollupOptions: {
             output: {
-                // Split vendor code from app code for better caching
-                manualChunks: {
-                    'react-vendor': ['react', 'react-dom'],
-                    'inertia-vendor': ['@inertiajs/react'],
-                    'chart-vendor': ['chart.js', 'react-chartjs-2', 'recharts'],
-                    'map-vendor': ['leaflet', 'react-leaflet'],
+                manualChunks(id) {
+                    // Vendor splitting — keeps app code separate from stable library code
+                    // so browsers cache libraries independently of app changes
+                    if (id.includes('node_modules/react-dom') || id.includes('node_modules/react/')) {
+                        return 'react-vendor';
+                    }
+                    if (id.includes('node_modules/@inertiajs')) {
+                        return 'inertia-vendor';
+                    }
+                    if (id.includes('node_modules/leaflet') || id.includes('node_modules/react-leaflet')) {
+                        return 'map-vendor';
+                    }
+                    if (
+                        id.includes('node_modules/chart.js') ||
+                        id.includes('node_modules/react-chartjs-2') ||
+                        id.includes('node_modules/recharts') ||
+                        id.includes('node_modules/d3')
+                    ) {
+                        return 'chart-vendor';
+                    }
+                    if (id.includes('node_modules/')) {
+                        return 'vendor';
+                    }
                 },
             },
         },
     },
-    // Faster dev server
     server: {
         hmr: {
-            overlay: false, // Don't show error overlay — it causes re-renders
+            overlay: false,
         },
     },
     optimizeDeps: {

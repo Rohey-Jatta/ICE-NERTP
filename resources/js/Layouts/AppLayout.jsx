@@ -128,9 +128,11 @@ export default function AppLayout({ children }) {
                             <Link href="/" className="hover:text-pink-400 transition-colors font-medium">
                                 Home
                             </Link>
+                            {/*
                             <Link href="/results" className="hover:text-pink-400 transition-colors font-medium">
                                 Results
                             </Link>
+                            */}
 
                             {isAuthenticated ? (
                                 <>
@@ -183,13 +185,13 @@ export default function AppLayout({ children }) {
                             >
                                 Home
                             </Link>
-                            <Link
+                            {/* <Link
                                 href="/results"
                                 className="block text-white py-2 px-3 rounded-lg hover:bg-white/10 transition-colors"
                                 onClick={() => setMobileMenuOpen(false)}
                             >
                                 Results
-                            </Link>
+                            </Link> */}
 
                             {isAuthenticated ? (
                                 <>

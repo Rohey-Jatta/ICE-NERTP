@@ -18,7 +18,9 @@ class HandleInertiaRequests extends Middleware
     {
         return [
             ...parent::share($request),
-            'auth' => [
+            // Use a closure so the user is only resolved when Inertia actually
+            // needs to include it in the response — not on every middleware pass
+            'auth' => fn () => [
                 'user' => $request->user(),
             ],
             'flash' => [
