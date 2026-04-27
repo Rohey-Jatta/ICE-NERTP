@@ -180,7 +180,7 @@ input:-webkit-autofill:active {
     }
     50% {
         opacity: 1;
-        box-shadow: 0 0 6px rgba(148, 163, 184, 1), 0 0 14px rgba(148, 163, 184, 0.35);
+        box-shadow: 0 0 6px rgb(232, 240, 250), 0 0 14px rgba(148, 163, 184, 0.35);
     }
 }
 
@@ -196,7 +196,7 @@ input:-webkit-autofill:active {
 .particle-star {
     position: absolute;
     border-radius: 50%;
-    background: rgba(148, 163, 184, 0.85);
+    background: rgba(238, 245, 253, 0.85);
     will-change: transform, opacity;
 }
 
@@ -293,19 +293,7 @@ input:-webkit-autofill:active {
     margin-top: -1px;
 }
 
-/* ── Inertia / NProgress bar overrides ───────────────────────────────────── */
 
-/* Thicker, more visible bar */
-#nprogress .bar {
-    height: 3px !important;
-    background: linear-gradient(90deg, #fa58b1, #f321bf) !important;
-    box-shadow: 0 0 8px rgba(243, 52, 163, 0.979) !important;
-}
-
-/* Remove the spinner puck — we disabled showSpinner but belt-and-suspenders */
-#nprogress .spinner {
-    display: none !important;
-}
 
 /* Show a "working" cursor on the whole page the instant a link is clicked.
    This fires synchronously before any JS executes, giving the absolute

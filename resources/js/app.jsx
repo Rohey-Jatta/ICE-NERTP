@@ -18,18 +18,6 @@ createInertiaApp({
         createRoot(el).render(<App {...props} />)
     },
 
-    /*
-     * Inertia's built-in progress bar uses NProgress — pure DOM manipulation,
-     * no React state, no re-renders, zero impact on navigation speed.
-     *
-     * delay: 0   → bar appears instantly on every click (no 250ms wait)
-     * color      → matches the app's indigo brand colour
-     * showSpinner: false → spinner adds a second DOM mutation per frame; skip it
-     */
-    progress: {
-        delay: 0,
-        color: '#4f46e5',
-        includeCSS: false,
-        showSpinner: false,
-    },
+
+
 })
