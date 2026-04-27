@@ -1,5 +1,6 @@
 import AppLayout from '@/Layouts/AppLayout';
 import { Link } from '@inertiajs/react';
+import useInertiaPrefetch from '@/Hooks/useInertiaPrefetch';
 
 // ── Reusable nav tabs ─────────────────────────────────────────────────────────
 function ResultsNav({ active = 'summary' }) {
@@ -14,6 +15,7 @@ function ResultsNav({ active = 'summary' }) {
                 <Link
                     key={t.key}
                     href={t.href}
+                    prefetch
                     className={`px-6 py-2.5 rounded-lg font-semibold text-sm transition-all ${
                         active === t.key
                             ? 'bg-slate-700 text-white shadow-lg'
@@ -45,6 +47,7 @@ function HeroBanner() {
 
 // ── Main export ───────────────────────────────────────────────────────────────
 export default function Results({ election, stats, candidates, message }) {
+    useInertiaPrefetch(['/results/map', '/results/stations']);
 
     // ── No election configured ────────────────────────────────────────────────
     if (!election) {
@@ -86,7 +89,7 @@ export default function Results({ election, stats, candidates, message }) {
                             {message || 'Election results are currently being certified through the IEC approval pipeline. Official results will be published here once all certifications are complete.'}
                         </p>
                         <div className="mt-6 flex justify-center gap-4">
-                            <Link href="/results/stations"
+                            <Link href="/results/stations" prefetch
                                   className="px-5 py-2.5 bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-semibold text-sm transition-colors">
                                 View Station Status →
                             </Link>
@@ -216,11 +219,11 @@ export default function Results({ election, stats, candidates, message }) {
 
                     {/* Quick links */}
                     <div className="mt-6 flex flex-wrap gap-3 justify-center">
-                        <Link href="/results/map"
+                        <Link href="/results/map" prefetch
                               className="px-5 py-2.5 bg-slate-800/60 hover:bg-slate-700 border border-slate-700/50 text-gray-300 hover:text-white rounded-lg font-semibold text-sm transition-colors">
                             🗺 View Map
                         </Link>
-                        <Link href="/results/stations"
+                        <Link href="/results/stations" prefetch
                               className="px-5 py-2.5 bg-slate-800/60 hover:bg-slate-700 border border-slate-700/50 text-gray-300 hover:text-white rounded-lg font-semibold text-sm transition-colors">
                             📋 View All Stations
                         </Link>

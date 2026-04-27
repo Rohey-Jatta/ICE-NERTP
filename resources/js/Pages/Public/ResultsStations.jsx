@@ -1,5 +1,6 @@
 import AppLayout from '@/Layouts/AppLayout';
 import { Link } from '@inertiajs/react';
+import useInertiaPrefetch from '@/Hooks/useInertiaPrefetch';
 
 const STATUS_CONFIG = {
     nationally_certified:     { label: 'Certified',      bg: 'bg-teal-500/20',   border: 'border-teal-500/50',   text: 'text-teal-300' },
@@ -147,6 +148,8 @@ function StationCard({ station, isPublished }) {
 }
 
 export default function ResultsStations({ election, stations, isPublished = false }) {
+    useInertiaPrefetch(['/results', '/results/map']);
+
     if (!election) {
         return (
             <AppLayout>
@@ -185,13 +188,13 @@ export default function ResultsStations({ election, stations, isPublished = fals
 
                         {/* Nav tabs */}
                         <div className="flex justify-center gap-3 flex-wrap">
-                            <Link href="/results" className="px-6 py-3 bg-slate-800/30 text-gray-300 rounded-lg font-semibold hover:bg-slate-700 transition-all">
+                            <Link href="/results" prefetch className="px-6 py-3 bg-slate-800/30 text-gray-300 rounded-lg font-semibold hover:bg-slate-700 transition-all">
                                 Summary
                             </Link>
-                            <Link href="/results/map" className="px-6 py-3 bg-slate-800/30 text-gray-300 rounded-lg font-semibold hover:bg-slate-700 transition-all">
+                            <Link href="/results/map" prefetch className="px-6 py-3 bg-slate-800/30 text-gray-300 rounded-lg font-semibold hover:bg-slate-700 transition-all">
                                 Map
                             </Link>
-                            <Link href="/results/stations" className="px-6 py-3 bg-slate-700 text-white rounded-lg font-semibold shadow-lg">
+                            <Link href="/results/stations" prefetch className="px-6 py-3 bg-slate-700 text-white rounded-lg font-semibold shadow-lg">
                                 Stations
                             </Link>
                         </div>

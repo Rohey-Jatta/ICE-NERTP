@@ -2,6 +2,7 @@
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
@@ -30,22 +31,46 @@ Route::middleware(['auth', 'role:iec-chairman'])
         // NEW: one GROUP BY query returns all status counts at once;
         //      one selectRaw covers both station total and voter sum.
 
-        $statusCounts = Result::selectRaw('certification_status, COUNT(*) as cnt')
-            ->groupBy('certification_status')
-            ->pluck('cnt', 'certification_status');
+        $cacheKey = 'chairman_dashboard_stats';
+        $statistics = Cache::remember($cacheKey, 30, function () use (&$statusCounts, &$pendingNational, &$nationallyCertified, &$stationAgg, &$totalStations, &$totalVoters, &$nationalProgress, &$pipelineCounts) {
+            $statusCounts = Result::selectRaw('certification_status, COUNT(*) as cnt')
+                ->groupBy('certification_status')
+                ->pluck('cnt', 'certification_status');
 
-        $pendingNational     = (int) ($statusCounts[Result::STATUS_PENDING_NATIONAL] ?? 0);
-        $nationallyCertified = (int) ($statusCounts[Result::STATUS_NATIONALLY_CERTIFIED] ?? 0);
+            $pendingNational     = (int) ($statusCounts[Result::STATUS_PENDING_NATIONAL] ?? 0);
+            $nationallyCertified = (int) ($statusCounts[Result::STATUS_NATIONALLY_CERTIFIED] ?? 0);
 
-        $stationAgg  = PollingStation::selectRaw(
-            'COUNT(*) as total, COALESCE(SUM(registered_voters), 0) as total_voters'
-        )->first();
-        $totalStations = (int) ($stationAgg->total ?? 0);
-        $totalVoters   = (int) ($stationAgg->total_voters ?? 0);
+            $stationAgg  = PollingStation::selectRaw(
+                'COUNT(*) as total, COALESCE(SUM(registered_voters), 0) as total_voters'
+            )->first();
+            $totalStations = (int) ($stationAgg->total ?? 0);
+            $totalVoters   = (int) ($stationAgg->total_voters ?? 0);
 
-        $nationalProgress = $totalStations > 0
-            ? round(($nationallyCertified / max($totalStations, 1)) * 100)
-            : 0;
+            $nationalProgress = $totalStations > 0
+                ? round(($nationallyCertified / max($totalStations, 1)) * 100)
+                : 0;
+
+            $pipelineCounts = [
+                'submitted'              => (int) ($statusCounts[Result::STATUS_SUBMITTED] ?? 0),
+                'pending_party'          => (int) ($statusCounts[Result::STATUS_PENDING_PARTY_ACCEPTANCE] ?? 0),
+                'pending_ward'           => (int) ($statusCounts[Result::STATUS_PENDING_WARD] ?? 0),
+                'ward_certified'         => (int) ($statusCounts[Result::STATUS_WARD_CERTIFIED] ?? 0),
+                'pending_constituency'   => (int) ($statusCounts[Result::STATUS_PENDING_CONSTITUENCY] ?? 0),
+                'constituency_certified' => (int) ($statusCounts[Result::STATUS_CONSTITUENCY_CERTIFIED] ?? 0),
+                'pending_admin_area'     => (int) ($statusCounts[Result::STATUS_PENDING_ADMIN_AREA] ?? 0),
+                'admin_area_certified'   => (int) ($statusCounts[Result::STATUS_ADMIN_AREA_CERTIFIED] ?? 0),
+                'pending_national'       => $pendingNational,
+                'nationally_certified'   => $nationallyCertified,
+            ];
+
+            return [
+                'nationallyCertified' => $nationallyCertified,
+                'totalStations'       => $totalStations,
+                'totalVoters'         => $totalVoters,
+                'nationalProgress'    => $nationalProgress,
+                'pipelineCounts'      => $pipelineCounts,
+            ];
+        });
 
         $recentActivity = \App\Models\AuditLog::with('user')
             ->whereIn('module', ['Certification', 'Results'])
@@ -59,29 +84,10 @@ Route::middleware(['auth', 'role:iec-chairman'])
                 'outcome' => $a->outcome,
             ]);
 
-        $pipelineCounts = [
-            'submitted'              => (int) ($statusCounts[Result::STATUS_SUBMITTED] ?? 0),
-            'pending_party'          => (int) ($statusCounts[Result::STATUS_PENDING_PARTY_ACCEPTANCE] ?? 0),
-            'pending_ward'           => (int) ($statusCounts[Result::STATUS_PENDING_WARD] ?? 0),
-            'ward_certified'         => (int) ($statusCounts[Result::STATUS_WARD_CERTIFIED] ?? 0),
-            'pending_constituency'   => (int) ($statusCounts[Result::STATUS_PENDING_CONSTITUENCY] ?? 0),
-            'constituency_certified' => (int) ($statusCounts[Result::STATUS_CONSTITUENCY_CERTIFIED] ?? 0),
-            'pending_admin_area'     => (int) ($statusCounts[Result::STATUS_PENDING_ADMIN_AREA] ?? 0),
-            'admin_area_certified'   => (int) ($statusCounts[Result::STATUS_ADMIN_AREA_CERTIFIED] ?? 0),
-            'pending_national'       => $pendingNational,
-            'nationally_certified'   => $nationallyCertified,
-        ];
-
         return Inertia::render('Chairman/Dashboard', [
             'auth'            => ['user' => Auth::user()],
             'pendingNational' => $pendingNational,
-            'statistics'      => [
-                'nationallyCertified' => $nationallyCertified,
-                'totalStations'       => $totalStations,
-                'totalVoters'         => $totalVoters,
-                'nationalProgress'    => $nationalProgress,
-                'pipelineCounts'      => $pipelineCounts,
-            ],
+            'statistics'      => $statistics,
             'recentActivity' => $recentActivity,
         ]);
     })->name('dashboard');

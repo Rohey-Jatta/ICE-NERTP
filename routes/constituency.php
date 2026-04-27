@@ -2,6 +2,7 @@
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
@@ -31,28 +32,37 @@ Route::middleware(['auth', 'role:constituency-approver'])
 
             $stats['totalWards'] = $wardIds->count();
 
-            $base = fn() => Result::where('election_id', $activeElection->id)
-                ->whereHas('pollingStation', fn($q) => $q->whereIn('ward_id', $wardIds));
+            $cacheKey = "constituency_dashboard_{$user->id}_{$constituency->id}_{$activeElection->id}";
+            $stats = Cache::remember($cacheKey, 30, function () use ($activeElection, $wardIds) {
+                $base = Result::where('election_id', $activeElection->id)
+                    ->whereHas('pollingStation', fn($q) => $q->whereIn('ward_id', $wardIds));
 
-            $stats['pending'] = $base()
-                ->where('certification_status', Result::STATUS_PENDING_CONSTITUENCY)->count();
+                $statusCounts = $base->selectRaw(
+                    'SUM(CASE WHEN certification_status = ? THEN 1 ELSE 0 END) as pending, '
+                    . 'SUM(CASE WHEN certification_status IN (?, ?, ?, ?) THEN 1 ELSE 0 END) as certified, '
+                    . 'SUM(CASE WHEN certification_status = ? AND rejection_count > 0 THEN 1 ELSE 0 END) as rejected, '
+                    . 'COUNT(*) as total',
+                    [
+                        Result::STATUS_PENDING_CONSTITUENCY,
+                        Result::STATUS_CONSTITUENCY_CERTIFIED,
+                        Result::STATUS_PENDING_ADMIN_AREA,
+                        Result::STATUS_ADMIN_AREA_CERTIFIED,
+                        Result::STATUS_PENDING_NATIONAL,
+                        Result::STATUS_PENDING_WARD,
+                    ]
+                )->first();
 
-            $stats['certified'] = $base()
-                ->whereIn('certification_status', [
-                    Result::STATUS_CONSTITUENCY_CERTIFIED,
-                    Result::STATUS_PENDING_ADMIN_AREA,
-                    Result::STATUS_ADMIN_AREA_CERTIFIED,
-                    Result::STATUS_PENDING_NATIONAL,
-                    Result::STATUS_NATIONALLY_CERTIFIED,
-                ])->count();
+                $certified = (int) $statusCounts->certified;
+                $total     = (int) $statusCounts->total;
 
-            $stats['rejected'] = $base()
-                ->where('certification_status', Result::STATUS_PENDING_WARD)
-                ->where('rejection_count', '>', 0)->count();
-
-            $totalResults      = $base()->count();
-            $stats['progress'] = $totalResults > 0
-                ? round(($stats['certified'] / $totalResults) * 100) : 0;
+                return [
+                    'pending'     => (int) $statusCounts->pending,
+                    'certified'   => $certified,
+                    'rejected'    => (int) $statusCounts->rejected,
+                    'totalWards'  => $wardIds->count(),
+                    'progress'    => $total > 0 ? round(($certified / $total) * 100) : 0,
+                ];
+            });
         }
 
         return Inertia::render('Constituency/Dashboard', [
@@ -80,18 +90,32 @@ Route::middleware(['auth', 'role:constituency-approver'])
             $base = fn() => Result::where('election_id', $activeElection->id)
                 ->whereHas('pollingStation', fn($q) => $q->whereIn('ward_id', $wardIds));
 
-            $counts['pending']   = $base()->where('certification_status', Result::STATUS_PENDING_CONSTITUENCY)->count();
-            $counts['certified'] = $base()->whereIn('certification_status', [
-                Result::STATUS_CONSTITUENCY_CERTIFIED,
-                Result::STATUS_PENDING_ADMIN_AREA,
-                Result::STATUS_ADMIN_AREA_CERTIFIED,
-                Result::STATUS_PENDING_NATIONAL,
-                Result::STATUS_NATIONALLY_CERTIFIED,
-            ])->count();
-            $counts['rejected'] = $base()
-                ->where('certification_status', Result::STATUS_PENDING_WARD)
-                ->where('rejection_count', '>', 0)->count();
-            $counts['all'] = $counts['pending'] + $counts['certified'] + $counts['rejected'];
+            $counts = Cache::remember("constituency_queue_counts_{$user->id}_{$constituency->id}_{$activeElection->id}_{$filter}", 15, function () use ($base) {
+                $countsRow = $base()
+                    ->selectRaw(
+                        'SUM(CASE WHEN certification_status = ? THEN 1 ELSE 0 END) as pending, '
+                        . 'SUM(CASE WHEN certification_status IN (?, ?, ?, ?, ?) THEN 1 ELSE 0 END) as certified, '
+                        . 'SUM(CASE WHEN certification_status = ? AND rejection_count > 0 THEN 1 ELSE 0 END) as rejected, '
+                        . 'COUNT(*) as all',
+                        [
+                            Result::STATUS_PENDING_CONSTITUENCY,
+                            Result::STATUS_CONSTITUENCY_CERTIFIED,
+                            Result::STATUS_PENDING_ADMIN_AREA,
+                            Result::STATUS_ADMIN_AREA_CERTIFIED,
+                            Result::STATUS_PENDING_NATIONAL,
+                            Result::STATUS_NATIONALLY_CERTIFIED,
+                            Result::STATUS_PENDING_WARD,
+                        ]
+                    )
+                    ->first();
+
+                return [
+                    'pending'   => (int) $countsRow->pending,
+                    'certified' => (int) $countsRow->certified,
+                    'rejected'  => (int) $countsRow->rejected,
+                    'all'       => (int) $countsRow->all,
+                ];
+            });
 
             $query = $base()->with([
                 'pollingStation.ward',

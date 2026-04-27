@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { Link, router, usePage } from '@inertiajs/react';
+import useInertiaPrefetch from '@/Hooks/useInertiaPrefetch';
 
 /* ─── Particle config ─────────────────────────────────────────────────────
    Module-level constant → runs ONCE on import, never re-computed.
@@ -35,6 +36,8 @@ export default function AppLayout({ children }) {
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const [isLoggingOut, setIsLoggingOut]     = useState(false);
     const bgRef = useRef(null);
+
+    useInertiaPrefetch([], { global: true })
 
     const handleLogout = useCallback((e) => {
         if (e) { e.preventDefault(); e.stopPropagation(); }
@@ -115,7 +118,7 @@ export default function AppLayout({ children }) {
             <header className="iec-header">
                 <div className="container mx-auto px-4 py-4">
                     <div className="flex items-center justify-between">
-                        <Link href="/" className="flex items-center gap-3">
+                        <Link href="/" prefetch className="flex items-center gap-3">
                             <img src="/asset/logo.png" alt="IEC Logo" className="w-12 h-12" />
                             <div className="text-white hidden sm:block">
                                 <h1 className="text-base font-bold">Independent Electoral Commission</h1>
@@ -125,7 +128,7 @@ export default function AppLayout({ children }) {
 
                         {/* Desktop Nav */}
                         <nav className="hidden md:flex items-center gap-6 text-white">
-                            <Link href="/" className="hover:text-pink-400 transition-colors font-medium">
+                            <Link href="/" prefetch className="hover:text-pink-400 transition-colors font-medium">
                                 Home
                             </Link>
                             {/*
@@ -180,6 +183,7 @@ export default function AppLayout({ children }) {
                         <nav className="md:hidden mt-4 pb-4 border-t border-slate-700/50 pt-4 space-y-3">
                             <Link
                                 href="/"
+                                prefetch
                                 className="block text-white py-2 px-3 rounded-lg hover:bg-white/10 transition-colors"
                                 onClick={() => setMobileMenuOpen(false)}
                             >

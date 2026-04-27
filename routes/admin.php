@@ -25,13 +25,18 @@ Route::middleware(['auth', 'role:iec-administrator'])
 
     // ── Dashboard ─────────────────────────────────────────────────────────────
     Route::get('/dashboard', function () {
-        return Inertia::render('Admin/Dashboard', [
-            'auth'        => ['user' => Auth::user()],
-            'statistics'  => [
+        $cacheKey = 'admin_dashboard_stats';
+        $statistics = Cache::remember($cacheKey, 30, function () {
+            return [
                 'totalUsers'      => User::count(),
                 'totalStations'   => PollingStation::count(),
                 'activeElections' => Election::where('status', 'active')->count(),
-            ],
+            ];
+        });
+
+        return Inertia::render('Admin/Dashboard', [
+            'auth'        => ['user' => Auth::user()],
+            'statistics'  => $statistics,
             'systemStatus' => ['status' => 'Running'],
         ]);
     })->name('dashboard');

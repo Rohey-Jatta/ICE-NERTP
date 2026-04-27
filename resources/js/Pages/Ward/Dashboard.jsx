@@ -28,6 +28,7 @@ export default function WardDashboard({ auth, ward, pendingResults, statistics }
                         </p>
                         <Link
                             href="/ward/approval-queue"
+                            prefetch
                             className="ml-auto px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-bold rounded-lg"
                         >
                             Review Now →
@@ -80,6 +81,7 @@ export default function WardDashboard({ auth, ward, pendingResults, statistics }
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <Link
                             href="/ward/approval-queue?filter=pending"
+                            prefetch
                             className="group p-5 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 rounded-xl transition-all"
                         >
                             <div className="flex items-center gap-3 mb-2">
@@ -93,6 +95,7 @@ export default function WardDashboard({ auth, ward, pendingResults, statistics }
 
                         <Link
                             href="/ward/approval-queue?filter=approved"
+                            prefetch
                             className="group p-5 bg-teal-500/10 hover:bg-teal-500/20 border border-teal-500/30 rounded-xl transition-all"
                         >
                             <div className="flex items-center gap-3 mb-2">

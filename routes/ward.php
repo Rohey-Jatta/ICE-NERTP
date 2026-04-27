@@ -5,6 +5,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\Cache;
 use Inertia\Inertia;
 use App\Models\AuditLog;
 use App\Models\AdministrativeHierarchy;
@@ -43,51 +44,58 @@ Route::middleware(['auth', 'role:ward-approver'])
             ]);
         }
 
-        $stationIds = PollingStation::where('ward_id', $ward->id)->pluck('id');
+        $cacheKey = "ward_dashboard_{$user->id}_{$ward->id}_" . ($activeElection ? $activeElection->id : 'no_election');
+        $data = Cache::remember($cacheKey, 60, function () use ($ward, $activeElection) {  // Cache for 1 minute
+            $stationIds = PollingStation::where('ward_id', $ward->id)->pluck('id');
 
-        $baseQuery = fn() => Result::whereIn('polling_station_id', $stationIds)
-            ->when($activeElection, fn($q) => $q->where('election_id', $activeElection->id));
+            $baseQuery = fn() => Result::whereIn('polling_station_id', $stationIds)
+                ->when($activeElection, fn($q) => $q->where('election_id', $activeElection->id));
 
-        $pendingCount = $baseQuery()
-            ->where('certification_status', Result::STATUS_PENDING_WARD)
-            ->count();
+            $pendingCount = $baseQuery()
+                ->where('certification_status', Result::STATUS_PENDING_WARD)
+                ->count();
 
-        $awaitingPartyCount = $baseQuery()
-            ->where('certification_status', Result::STATUS_PENDING_PARTY_ACCEPTANCE)
-            ->count();
+            $awaitingPartyCount = $baseQuery()
+                ->where('certification_status', Result::STATUS_PENDING_PARTY_ACCEPTANCE)
+                ->count();
 
-        $certifiedCount = $baseQuery()
-            ->whereIn('certification_status', [
-                Result::STATUS_WARD_CERTIFIED,
-                Result::STATUS_PENDING_CONSTITUENCY,
-                Result::STATUS_CONSTITUENCY_CERTIFIED,
-                Result::STATUS_PENDING_ADMIN_AREA,
-                Result::STATUS_ADMIN_AREA_CERTIFIED,
-                Result::STATUS_PENDING_NATIONAL,
-                Result::STATUS_NATIONALLY_CERTIFIED,
-            ])->count();
+            $certifiedCount = $baseQuery()
+                ->whereIn('certification_status', [
+                    Result::STATUS_WARD_CERTIFIED,
+                    Result::STATUS_PENDING_CONSTITUENCY,
+                    Result::STATUS_CONSTITUENCY_CERTIFIED,
+                    Result::STATUS_PENDING_ADMIN_AREA,
+                    Result::STATUS_ADMIN_AREA_CERTIFIED,
+                    Result::STATUS_PENDING_NATIONAL,
+                    Result::STATUS_NATIONALLY_CERTIFIED,
+                ])->count();
 
-        $rejectedCount = $baseQuery()
-            ->where('certification_status', Result::STATUS_SUBMITTED)
-            ->where('rejection_count', '>', 0)
-            ->count();
+            $rejectedCount = $baseQuery()
+                ->where('certification_status', Result::STATUS_SUBMITTED)
+                ->where('rejection_count', '>', 0)
+                ->count();
 
-        $totalStations = $stationIds->count();
-        $total         = $pendingCount + $certifiedCount;
-        $progress      = $total > 0 ? round(($certifiedCount / $total) * 100) : 0;
+            $totalStations = $stationIds->count();
+            $total         = $pendingCount + $certifiedCount;
+            $progress      = $total > 0 ? round(($certifiedCount / $total) * 100) : 0;
+
+            return [
+                'statistics' => [
+                    'totalStations' => $totalStations,
+                    'pending'       => $pendingCount,
+                    'approved'      => $certifiedCount,
+                    'rejected'      => $rejectedCount,
+                    'awaitingParty' => $awaitingPartyCount,
+                    'progress'      => $progress,
+                ],
+                'pendingResults' => $pendingCount,
+            ];
+        });
 
         return Inertia::render('Ward/Dashboard', [
             'auth' => ['user' => $user],
             'ward' => ['id' => $ward->id, 'name' => $ward->name, 'code' => $ward->code],
-            'statistics' => [
-                'totalStations' => $totalStations,
-                'pending'       => $pendingCount,
-                'approved'      => $certifiedCount,
-                'rejected'      => $rejectedCount,
-                'awaitingParty' => $awaitingPartyCount,
-                'progress'      => $progress,
-            ],
-            'pendingResults' => $pendingCount,
+            ...$data,
         ]);
     })->name('dashboard');
 

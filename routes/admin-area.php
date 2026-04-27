@@ -2,6 +2,7 @@
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
@@ -21,54 +22,64 @@ Route::middleware(['auth', 'role:admin-area-approver'])
         $adminArea = AdministrativeHierarchy::where('assigned_approver_id', $user->id)
             ->where('level', 'admin_area')->first();
 
-        $pending       = 0;
-        $approved      = 0;
-        $constituencies = 0;
-        $awaitingBelow  = 0;
+        $pendingResults = 0;
+        $statistics    = [
+            'approved'       => 0,
+            'constituencies' => 0,
+            'progress'       => 0,
+            'awaitingBelow'  => 0,
+        ];
 
         if ($adminArea) {
-            $areaScope = fn($q) => $q->whereHas('pollingStation.ward', fn($q2) =>
-                $q2->whereHas('parent', fn($q3) => $q3->where('parent_id', $adminArea->id))
-            );
+            $cacheKey = "admin_area_dashboard_{$user->id}_{$adminArea->id}";
 
-            $pending = $areaScope(Result::query())
-                ->where('certification_status', Result::STATUS_PENDING_ADMIN_AREA)
-                ->count();
+            $dashboardData = Cache::remember($cacheKey, 30, function () use ($adminArea) {
+                $areaScope = fn($q) => $q->whereHas('pollingStation.ward', fn($q2) =>
+                    $q2->whereHas('parent', fn($q3) => $q3->where('parent_id', $adminArea->id))
+                );
 
-            $approved = $areaScope(Result::query())
-                ->whereIn('certification_status', [
-                    Result::STATUS_ADMIN_AREA_CERTIFIED,
-                    Result::STATUS_PENDING_NATIONAL,
-                    Result::STATUS_NATIONALLY_CERTIFIED,
-                ])->count();
+                $statusCounts = $areaScope(Result::query())
+                    ->selectRaw('certification_status, COUNT(*) as count')
+                    ->groupBy('certification_status')
+                    ->pluck('count', 'certification_status');
 
-            $awaitingBelow = $areaScope(Result::query())
-                ->whereIn('certification_status', [
-                    Result::STATUS_SUBMITTED,
-                    Result::STATUS_PENDING_PARTY_ACCEPTANCE,
-                    Result::STATUS_PENDING_WARD,
-                    Result::STATUS_WARD_CERTIFIED,
-                    Result::STATUS_PENDING_CONSTITUENCY,
-                    Result::STATUS_CONSTITUENCY_CERTIFIED,
-                ])->count();
+                $pending = (int) ($statusCounts[Result::STATUS_PENDING_ADMIN_AREA] ?? 0);
+                $approved = (int) ($statusCounts[Result::STATUS_ADMIN_AREA_CERTIFIED] ?? 0)
+                    + (int) ($statusCounts[Result::STATUS_PENDING_NATIONAL] ?? 0)
+                    + (int) ($statusCounts[Result::STATUS_NATIONALLY_CERTIFIED] ?? 0);
+                $awaitingBelow = (int) ($statusCounts[Result::STATUS_SUBMITTED] ?? 0)
+                    + (int) ($statusCounts[Result::STATUS_PENDING_PARTY_ACCEPTANCE] ?? 0)
+                    + (int) ($statusCounts[Result::STATUS_PENDING_WARD] ?? 0)
+                    + (int) ($statusCounts[Result::STATUS_WARD_CERTIFIED] ?? 0)
+                    + (int) ($statusCounts[Result::STATUS_PENDING_CONSTITUENCY] ?? 0)
+                    + (int) ($statusCounts[Result::STATUS_CONSTITUENCY_CERTIFIED] ?? 0);
 
-            $constituencies = AdministrativeHierarchy::where('parent_id', $adminArea->id)
-                ->where('level', 'constituency')->count();
+                $constituencies = AdministrativeHierarchy::where('parent_id', $adminArea->id)
+                    ->where('level', 'constituency')->count();
+
+                $total = $pending + $approved;
+                $progress = $total > 0 ? round(($approved / $total) * 100) : 0;
+
+                return [
+                    'pendingResults' => $pending,
+                    'statistics'     => [
+                        'approved'       => $approved,
+                        'constituencies' => $constituencies,
+                        'progress'       => $progress,
+                        'awaitingBelow'  => $awaitingBelow,
+                    ],
+                ];
+            });
+
+            $pendingResults = $dashboardData['pendingResults'];
+            $statistics    = $dashboardData['statistics'];
         }
-
-        $total    = $pending + $approved;
-        $progress = $total > 0 ? round(($approved / $total) * 100) : 0;
 
         return Inertia::render('AdminArea/Dashboard', [
             'auth'           => ['user' => $user],
             'adminArea'      => $adminArea ? ['id' => $adminArea->id, 'name' => $adminArea->name] : null,
-            'pendingResults' => $pending,
-            'statistics'     => [
-                'approved'       => $approved,
-                'constituencies' => $constituencies,
-                'progress'       => $progress,
-                'awaitingBelow'  => $awaitingBelow,
-            ],
+            'pendingResults' => $pendingResults,
+            'statistics'     => $statistics,
         ]);
     })->name('dashboard');
 
@@ -87,6 +98,32 @@ Route::middleware(['auth', 'role:admin-area-approver'])
                 $q2->whereHas('parent', fn($q3) => $q3->where('parent_id', $adminArea->id))
             );
 
+            $countsCacheKey = "admin_area_queue_counts_{$user->id}_{$adminArea->id}_{$filter}";
+            $counts = Cache::remember($countsCacheKey, 15, function () use ($areaScope) {
+                $baseCounts = $areaScope(Result::query())
+                    ->selectRaw(
+                        'SUM(CASE WHEN certification_status = ? THEN 1 ELSE 0 END) as pending, '
+                        . 'SUM(CASE WHEN certification_status IN (?, ?, ?) THEN 1 ELSE 0 END) as approved, '
+                        . 'SUM(CASE WHEN certification_status = ? AND rejection_count > 0 THEN 1 ELSE 0 END) as rejected, '
+                        . 'COUNT(*) as all',
+                        [
+                            Result::STATUS_PENDING_ADMIN_AREA,
+                            Result::STATUS_ADMIN_AREA_CERTIFIED,
+                            Result::STATUS_PENDING_NATIONAL,
+                            Result::STATUS_NATIONALLY_CERTIFIED,
+                            Result::STATUS_PENDING_CONSTITUENCY,
+                        ]
+                    )
+                    ->first();
+
+                return [
+                    'pending'  => (int) $baseCounts->pending,
+                    'approved' => (int) $baseCounts->approved,
+                    'rejected' => (int) $baseCounts->rejected,
+                    'all'      => (int) $baseCounts->all,
+                ];
+            });
+
             $baseQuery = Result::with([
                 'pollingStation.ward.parent',
                 'election',
@@ -97,19 +134,6 @@ Route::middleware(['auth', 'role:admin-area-approver'])
                 'certifications' => fn($q) => $q->latest(),
             ]);
             $baseQuery = $areaScope($baseQuery);
-
-            $counts['pending']  = (clone $baseQuery)
-                ->where('certification_status', Result::STATUS_PENDING_ADMIN_AREA)->count();
-            $counts['approved'] = (clone $baseQuery)
-                ->whereIn('certification_status', [
-                    Result::STATUS_ADMIN_AREA_CERTIFIED,
-                    Result::STATUS_PENDING_NATIONAL,
-                    Result::STATUS_NATIONALLY_CERTIFIED,
-                ])->count();
-            $counts['rejected'] = (clone $baseQuery)
-                ->where('certification_status', Result::STATUS_PENDING_CONSTITUENCY)
-                ->where('rejection_count', '>', 0)->count();
-            $counts['all'] = $counts['pending'] + $counts['approved'] + $counts['rejected'];
 
             $activeQuery = match ($filter) {
                 'pending'  => (clone $baseQuery)->where('certification_status', Result::STATUS_PENDING_ADMIN_AREA),

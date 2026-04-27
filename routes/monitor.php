@@ -2,6 +2,7 @@
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Route;
@@ -33,41 +34,54 @@ Route::middleware(['auth', 'role:election-monitor'])
             'visited'           => 0,
         ];
 
+        $recentObservations = collect();
+
         if ($monitor) {
-            $stats['assigned_stations'] = $monitor->pollingStations->count();
+            $cacheKey = "monitor_dashboard_{$monitor->id}_" . ($monitor->election->id ?? 'none');
+            $dashboardData = Cache::remember($cacheKey, 30, function () use ($monitor) {
+                $stats = [
+                    'assigned_stations' => $monitor->pollingStations->count(),
+                    'observations'      => 0,
+                    'flagged'           => 0,
+                    'visited'           => 0,
+                ];
 
-            $stats['observations'] = DB::table('monitor_observations')
-                ->where('election_monitor_id', $monitor->id)
-                ->count();
+                $baseQuery = DB::table('monitor_observations')
+                    ->where('election_monitor_id', $monitor->id);
 
-            $stats['flagged'] = DB::table('monitor_observations')
-                ->where('election_monitor_id', $monitor->id)
-                ->whereIn('observation_type', ['irregularity', 'process_concern', 'incident'])
-                ->count();
+                $stats['observations'] = (clone $baseQuery)->count();
+                $stats['flagged'] = (clone $baseQuery)
+                    ->whereIn('observation_type', ['irregularity', 'process_concern', 'incident'])
+                    ->count();
+                $stats['visited'] = (clone $baseQuery)
+                    ->distinct('polling_station_id')
+                    ->count('polling_station_id');
 
-            $stats['visited'] = DB::table('monitor_observations')
-                ->where('election_monitor_id', $monitor->id)
-                ->distinct('polling_station_id')
-                ->count('polling_station_id');
+                $recentObservations = DB::table('monitor_observations')
+                    ->where('election_monitor_id', $monitor->id)
+                    ->join('polling_stations', 'monitor_observations.polling_station_id', '=', 'polling_stations.id')
+                    ->select(
+                        'monitor_observations.id',
+                        'monitor_observations.title',
+                        'monitor_observations.observation_type',
+                        'monitor_observations.severity',
+                        'monitor_observations.observed_at',
+                        'polling_stations.name as station_name',
+                        'polling_stations.code as station_code'
+                    )
+                    ->orderByDesc('monitor_observations.observed_at')
+                    ->limit(5)
+                    ->get();
+
+                return [
+                    'stats'              => $stats,
+                    'recentObservations' => $recentObservations,
+                ];
+            });
+
+            $stats = $dashboardData['stats'];
+            $recentObservations = $dashboardData['recentObservations'];
         }
-
-        $recentObservations = $monitor
-            ? DB::table('monitor_observations')
-                ->where('election_monitor_id', $monitor->id)
-                ->join('polling_stations', 'monitor_observations.polling_station_id', '=', 'polling_stations.id')
-                ->select(
-                    'monitor_observations.id',
-                    'monitor_observations.title',
-                    'monitor_observations.observation_type',
-                    'monitor_observations.severity',
-                    'monitor_observations.observed_at',
-                    'polling_stations.name as station_name',
-                    'polling_stations.code as station_code'
-                )
-                ->orderByDesc('monitor_observations.observed_at')
-                ->limit(5)
-                ->get()
-            : collect();
 
         return Inertia::render('Monitor/Dashboard', [
             'auth'               => ['user' => $user],
@@ -87,17 +101,24 @@ Route::middleware(['auth', 'role:election-monitor'])
 
         $stations = [];
         if ($monitor) {
-            $stations = $monitor->pollingStations->map(function ($station) use ($monitor) {
-                // Get latest result for this station
-                $result = Result::where('polling_station_id', $station->id)
-                    ->latest('submitted_at')
-                    ->first();
+            $stationIds = $monitor->pollingStations->pluck('id')->all();
 
-                // How many observations this monitor has for this station
-                $observationCount = DB::table('monitor_observations')
-                    ->where('election_monitor_id', $monitor->id)
-                    ->where('polling_station_id', $station->id)
-                    ->count();
+            $latestResults = Result::whereIn('polling_station_id', $stationIds)
+                ->orderByDesc('submitted_at')
+                ->get()
+                ->groupBy('polling_station_id')
+                ->map(fn($group) => $group->first());
+
+            $observationCounts = DB::table('monitor_observations')
+                ->where('election_monitor_id', $monitor->id)
+                ->whereIn('polling_station_id', $stationIds)
+                ->select('polling_station_id', DB::raw('COUNT(*) as count'))
+                ->groupBy('polling_station_id')
+                ->pluck('count', 'polling_station_id');
+
+            $stations = $monitor->pollingStations->map(function ($station) use ($latestResults, $observationCounts) {
+                $result = $latestResults->get($station->id);
+                $observationCount = $observationCounts->get($station->id, 0);
 
                 return [
                     'id'               => $station->id,

@@ -1,8 +1,11 @@
 import AppLayout from '@/Layouts/AppLayout';
 import { Link } from '@inertiajs/react';
 import LeafletMap from '@/Components/Map/LeafletMap';
+import useInertiaPrefetch from '@/Hooks/useInertiaPrefetch';
 
 export default function ResultsMap({ election, stations }) {
+    useInertiaPrefetch(['/results', '/results/stations']);
+
     if (!election) {
         return (
             <AppLayout>
@@ -23,13 +26,13 @@ export default function ResultsMap({ election, stations }) {
                     <div className="text-center mb-8">
                         <h1 className="text-4xl font-bold text-white mb-6">{election.name}</h1>
                         <div className="flex justify-center gap-4 mb-8 flex-wrap">
-                            <Link href="/results" className="px-6 py-3 bg-slate-800/30 text-gray-300 rounded-lg font-semibold hover:bg-slate-700 transition-all">
+                            <Link href="/results" prefetch className="px-6 py-3 bg-slate-800/30 text-gray-300 rounded-lg font-semibold hover:bg-slate-700 transition-all">
                                 Summary
                             </Link>
-                            <Link href="/results/map" className="px-6 py-3 bg-slate-700 text-white rounded-lg font-semibold shadow-lg">
+                            <Link href="/results/map" prefetch className="px-6 py-3 bg-slate-700 text-white rounded-lg font-semibold shadow-lg">
                                 Map
                             </Link>
-                            <Link href="/results/stations" className="px-6 py-3 bg-slate-800/30 text-gray-300 rounded-lg font-semibold hover:bg-slate-700 transition-all">
+                            <Link href="/results/stations" prefetch className="px-6 py-3 bg-slate-800/30 text-gray-300 rounded-lg font-semibold hover:bg-slate-700 transition-all">
                                 Stations
                             </Link>
                         </div>

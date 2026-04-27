@@ -2,6 +2,7 @@
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
@@ -72,28 +73,38 @@ Route::middleware(['auth', 'role:party-representative'])
             ]);
         }
 
-        // Only scope to active election results
-        $resultIds = Result::whereIn('polling_station_id', $stationIds)
-            ->where('election_id', $activeElection->id)
-            ->whereNotIn('certification_status', [
-                Result::STATUS_SUBMITTED,
-                Result::STATUS_REJECTED,
-            ])
-            ->pluck('id');
+        $cacheKey = "party_dashboard_{$rep->id}_{$activeElection->id}";
+        $dashboardData = Cache::remember($cacheKey, 30, function () use ($rep, $activeElection, $stationIds) {
+            $resultIds = Result::whereIn('polling_station_id', $stationIds)
+                ->where('election_id', $activeElection->id)
+                ->whereNotIn('certification_status', [
+                    Result::STATUS_SUBMITTED,
+                    Result::STATUS_REJECTED,
+                ])
+                ->pluck('id');
 
-        $decidedResultIds = PartyAcceptance::where('political_party_id', $rep->political_party_id)
-            ->where('is_final', true)
-            ->whereIn('result_id', $resultIds)
-            ->pluck('result_id');
+            $decidedResultIds = PartyAcceptance::where('political_party_id', $rep->political_party_id)
+                ->where('is_final', true)
+                ->whereIn('result_id', $resultIds)
+                ->pluck('result_id');
 
-        $pendingAcceptance = $resultIds->diff($decidedResultIds)->count();
+            $pendingAcceptance = $resultIds->diff($decidedResultIds)->count();
 
-        $acceptanceCounts = PartyAcceptance::where('political_party_id', $rep->political_party_id)
-            ->where('is_final', true)
-            ->whereIn('result_id', $resultIds)
-            ->selectRaw('status, COUNT(*) as count')
-            ->groupBy('status')
-            ->pluck('count', 'status');
+            $acceptanceCounts = PartyAcceptance::where('political_party_id', $rep->political_party_id)
+                ->where('is_final', true)
+                ->whereIn('result_id', $resultIds)
+                ->selectRaw('status, COUNT(*) as count')
+                ->groupBy('status')
+                ->pluck('count', 'status');
+
+            return [
+                'pendingAcceptance'       => $pendingAcceptance,
+                'acceptanceCounts'        => $acceptanceCounts,
+            ];
+        });
+
+        $pendingAcceptance = $dashboardData['pendingAcceptance'];
+        $acceptanceCounts = $dashboardData['acceptanceCounts'];
 
         return Inertia::render('Party/Dashboard', [
             'auth'             => ['user' => Auth::user()],

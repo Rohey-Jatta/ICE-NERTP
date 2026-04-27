@@ -2,6 +2,7 @@
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Str;
@@ -24,29 +25,32 @@ Route::middleware(['auth', 'role:polling-officer'])
         $station        = PollingStation::where('assigned_officer_id', $user->id)->first();
         $activeElection = Election::where('status', 'active')->latest()->first();
 
-        $submissions = Result::where('submitted_by', $user->id)
+        $submissionStats = Result::where('submitted_by', $user->id)
             ->when($activeElection, fn($q) => $q->where('election_id', $activeElection->id))
-            ->orderByDesc('submitted_at')
-            ->get();
+            ->selectRaw(
+                'COUNT(*) as total, '
+                . 'SUM(CASE WHEN certification_status IN (?, ?, ?) THEN 1 ELSE 0 END) as pending, '
+                . 'SUM(CASE WHEN certification_status IN (?, ?, ?, ?, ?, ?, ?) THEN 1 ELSE 0 END) as certified, '
+                . 'SUM(CASE WHEN certification_status = ? AND rejection_count > 0 THEN 1 ELSE 0 END) as rejected',
+                [
+                    Result::STATUS_SUBMITTED,
+                    Result::STATUS_PENDING_PARTY_ACCEPTANCE,
+                    Result::STATUS_PENDING_WARD,
+                    Result::STATUS_WARD_CERTIFIED,
+                    Result::STATUS_PENDING_CONSTITUENCY,
+                    Result::STATUS_CONSTITUENCY_CERTIFIED,
+                    Result::STATUS_PENDING_ADMIN_AREA,
+                    Result::STATUS_ADMIN_AREA_CERTIFIED,
+                    Result::STATUS_PENDING_NATIONAL,
+                    Result::STATUS_NATIONALLY_CERTIFIED,
+                    Result::STATUS_SUBMITTED,
+                ]
+            )
+            ->first();
 
-        $pendingCount = $submissions->whereIn('certification_status', [
-            Result::STATUS_SUBMITTED,
-            Result::STATUS_PENDING_PARTY_ACCEPTANCE,
-            Result::STATUS_PENDING_WARD,
-        ])->count();
-
-        $certifiedCount = $submissions->whereIn('certification_status', [
-            Result::STATUS_WARD_CERTIFIED,
-            Result::STATUS_PENDING_CONSTITUENCY,
-            Result::STATUS_CONSTITUENCY_CERTIFIED,
-            Result::STATUS_PENDING_ADMIN_AREA,
-            Result::STATUS_ADMIN_AREA_CERTIFIED,
-            Result::STATUS_PENDING_NATIONAL,
-            Result::STATUS_NATIONALLY_CERTIFIED,
-        ])->count();
-
-        $rejectedCount = $submissions->where('certification_status', Result::STATUS_SUBMITTED)
-            ->where('rejection_count', '>', 0)->count();
+        $pendingCount = (int) $submissionStats->pending;
+        $certifiedCount = (int) $submissionStats->certified;
+        $rejectedCount = (int) $submissionStats->rejected;
 
         $hasSubmitted = $station && $activeElection
             ? Result::where('polling_station_id', $station->id)
@@ -65,7 +69,7 @@ Route::middleware(['auth', 'role:polling-officer'])
                 'election_name'     => $activeElection->name ?? 'N/A',
             ] : null,
             'statistics' => [
-                'totalSubmissions' => $submissions->count(),
+                'totalSubmissions' => (int) $submissionStats->total,
                 'pending'          => $pendingCount,
                 'certified'        => $certifiedCount,
                 'rejected'         => $rejectedCount,
