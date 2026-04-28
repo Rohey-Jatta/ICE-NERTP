@@ -3,282 +3,426 @@
 @import 'tailwindcss/components';
 @import 'tailwindcss/utilities';
 
-/* ─── Layout Shell ───────────────────────────────────────────────────────── */
+/* ══════════════════════════════════════════════════════════════════
+   IEC NERTP – Design System
+   Brand:  Hot Pink #E91E8C  |  Navy #0D1B2A
+   Style:  Professional government, clean, trustworthy
+══════════════════════════════════════════════════════════════════ */
 
-.iec-layout {
-    min-height: 100vh;
-    background: #0f172a;
-    position: relative;
-    overflow-x: hidden;
+/* ─── CSS Variables ──────────────────────────────────────────── */
+:root {
+    --iec-pink:        #E91E8C;
+    --iec-pink-dark:   #C4186F;
+    --iec-pink-light:  #F040A4;
+    --iec-pink-faint:  rgba(233,30,140,0.08);
+    --iec-navy:        #0D1B2A;
+    --iec-navy-light:  #1A2B3C;
+    --iec-navy-muted:  #1E3A5F;
+
+    --shadow-xs:  0 1px 2px rgba(0,0,0,.05);
+    --shadow-sm:  0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.05);
+    --shadow-md:  0 4px 6px rgba(0,0,0,.07), 0 2px 4px rgba(0,0,0,.05);
+    --shadow-lg:  0 10px 15px rgba(0,0,0,.07), 0 4px 6px rgba(0,0,0,.04);
+    --shadow-xl:  0 20px 25px rgba(0,0,0,.08), 0 8px 10px rgba(0,0,0,.04);
+    --shadow-pink: 0 4px 14px rgba(233,30,140,0.25);
 }
 
-.iec-bg {
-    position: fixed;
-    inset: 0;
-    z-index: 0;
-    pointer-events: none;
-    background:
-        radial-gradient(ellipse 80% 60% at 20% 30%, rgba(20, 184, 166, 0.08) 0%, transparent 60%),
-        radial-gradient(ellipse 60% 50% at 80% 70%, rgba(59, 130, 246, 0.06) 0%, transparent 60%),
-        linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+/* ─── Top Info Bar ───────────────────────────────────────────── */
+.iec-top-bar {
+    background-color: var(--iec-pink);
+    color: white;
+    font-size: 0.75rem;
+    line-height: 1;
+    padding: 0.4rem 0;
+}
+
+/* ─── Main Navigation Header ─────────────────────────────────── */
+.iec-nav-header {
+    background-color: #ffffff;
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    box-shadow: var(--shadow-sm);
+    border-bottom: 1px solid #f0f0f0;
+    transition: box-shadow 0.25s ease;
+}
+
+.iec-nav-header.is-scrolled {
+    box-shadow: var(--shadow-md);
+}
+
+/* ─── IEC Footer ─────────────────────────────────────────────── */
+.iec-footer {
+    background-color: var(--iec-navy);
+    color: #e5e7eb;
+}
+
+/* ─── Buttons ────────────────────────────────────────────────── */
+.btn-iec {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.375rem;
+    font-weight: 600;
+    border-radius: 0.375rem;
+    transition: background-color 0.15s, transform 0.1s, box-shadow 0.15s;
+    white-space: nowrap;
+    cursor: pointer;
+    text-decoration: none;
+    border: 2px solid transparent;
+    line-height: 1;
+}
+
+.btn-iec-primary {
+    padding: 0.5625rem 1.25rem;
+    background-color: var(--iec-pink);
+    color: white;
+    font-size: 0.875rem;
+}
+
+.btn-iec-primary:hover:not(:disabled) {
+    background-color: var(--iec-pink-dark);
+    box-shadow: var(--shadow-pink);
+    transform: translateY(-1px);
+}
+
+.btn-iec-primary:active:not(:disabled) {
+    transform: translateY(0);
+    box-shadow: none;
+}
+
+.btn-iec-primary:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+.btn-iec-secondary {
+    padding: 0.5rem 1.25rem;
+    background-color: transparent;
+    color: var(--iec-pink);
+    border-color: var(--iec-pink);
+    font-size: 0.875rem;
+}
+
+.btn-iec-secondary:hover {
+    background-color: var(--iec-pink);
+    color: white;
+}
+
+.btn-iec-white {
+    padding: 0.5rem 1.25rem;
+    background-color: white;
+    color: var(--iec-pink);
+    font-size: 0.875rem;
+    box-shadow: var(--shadow-sm);
+}
+
+.btn-iec-white:hover {
+    background-color: #fdf2f8;
+    box-shadow: var(--shadow-md);
+}
+
+.btn-iec-outline-white {
+    padding: 0.5rem 1.25rem;
+    background-color: transparent;
+    color: white;
+    border-color: rgba(255,255,255,0.6);
+    font-size: 0.875rem;
+}
+
+.btn-iec-outline-white:hover {
+    background-color: rgba(255,255,255,0.12);
+    border-color: white;
+}
+
+.btn-iec-lg {
+    padding: 0.75rem 1.75rem;
+    font-size: 1rem;
+    border-radius: 0.5rem;
+}
+
+.btn-iec-sm {
+    padding: 0.375rem 0.875rem;
+    font-size: 0.8125rem;
+}
+
+/* ─── Nav Links ──────────────────────────────────────────────── */
+.nav-link {
+    display: inline-flex;
+    align-items: center;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: #374151;
+    text-decoration: none;
+    padding: 0.25rem 0;
+    border-bottom: 2px solid transparent;
+    transition: color 0.15s, border-color 0.15s;
+}
+
+.nav-link:hover,
+.nav-link.active {
+    color: var(--iec-pink);
+    border-bottom-color: var(--iec-pink);
+}
+
+/* ─── IEC Cards ──────────────────────────────────────────────── */
+.iec-card {
+    background: white;
+    border-radius: 0.75rem;
+    border: 1px solid #e5e7eb;
+    box-shadow: var(--shadow-sm);
+    overflow: hidden;
+    transition: box-shadow 0.2s, transform 0.2s;
+}
+
+.iec-card-hover:hover {
+    box-shadow: var(--shadow-lg);
+    transform: translateY(-3px);
+}
+
+.iec-card-action {
+    border-top: 3px solid transparent;
+    transition: box-shadow 0.2s, transform 0.2s, border-color 0.2s;
+}
+
+.iec-card-action:hover {
+    border-top-color: var(--iec-pink);
+    box-shadow: var(--shadow-lg);
+    transform: translateY(-2px);
+}
+
+/* ─── Section Labels (matches IEC website style) ─────────────── */
+.iec-section-label {
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--iec-pink);
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.iec-section-label::before {
+    content: '';
+    display: block;
+    width: 2.5rem;
+    height: 2.5px;
+    background-color: var(--iec-pink);
+}
+
+/* ─── IEC Hero Sections ──────────────────────────────────────── */
+.iec-hero-navy {
+    background: linear-gradient(135deg, var(--iec-navy) 0%, var(--iec-navy-light) 50%, var(--iec-navy-muted) 100%);
+    position: relative;
     overflow: hidden;
 }
 
-.iec-bg::before,
-.iec-bg::after {
+.iec-hero-navy::before {
     content: '';
     position: absolute;
-    border-radius: 50%;
-    filter: blur(80px);
-    animation: orb-pulse 8s ease-in-out infinite;
-}
-
-.iec-bg::before {
-    width: 600px;
-    height: 400px;
-    top: 10%;
-    left: 5%;
-    background: rgba(20, 184, 166, 0.06);
-}
-
-.iec-bg::after {
-    width: 500px;
-    height: 350px;
-    bottom: 10%;
-    right: 5%;
-    background: rgba(59, 130, 246, 0.05);
-    animation-delay: 4s;
-}
-
-@keyframes orb-pulse {
-    0%, 100% { opacity: 0.4; transform: scale(1); }
-    50%       { opacity: 0.7; transform: scale(1.15); }
-}
-
-/* ─── Header ─────────────────────────────────────────────────────────────── */
-
-.iec-header {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    z-index: 50;
-    background: rgba(28, 49, 71, 0.95);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    border-bottom: 1px solid rgba(100, 116, 139, 0.3);
-    box-shadow: 0 1px 20px rgba(0, 0, 0, 0.3);
-}
-
-/* ─── Main content ───────────────────────────────────────────────────────── */
-
-.iec-main {
-    position: relative;
-    z-index: 10;
-    padding-top: 5rem;
-    min-height: calc(100vh - 80px);
-}
-
-/* ─── Footer ─────────────────────────────────────────────────────────────── */
-
-.iec-footer {
-    position: relative;
-    z-index: 10;
-    background: rgba(28, 49, 71, 0.95);
-    border-top: 1px solid rgba(100, 116, 139, 0.3);
-    padding: 2rem 0;
-    margin-top: 5rem;
-}
-
-/* ─── Transitions ────────────────────────────────────────────────────────── */
-
-* {
-    scroll-behavior: auto !important;
-}
-
-a, button {
-    transition: color 0.15s, background-color 0.15s, border-color 0.15s, opacity 0.15s;
-}
-
-/* ─── Browser autofill dark theme override ───────────────────────────────── */
-
-input:-webkit-autofill,
-input:-webkit-autofill:hover,
-input:-webkit-autofill:focus,
-input:-webkit-autofill:active {
-    -webkit-box-shadow: 0 0 0px 1000px #0f172a inset !important;
-    -webkit-text-fill-color: white !important;
-    caret-color: white;
-    transition: background-color 5000s ease-in-out 0s !important;
-    border-color: rgba(100, 116, 139, 0.8) !important;
-}
-
-/* ─── NEW STARFIELD PARTICLE SYSTEM ─────────────────────────────────────── */
-/* 8 directional float animations for multi-direction movement */
-
-@keyframes float1 {
-    0%   { transform: translate(0, 0); opacity: 0; }
-    8%   { opacity: 0.9; }
-    92%  { opacity: 0.5; }
-    100% { transform: translate(160px, -110px); opacity: 0; }
-}
-
-@keyframes float2 {
-    0%   { transform: translate(0, 0); opacity: 0; }
-    8%   { opacity: 0.7; }
-    92%  { opacity: 0.3; }
-    100% { transform: translate(-130px, -90px); opacity: 0; }
-}
-
-@keyframes float3 {
-    0%   { transform: translate(0, 0); opacity: 0; }
-    8%   { opacity: 0.85; }
-    92%  { opacity: 0.4; }
-    100% { transform: translate(110px, 130px); opacity: 0; }
-}
-
-@keyframes float4 {
-    0%   { transform: translate(0, 0); opacity: 0; }
-    8%   { opacity: 0.65; }
-    92%  { opacity: 0.25; }
-    100% { transform: translate(-90px, 120px); opacity: 0; }
-}
-
-@keyframes float5 {
-    0%   { transform: translate(0, 0); opacity: 0; }
-    8%   { opacity: 0.9; }
-    92%  { opacity: 0.5; }
-    100% { transform: translate(30px, -150px); opacity: 0; }
-}
-
-@keyframes float6 {
-    0%   { transform: translate(0, 0); opacity: 0; }
-    8%   { opacity: 0.75; }
-    92%  { opacity: 0.35; }
-    100% { transform: translate(-25px, 140px); opacity: 0; }
-}
-
-@keyframes float7 {
-    0%   { transform: translate(0, 0); opacity: 0; }
-    8%   { opacity: 0.95; }
-    92%  { opacity: 0.55; }
-    100% { transform: translate(170px, 20px); opacity: 0; }
-}
-
-@keyframes float8 {
-    0%   { transform: translate(0, 0); opacity: 0; }
-    8%   { opacity: 0.6; }
-    92%  { opacity: 0.2; }
-    100% { transform: translate(-160px, -15px); opacity: 0; }
-}
-
-/* Twinkling glow effect */
-@keyframes twinkle {
-    0%, 100% {
-        opacity: 0.2;
-        box-shadow: 0 0 2px rgba(148, 163, 184, 0.4);
-    }
-    50% {
-        opacity: 1;
-        box-shadow: 0 0 6px rgb(232, 240, 250), 0 0 14px rgba(148, 163, 184, 0.35);
-    }
-}
-
-/* Shooting star streak */
-@keyframes shootingStar {
-    0%   { transform: rotate(30deg) scaleX(1)  translateX(0);    opacity: 0; }
-    5%   { opacity: 1; }
-    85%  { opacity: 0.6; }
-    100% { transform: rotate(30deg) scaleX(0.1) translateX(600px); opacity: 0; }
-}
-
-/* Particle star base class */
-.particle-star {
-    position: absolute;
-    border-radius: 50%;
-    background: rgba(238, 245, 253, 0.85);
-    will-change: transform, opacity;
-}
-
-/* Shooting star element */
-.shooting-star {
-    position: absolute;
-    height: 2px;
-    background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.9) 50%, rgba(255,255,255,0) 100%);
-    border-radius: 2px;
-    animation: shootingStar 1.6s ease-out forwards;
-    will-change: transform, opacity;
-    box-shadow: 0 0 8px rgba(255, 255, 255, 0.7), 0 0 20px rgba(200, 220, 255, 0.4);
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg width='80' height='80' viewBox='0 0 80 80' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.02'%3E%3Cpath d='M50 50c0-5.523 4.477-10 10-10s10 4.477 10 10-4.477 10-10 10c0 5.523-4.477 10-10 10s-10-4.477-10-10 4.477-10 10-10zM10 10c0-5.523 4.477-10 10-10s10 4.477 10 10-4.477 10-10 10c0 5.523-4.477 10-10 10S0 25.523 0 20s4.477-10 10-10z' /%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
     pointer-events: none;
 }
 
-/* ─── Legacy particle system (Login / TwoFactor pages) ───────────────────── */
-
-@keyframes float-up {
-    0% {
-        transform: translateY(100vh) translateX(0);
-        opacity: 0;
-    }
-    5%   { opacity: 0.5; }
-    95%  { opacity: 0.3; }
-    100% {
-        transform: translateY(-10vh) translateX(20px);
-        opacity: 0;
-    }
+/* ─── Pink Divider / Accent ──────────────────────────────────── */
+.iec-divider-pink {
+    width: 3.5rem;
+    height: 3px;
+    background-color: var(--iec-pink);
+    border-radius: 2px;
 }
 
-.particle {
-    position: absolute;
-    width: 2px;
-    height: 2px;
-    background: #94a3b8;
+/* ─── Stat Cards ─────────────────────────────────────────────── */
+.iec-stat-card {
+    background: white;
+    border-radius: 0.75rem;
+    padding: 1.5rem;
+    border: 1px solid #e5e7eb;
+    box-shadow: var(--shadow-sm);
+    text-align: center;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.iec-stat-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+}
+
+.iec-stat-card .stat-number {
+    font-size: 2rem;
+    font-weight: 800;
+    color: var(--iec-navy);
+    line-height: 1;
+    margin-bottom: 0.25rem;
+}
+
+.iec-stat-card .stat-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #9ca3af;
+}
+
+/* ─── Feature Icon Blocks (IEC quick-nav style) ───────────────── */
+.iec-feature-block {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 1.5rem 1rem;
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 0.75rem;
+    text-align: center;
+    cursor: pointer;
+    text-decoration: none;
+    transition: all 0.2s;
+    gap: 0.75rem;
+    box-shadow: var(--shadow-xs);
+}
+
+.iec-feature-block:hover {
+    background-color: var(--iec-pink);
+    color: white;
+    border-color: var(--iec-pink);
+    box-shadow: var(--shadow-pink);
+    transform: translateY(-3px);
+}
+
+.iec-feature-block .feature-icon {
+    width: 3.5rem;
+    height: 3.5rem;
     border-radius: 50%;
-    animation: float-up linear infinite;
+    background: rgba(233,30,140,0.08);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s;
 }
 
-.particle:nth-child(1)  { left: 95%;  animation-duration: 45s; animation-delay:  0s; }
-.particle:nth-child(2)  { left: 10%; animation-duration: 38s; animation-delay:  3s; }
-.particle:nth-child(3)  { left: 18%; animation-duration: 52s; animation-delay:  7s; }
-.particle:nth-child(4)  { left: 25%; animation-duration: 59s; animation-delay:  0s; }
-.particle:nth-child(5)  { left: 33%; animation-duration: 48s; animation-delay:  5s; }
-.particle:nth-child(6)  { left: 40%; animation-duration: 35s; animation-delay:  9s; }
-.particle:nth-child(7)  { left: 47%; animation-duration: 55s; animation-delay:  2s; }
-.particle:nth-child(8)  { left: 54%; animation-duration: 43s; animation-delay:  6s; }
-.particle:nth-child(9)  { right: 61%; animation-duration: 369s; animation-delay:  0s; }
-.particle:nth-child(10) { top: 68%; animation-duration: 50s; animation-delay:  1s; }
-.particle:nth-child(11) { left: 74%; animation-duration: 46s; animation-delay:  0s; }
-.particle:nth-child(12) { left: 80%; animation-duration: 37s; animation-delay:  3s; }
-.particle:nth-child(13) { left: 86%; animation-duration: 53s; animation-delay:  7s; }
-.particle:nth-child(14) { left: 92%; animation-duration: 42s; animation-delay:  1s; }
-.particle:nth-child(15) { top: 97%; animation-duration: 47s; animation-delay:  0s; }
-
-/* ─── Page content fade-in ───────────────────────────────────────────────── */
-
-.iec-main > * {
-    animation: page-in 0.15s ease-out;
+.iec-feature-block:hover .feature-icon {
+    background: rgba(255,255,255,0.2);
 }
 
-@keyframes page-in {
-    from { opacity: 0; transform: translateY(4px); }
+.iec-feature-block .feature-label {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #1f2937;
+    transition: color 0.2s;
+}
+
+.iec-feature-block:hover .feature-label {
+    color: white;
+}
+
+/* ─── Badge/Status Pills ─────────────────────────────────────── */
+.iec-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.2rem 0.625rem;
+    border-radius: 9999px;
+    font-size: 0.6875rem;
+    font-weight: 600;
+}
+
+.iec-badge-pink    { background: rgba(233,30,140,0.1);  color: var(--iec-pink); }
+.iec-badge-navy    { background: rgba(13,27,42,0.08);   color: var(--iec-navy); }
+.iec-badge-green   { background: #d1fae5;  color: #065f46; }
+.iec-badge-amber   { background: #fef3c7;  color: #92400e; }
+.iec-badge-red     { background: #fee2e2;  color: #991b1b; }
+.iec-badge-blue    { background: #dbeafe;  color: #1d4ed8; }
+
+/* ─── Form Inputs ────────────────────────────────────────────── */
+.iec-input {
+    width: 100%;
+    padding: 0.625rem 0.875rem;
+    font-size: 0.875rem;
+    color: #111827;
+    background-color: white;
+    border: 1.5px solid #d1d5db;
+    border-radius: 0.375rem;
+    transition: border-color 0.15s, box-shadow 0.15s;
+    outline: none;
+}
+
+.iec-input:focus {
+    border-color: var(--iec-pink);
+    box-shadow: 0 0 0 3px rgba(233, 30, 140, 0.1);
+}
+
+.iec-input::placeholder { color: #9ca3af; }
+
+.iec-label {
+    display: block;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #374151;
+    margin-bottom: 0.375rem;
+}
+
+/* ─── Alert Boxes ────────────────────────────────────────────── */
+.iec-alert-success { background:#d1fae5; border-left:3px solid #10b981; color:#065f46; }
+.iec-alert-error   { background:#fee2e2; border-left:3px solid #ef4444; color:#991b1b; }
+.iec-alert-warning { background:#fef3c7; border-left:3px solid #f59e0b; color:#92400e; }
+.iec-alert-info    { background:#dbeafe; border-left:3px solid #3b82f6; color:#1e40af; }
+.iec-alert { padding:0.875rem 1rem; border-radius:0.5rem; font-size:0.875rem; }
+
+/* ─── Page Transitions ───────────────────────────────────────── */
+@keyframes iec-fade-up {
+    from { opacity: 0; transform: translateY(10px); }
     to   { opacity: 1; transform: translateY(0); }
 }
 
-/* ─── Slow-pulse (used on login orb) ────────────────────────────────────── */
-
-@keyframes slow-pulse {
-    0%, 100% { opacity: 0.3; transform: scale(1); }
-    50%       { opacity: 0.5; transform: scale(1.1); }
+@keyframes iec-fade-in {
+    from { opacity: 0; }
+    to   { opacity: 1; }
 }
 
-.animate-slow-pulse {
-    animation: slow-pulse 5s ease-in-out infinite;
+.iec-animate-up   { animation: iec-fade-up  0.45s ease-out; }
+.iec-animate-fade { animation: iec-fade-in  0.3s ease-out; }
+
+/* Stagger delay helpers */
+.iec-delay-1 { animation-delay: 0.1s; animation-fill-mode: both; }
+.iec-delay-2 { animation-delay: 0.2s; animation-fill-mode: both; }
+.iec-delay-3 { animation-delay: 0.3s; animation-fill-mode: both; }
+.iec-delay-4 { animation-delay: 0.4s; animation-fill-mode: both; }
+.iec-delay-5 { animation-delay: 0.5s; animation-fill-mode: both; }
+.iec-delay-6 { animation-delay: 0.6s; animation-fill-mode: both; }
+
+/* ─── Pink underline decoration ──────────────────────────────── */
+.iec-underline-pink {
+    position: relative;
+    display: inline-block;
+}
+.iec-underline-pink::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    bottom: -4px;
+    width: 100%;
+    height: 3px;
+    background-color: var(--iec-pink);
+    border-radius: 2px;
 }
 
-/* ─── Leaflet map popup styles ───────────────────────────────────────────── */
+/* ─── Browser autofill override (light theme) ────────────────── */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus {
+    -webkit-box-shadow: 0 0 0 1000px white inset !important;
+    -webkit-text-fill-color: #111827 !important;
+    caret-color: #111827;
+    transition: background-color 5000s ease-in-out 0s !important;
+    border-color: #d1d5db !important;
+}
 
+/* ─── Leaflet Map Popup Override ─────────────────────────────── */
 .leaflet-popup-content-wrapper {
     border-radius: 12px !important;
-    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.25) !important;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.18) !important;
     padding: 0 !important;
     overflow: hidden;
 }
@@ -289,16 +433,33 @@ input:-webkit-autofill:active {
     width: auto !important;
 }
 
-.leaflet-popup-tip-container {
-    margin-top: -1px;
+.leaflet-popup-tip-container { margin-top: -1px; }
+
+/* ─── Utility: pink text / bg ────────────────────────────────── */
+.text-iec-pink { color: var(--iec-pink); }
+.text-iec-navy { color: var(--iec-navy); }
+.bg-iec-pink   { background-color: var(--iec-pink); }
+.bg-iec-navy   { background-color: var(--iec-navy); }
+
+/* ─── Misc ───────────────────────────────────────────────────── */
+* { -webkit-tap-highlight-color: transparent; scroll-behavior: smooth; }
+
+a, button {
+    transition: color 0.15s, background-color 0.15s, border-color 0.15s,
+                opacity 0.15s, box-shadow 0.15s, transform 0.1s;
 }
 
+/* Login page particle (preserved for Auth/Login fallback) */
+@keyframes float-up {
+    0%   { transform: translateY(100vh); opacity: 0; }
+    5%   { opacity: 0.4; }
+    95%  { opacity: 0.2; }
+    100% { transform: translateY(-10vh); opacity: 0; }
+}
 
-
-/* Show a "working" cursor on the whole page the instant a link is clicked.
-   This fires synchronously before any JS executes, giving the absolute
-   earliest possible feedback with zero render cost. */
-/* html.nprogress-busy,
-html.nprogress-busy * {
-    cursor: wait !important;
-} */
+/* ─── Legacy admin dark-panel helpers (still used by admin pages) */
+.dark-panel {
+    background-color: rgba(30, 41, 59, 0.6);
+    border: 1px solid rgba(71, 85, 105, 0.4);
+    border-radius: 0.75rem;
+}
