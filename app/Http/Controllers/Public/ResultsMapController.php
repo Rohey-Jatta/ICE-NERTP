@@ -13,19 +13,40 @@ class ResultsMapController extends Controller
 {
     public function index(Request $request)
     {
-        $election = Election::where('status', 'active')->latest()->first()
-            ?? Election::whereIn('status', ['certifying', 'results_pending', 'certified'])
-                       ->latest()
-                       ->first();
+        // ── Resolve election (honours ?election=ID param) ─────────────────────
+        $selectedId = (int) $request->get('election', 0);
 
-        if (! $election) {
+        $availableElections = Election::where('allow_provisional_public_display', true)
+            ->whereIn('status', ['active', 'certifying', 'results_pending', 'certified'])
+            ->orderByDesc('start_date')
+            ->get(['id', 'name', 'type', 'status'])
+            ->map(fn($e) => [
+                'id'     => $e->id,
+                'name'   => $e->name,
+                'type'   => $e->type,
+                'status' => $e->status,
+            ]);
+
+        $election = null;
+        if ($selectedId && $availableElections->contains('id', $selectedId)) {
+            $election = Election::find($selectedId);
+        }
+        if (!$election) {
+            $election = Election::where('allow_provisional_public_display', true)
+                ->where('status', 'active')->latest()->first()
+                ?? Election::whereIn('status', ['certifying', 'results_pending', 'certified'])
+                    ->where('allow_provisional_public_display', true)->latest()->first();
+        }
+
+        if (!$election) {
             return Inertia::render('Public/ResultsMap', [
-                'stations' => [],
-                'election' => null,
+                'stations'           => [],
+                'election'           => null,
+                'elections'          => $availableElections,
+                'selectedElectionId' => null,
             ]);
         }
 
-        // Cache the heavy PostGIS json_agg query — was running uncached on every request
         $cacheKey = "results_map_{$election->id}";
         $stations = Cache::remember($cacheKey, 300, function () use ($election) {
             $stationsRaw = DB::select("
@@ -71,13 +92,14 @@ class ResultsMapController extends Controller
         });
 
         return Inertia::render('Public/ResultsMap', [
-            'stations' => $stations,
-            'election' => [
+            'stations'           => $stations,
+            'election'           => [
                 'id'   => $election->id,
                 'name' => $election->name,
-                'date' => $election->date,
                 'type' => $election->type,
             ],
+            'elections'          => $availableElections,
+            'selectedElectionId' => $election->id,
         ]);
     }
 }

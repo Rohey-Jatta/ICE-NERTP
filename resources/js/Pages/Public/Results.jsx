@@ -1,13 +1,35 @@
 import AppLayout from '@/Layouts/AppLayout';
-import { Link } from '@inertiajs/react';
+import { Link, router } from '@inertiajs/react';
 import useInertiaPrefetch from '@/Hooks/useInertiaPrefetch';
 
-// ── Reusable nav tabs ─────────────────────────────────────────────────────────
-function ResultsNav({ active = 'summary' }) {
+function ElectionSelector({ elections = [], selectedElectionId }) {
+    if (elections.length <= 1) return null;
+    return (
+        <div className="flex flex-wrap justify-center gap-2 mb-6">
+            <span className="text-gray-500 text-xs self-center mr-1">Election:</span>
+            {elections.map(e => (
+                <button
+                    key={e.id}
+                    onClick={() => router.get('/results', { election: e.id }, { preserveScroll: false })}
+                    className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-all ${
+                        selectedElectionId === e.id
+                            ? 'bg-pink-600 text-white shadow-lg'
+                            : 'bg-slate-800/40 text-gray-300 hover:bg-slate-700 border border-slate-700/50'
+                    }`}
+                >
+                    {e.name}
+                </button>
+            ))}
+        </div>
+    );
+}
+
+function ResultsNav({ active = 'summary', electionId }) {
+    const param = electionId ? `?election=${electionId}` : '';
     const tabs = [
-        { key: 'summary',  label: 'Summary',  href: '/results' },
-        { key: 'map',      label: 'Map',       href: '/results/map' },
-        { key: 'stations', label: 'Stations',  href: '/results/stations' },
+        { key: 'summary',  label: 'Summary',  href: `/results${param}` },
+        { key: 'map',      label: 'Map',       href: `/results/map${param}` },
+        { key: 'stations', label: 'Stations',  href: `/results/stations${param}` },
     ];
     return (
         <div className="flex justify-center gap-3 flex-wrap">
@@ -29,15 +51,12 @@ function ResultsNav({ active = 'summary' }) {
     );
 }
 
-// ── Hero Banner ───────────────────────────────────────────────────────────────
 function HeroBanner() {
     return (
-        <div className="py-12 text-center">
+        <div className="py-8 text-center">
             <div className="container mx-auto px-4">
-                <h2 className="text-3xl font-bold text-white mb-2">
-                    Election Results
-                </h2>
-                <p className="text-gray-400">
+                <h2 className="text-2xl font-bold text-white mb-1">Election Results</h2>
+                <p className="text-gray-400 text-sm">
                     Independent Electoral Commission of The Gambia — Official Results Portal
                 </p>
             </div>
@@ -45,21 +64,21 @@ function HeroBanner() {
     );
 }
 
-// ── Main export ───────────────────────────────────────────────────────────────
-export default function Results({ election, stats, candidates, message }) {
+export default function Results({ election, elections = [], selectedElectionId, stats, candidates, message }) {
     useInertiaPrefetch(['/results/map', '/results/stations']);
 
-    // ── No election configured ────────────────────────────────────────────────
     if (!election) {
         return (
             <AppLayout>
                 <HeroBanner />
                 <div className="container mx-auto px-4 pb-16">
+                    <ElectionSelector elections={elections} selectedElectionId={selectedElectionId} />
                     <div className="max-w-2xl mx-auto text-center p-10 bg-slate-800/40 rounded-xl border border-pink-700/50">
                         <div className="text-5xl mb-4">🗳️</div>
                         <h3 className="text-2xl font-bold text-white mb-3">No Active Election</h3>
                         <p className="text-gray-400">
-                            There is no active election at this time. Results will appear here once an election has been configured and certified by the IEC.
+                            There is no active election at this time. Results will appear here once an election
+                            has been configured and certified by the IEC.
                         </p>
                     </div>
                 </div>
@@ -67,29 +86,26 @@ export default function Results({ election, stats, candidates, message }) {
         );
     }
 
-    // ── Election exists but results not yet certified/published ───────────────
     if (!stats || !candidates || candidates.length === 0) {
         return (
             <AppLayout>
-                {/* Slim election banner */}
                 <div className="bg-slate-800/50 border-b border-slate-700/50 py-6">
                     <div className="container mx-auto px-4 text-center">
-                        <h1 className="text-3xl font-bold text-white mb-2">{election.name}</h1>
-                        <ResultsNav active="summary" />
+                        <h1 className="text-3xl font-bold text-white mb-3">{election.name}</h1>
+                        <ElectionSelector elections={elections} selectedElectionId={selectedElectionId} />
+                        <ResultsNav active="summary" electionId={selectedElectionId} />
                     </div>
                 </div>
-
                 <HeroBanner />
-
                 <div className="container mx-auto px-4 pb-16">
                     <div className="max-w-2xl mx-auto text-center p-10 bg-slate-800/40 rounded-xl border border-amber-500/20">
                         <div className="text-5xl mb-4">⏳</div>
                         <h3 className="text-2xl font-bold text-white mb-3">Results Pending Publication</h3>
                         <p className="text-gray-400 leading-relaxed">
-                            {message || 'Election results are currently being certified through the IEC approval pipeline. Official results will be published here once all certifications are complete.'}
+                            {message || 'Election results are currently being certified through the IEC approval pipeline.'}
                         </p>
                         <div className="mt-6 flex justify-center gap-4">
-                            <Link href="/results/stations" prefetch
+                            <Link href={`/results/stations${selectedElectionId ? `?election=${selectedElectionId}` : ''}`} prefetch
                                   className="px-5 py-2.5 bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-semibold text-sm transition-colors">
                                 View Station Status →
                             </Link>
@@ -100,7 +116,6 @@ export default function Results({ election, stats, candidates, message }) {
         );
     }
 
-    // ── Full results view ─────────────────────────────────────────────────────
     const turnout = stats?.total_registered > 0
         ? ((stats.total_cast / stats.total_registered) * 100).toFixed(1)
         : 0;
@@ -109,18 +124,17 @@ export default function Results({ election, stats, candidates, message }) {
 
     return (
         <AppLayout>
-            {/* Election header */}
             <div className="bg-slate-800/50 border-b border-slate-700/50 py-6">
                 <div className="container mx-auto px-4 text-center">
-                    <h1 className="text-3xl font-bold text-white mb-4">{election.name}</h1>
-                    <ResultsNav active="summary" />
+                    <h1 className="text-3xl font-bold text-white mb-3">{election.name}</h1>
+                    <ElectionSelector elections={elections} selectedElectionId={selectedElectionId} />
+                    <ResultsNav active="summary" electionId={selectedElectionId} />
                 </div>
             </div>
 
             <div className="container mx-auto px-4 py-8">
                 <div className="max-w-7xl mx-auto">
 
-                    {/* Stats row */}
                     <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
                         {[
                             { label: 'Registered Voters', value: parseInt(stats?.total_registered || 0).toLocaleString(), color: 'text-white' },
@@ -136,7 +150,6 @@ export default function Results({ election, stats, candidates, message }) {
                         ))}
                     </div>
 
-                    {/* Reporting progress */}
                     <div className="bg-slate-800/60 rounded-xl p-6 border border-slate-700/50 mb-8">
                         <div className="flex justify-between items-center mb-3">
                             <div>
@@ -166,7 +179,6 @@ export default function Results({ election, stats, candidates, message }) {
                         </div>
                     </div>
 
-                    {/* Candidate results */}
                     <div className="bg-slate-800/60 rounded-xl p-8 border border-slate-700/50">
                         <h2 className="text-2xl font-bold text-white mb-6">Candidate Results</h2>
                         <div className="space-y-4">
@@ -217,13 +229,12 @@ export default function Results({ election, stats, candidates, message }) {
                         </div>
                     </div>
 
-                    {/* Quick links */}
                     <div className="mt-6 flex flex-wrap gap-3 justify-center">
-                        <Link href="/results/map" prefetch
+                        <Link href={`/results/map${selectedElectionId ? `?election=${selectedElectionId}` : ''}`} prefetch
                               className="px-5 py-2.5 bg-slate-800/60 hover:bg-slate-700 border border-slate-700/50 text-gray-300 hover:text-white rounded-lg font-semibold text-sm transition-colors">
                             🗺 View Map
                         </Link>
-                        <Link href="/results/stations" prefetch
+                        <Link href={`/results/stations${selectedElectionId ? `?election=${selectedElectionId}` : ''}`} prefetch
                               className="px-5 py-2.5 bg-slate-800/60 hover:bg-slate-700 border border-slate-700/50 text-gray-300 hover:text-white rounded-lg font-semibold text-sm transition-colors">
                             📋 View All Stations
                         </Link>

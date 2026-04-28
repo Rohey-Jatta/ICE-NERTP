@@ -21,7 +21,6 @@ export default function ResultSubmit({ auth, station, election, candidates = [],
     const [totalsError, setTotalsError]       = useState(null);
     const [candidateError, setCandidateError] = useState(null);
 
-    // Live validation
     useEffect(() => {
         const total = parseInt(data.total_votes_cast) || 0;
         const valid = parseInt(data.valid_votes) || 0;
@@ -54,15 +53,20 @@ export default function ResultSubmit({ auth, station, election, candidates = [],
         reader.readAsDataURL(file);
     };
 
+    /**
+     * BUG FIX: Removed `window.axios.defaults.headers...` from here.
+     *
+     * The previous code crashed with:
+     *   "Cannot read properties of undefined (reading 'defaults')"
+     * because window.axios was never defined (bootstrap.js wasn't imported
+     * in app.jsx). The fix is two-part:
+     *   1. Import bootstrap.js in app.jsx (done above).
+     *   2. Remove this axios manipulation entirely — Inertia's useForm post()
+     *      sends the X-XSRF-TOKEN cookie automatically, so there is no need
+     *      to manually refresh the CSRF token header before every submission.
+     */
     const handleSubmit = (e) => {
         e.preventDefault();
-
-        // Refresh CSRF token before submitting to prevent 419
-        const csrfMeta = document.head.querySelector('meta[name="csrf-token"]');
-        if (csrfMeta) {
-            window.axios.defaults.headers.common['X-CSRF-TOKEN'] = csrfMeta.content;
-        }
-
         post('/officer/results/submit', { preserveScroll: true });
     };
 
@@ -105,7 +109,6 @@ export default function ResultSubmit({ auth, station, election, candidates = [],
         <AppLayout user={auth?.user}>
             <div className="container mx-auto px-4 py-8 max-w-3xl">
 
-                {/* Back nav */}
                 <div className="mb-6">
                     <Link href="/officer/dashboard" className="text-gray-400 hover:text-white text-sm inline-flex items-center gap-1 mb-3">
                         ← Officer Dashboard
@@ -122,7 +125,6 @@ export default function ResultSubmit({ auth, station, election, candidates = [],
                     )}
                 </div>
 
-                {/* Rejection reason banner */}
                 {isResubmission && editableResult?.last_rejection_reason && (
                     <div className="mb-6 p-4 bg-red-500/10 border border-red-500/40 rounded-xl">
                         <div className="text-red-300 font-semibold text-sm mb-1">
@@ -133,7 +135,6 @@ export default function ResultSubmit({ auth, station, election, candidates = [],
                     </div>
                 )}
 
-                {/* No election warning */}
                 {!election && (
                     <div className="mb-6 p-4 bg-amber-500/10 border border-amber-500/40 rounded-xl">
                         <p className="text-amber-300 text-sm">⚠ No active election found. Contact the administrator.</p>
@@ -142,7 +143,6 @@ export default function ResultSubmit({ auth, station, election, candidates = [],
 
                 <form onSubmit={handleSubmit} className="space-y-6">
 
-                    {/* Vote Totals */}
                     <div className="bg-slate-800/40 rounded-xl p-6 border border-slate-700/50">
                         <h2 className="text-white font-bold text-lg mb-1">Vote Totals</h2>
                         <p className="text-gray-500 text-xs mb-4">Valid + Rejected must equal Total Votes Cast</p>
@@ -195,14 +195,12 @@ export default function ResultSubmit({ auth, station, election, candidates = [],
                             </div>
                         </div>
 
-                        {/* Live validation error */}
                         {totalsError && (
                             <div className="mt-3 p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-red-300 text-xs">
                                 ⚠ {totalsError}
                             </div>
                         )}
 
-                        {/* Live turnout indicator */}
                         {data.total_votes_cast && data.registered_voters && !totalsError && (
                             <div className="mt-3 p-3 bg-slate-900/50 rounded-lg">
                                 <div className="flex justify-between text-xs text-gray-400 mb-1">
@@ -217,7 +215,6 @@ export default function ResultSubmit({ auth, station, election, candidates = [],
                         )}
                     </div>
 
-                    {/* Candidate Votes */}
                     {candidates.length > 0 && (
                         <div className="bg-slate-800/40 rounded-xl p-6 border border-slate-700/50">
                             <div className="flex justify-between items-start mb-1">
@@ -243,7 +240,6 @@ export default function ResultSubmit({ auth, station, election, candidates = [],
                                             <div className="text-white font-semibold text-sm">{candidate.name}</div>
                                             <div className="text-gray-500 text-xs">{candidate.party_name}</div>
                                         </div>
-                                        {/* Mini bar */}
                                         {data.valid_votes && data.candidate_votes[candidate.id] && (
                                             <div className="w-20 bg-slate-700 rounded-full h-1.5 flex-shrink-0">
                                                 <div className="h-1.5 rounded-full transition-all"
@@ -282,7 +278,6 @@ export default function ResultSubmit({ auth, station, election, candidates = [],
                         </div>
                     )}
 
-                    {/* Photo Upload */}
                     <div className="bg-slate-800/40 rounded-xl p-6 border border-slate-700/50">
                         <h2 className="text-white font-bold text-lg mb-1">Result Sheet Photo</h2>
                         <p className="text-gray-500 text-xs mb-4">
@@ -318,7 +313,6 @@ export default function ResultSubmit({ auth, station, election, candidates = [],
                         {errors.photo && <p className="text-red-400 text-xs mt-1">{errors.photo}</p>}
                     </div>
 
-                    {/* Submit */}
                     <div className="flex gap-4">
                         <button type="submit" disabled={!canSubmit}
                             className="flex-1 py-4 bg-blue-600 hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold rounded-xl text-lg transition-colors">
