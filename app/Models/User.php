@@ -28,14 +28,11 @@ class User extends Authenticatable
         'two_factor_secret',
     ];
 
-    protected function casts(): array
-    {
-        return [
-            'email_verified_at' => 'datetime',
-            'password' => 'hashed',
-            'two_factor_enabled' => 'boolean',
-        ];
-    }
+    protected $casts = [
+        'email_verified_at' => 'datetime',
+        'password' => 'hashed',
+        'two_factor_enabled' => 'boolean',
+    ];
 
     // Relationships
 
