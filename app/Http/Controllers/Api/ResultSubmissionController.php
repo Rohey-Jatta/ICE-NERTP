@@ -129,13 +129,14 @@ class ResultSubmissionController extends Controller
                 'submitted_longitude' => $validated['submitted_longitude'],
                 'gps_accuracy_meters' => $validated['gps_accuracy_meters'],
                 'gps_validated' => true, // Set by GPS middleware
-                'certification_status' => Result::STATUS_SUBMITTED,
                 'submitted_by' => $request->user()->id,
                 'submitted_at' => now(),
                 'submitted_offline' => $request->boolean('was_offline', false),
                 'offline_queued_at' => $request->input('queued_at'),
                 'version' => 1,
             ]);
+
+            $result->forceFill(['certification_status' => Result::STATUS_SUBMITTED])->save();
 
             // Create candidate votes
             foreach ($validated['candidate_votes'] as $cv) {

@@ -29,10 +29,9 @@ class Result extends Model
         'total_registered_voters', 'total_votes_cast', 'valid_votes',
         'rejected_votes', 'disputed_votes', 'result_sheet_photo_path',
         'result_sheet_photo_hash', 'submitted_latitude', 'submitted_longitude',
-        'gps_accuracy_meters', 'gps_validated', 'certification_status',
-        'rejection_count', 'last_rejection_reason', 'last_rejected_by',
-        'last_rejected_at', 'submitted_offline', 'offline_queued_at',
-        'submitted_by', 'submitted_at', 'version', 'nationally_certified_at',
+        'gps_accuracy_meters', 'gps_validated',
+        'submitted_offline', 'offline_queued_at',
+        'submitted_by', 'submitted_at', 'version',
     ];
 
     protected $casts = [
