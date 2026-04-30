@@ -81,20 +81,22 @@ class ResultsSummaryController extends Controller
             $publicStatuses = ['nationally_certified'];
         }
 
-        $stats = DB::selectOne("
-            SELECT
+        $stats = DB::table('polling_stations as ps')
+            ->selectRaw('
                 COUNT(DISTINCT ps.id) as total_stations,
                 COALESCE(SUM(ps.registered_voters), 0) as total_registered,
                 COUNT(DISTINCT r.id) as stations_reported,
                 COALESCE(SUM(r.total_votes_cast), 0) as total_cast,
                 COALESCE(SUM(r.valid_votes), 0) as valid_votes,
                 COALESCE(SUM(r.rejected_votes), 0) as rejected_votes
-            FROM polling_stations ps
-            LEFT JOIN results r ON ps.id = r.polling_station_id
-                AND r.election_id = ?
-                AND r.certification_status = ANY(?)
-            WHERE ps.election_id = ?
-        ", [$election->id, '{' . implode(',', $publicStatuses) . '}', $election->id]);
+            ')
+            ->leftJoin('results as r', function ($join) use ($election, $publicStatuses) {
+                $join->on('ps.id', '=', 'r.polling_station_id')
+                     ->where('r.election_id', $election->id)
+                     ->whereIn('r.certification_status', $publicStatuses);
+            })
+            ->where('ps.election_id', $election->id)
+            ->first();
 
         if (!$stats || $stats->stations_reported == 0) {
             return [
@@ -109,22 +111,24 @@ class ResultsSummaryController extends Controller
             ];
         }
 
-        $candidates = DB::select("
-            SELECT
+        $candidates = DB::table('candidates as c')
+            ->selectRaw("
                 c.id, c.name,
-                COALESCE(pp.name, 'Independent')   as party_name,
-                COALESCE(pp.abbreviation, 'IND')   as party_abbr,
-                COALESCE(pp.color, '#6b7280')       as party_color,
-                COALESCE(SUM(rcv.votes), 0)         as total_votes
-            FROM candidates c
-            LEFT JOIN political_parties pp ON c.political_party_id = pp.id
-            LEFT JOIN result_candidate_votes rcv ON c.id = rcv.candidate_id
-            LEFT JOIN results r ON rcv.result_id = r.id
-                AND r.certification_status = ANY(?)
-            WHERE c.election_id = ?
-            GROUP BY c.id, c.name, pp.name, pp.abbreviation, pp.color
-            ORDER BY total_votes DESC
-        ", ['{' . implode(',', $publicStatuses) . '}', $election->id]);
+                COALESCE(pp.name, 'Independent')  as party_name,
+                COALESCE(pp.abbreviation, 'IND')  as party_abbr,
+                COALESCE(pp.color, '#6b7280')      as party_color,
+                COALESCE(SUM(rcv.votes), 0)        as total_votes
+            ")
+            ->leftJoin('political_parties as pp', 'c.political_party_id', '=', 'pp.id')
+            ->leftJoin('result_candidate_votes as rcv', 'c.id', '=', 'rcv.candidate_id')
+            ->leftJoin('results as r', function ($join) use ($publicStatuses) {
+                $join->on('rcv.result_id', '=', 'r.id')
+                     ->whereIn('r.certification_status', $publicStatuses);
+            })
+            ->where('c.election_id', $election->id)
+            ->groupBy('c.id', 'c.name', 'pp.name', 'pp.abbreviation', 'pp.color')
+            ->orderByDesc('total_votes')
+            ->get();
 
         return [
             'election' => [

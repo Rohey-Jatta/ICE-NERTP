@@ -35,10 +35,12 @@ return new class extends Migration
             $table->index('is_active');
         });
 
-        // PostGIS geometry column + spatial index
-        DB::statement('ALTER TABLE polling_stations ADD COLUMN location GEOMETRY(Point, 4326)');
-        DB::statement('UPDATE polling_stations SET location = ST_SetSRID(ST_MakePoint(longitude, latitude), 4326)');
-        DB::statement('CREATE INDEX polling_stations_location_idx ON polling_stations USING GIST (location)');
+        // PostGIS geometry column + spatial index (PostgreSQL only)
+        if (DB::getDriverName() === 'pgsql') {
+            DB::statement('ALTER TABLE polling_stations ADD COLUMN location GEOMETRY(Point, 4326)');
+            DB::statement('UPDATE polling_stations SET location = ST_SetSRID(ST_MakePoint(longitude, latitude), 4326)');
+            DB::statement('CREATE INDEX polling_stations_location_idx ON polling_stations USING GIST (location)');
+        }
     }
 
     public function down(): void
