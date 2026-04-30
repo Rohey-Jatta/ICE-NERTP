@@ -12,12 +12,8 @@ class PartyRepresentative extends Model
         'user_id',
         'political_party_id',
         'election_id',
-        'representative_id',
         'designation',
         'accreditation_number',
-        'full_name',
-        'phone',
-        'email',
         'is_active',
     ];
 
