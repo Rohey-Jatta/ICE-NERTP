@@ -49,7 +49,7 @@ class ProcessResultSubmission implements ShouldQueue
                 ? Result::STATUS_PENDING_PARTY_ACCEPTANCE
                 : Result::STATUS_PENDING_WARD;
 
-            $result->update(['certification_status' => $nextStatus]);
+            $result->forceFill(['certification_status' => $nextStatus])->save();
 
             AuditLog::record(
                 action: 'result.processing.completed',
