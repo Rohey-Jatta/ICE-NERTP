@@ -143,78 +143,6 @@ export default function ResultSubmit({ auth, station, election, candidates = [],
 
                 <form onSubmit={handleSubmit} className="space-y-6">
 
-                    <div className="bg-slate-800/40 rounded-xl p-6 border border-slate-700/50">
-                        <h2 className="text-white font-bold text-lg mb-1">Vote Totals</h2>
-                        <p className="text-gray-500 text-xs mb-4">Valid + Rejected must equal Total Votes Cast</p>
-
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="col-span-2 sm:col-span-1">
-                                <label className="block text-gray-300 text-sm font-semibold mb-2">
-                                    Registered Voters <span className="text-red-400">*</span>
-                                </label>
-                                <input type="number" min="1"
-                                    value={data.registered_voters}
-                                    onChange={(e) => setData('registered_voters', e.target.value)}
-                                    className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white font-mono focus:outline-none focus:border-blue-500"
-                                    placeholder="0" required />
-                                {errors.registered_voters && <p className="text-red-400 text-xs mt-1">{errors.registered_voters}</p>}
-                            </div>
-
-                            <div className="col-span-2 sm:col-span-1">
-                                <label className="block text-gray-300 text-sm font-semibold mb-2">
-                                    Total Votes Cast <span className="text-red-400">*</span>
-                                </label>
-                                <input type="number" min="0"
-                                    value={data.total_votes_cast}
-                                    onChange={(e) => setData('total_votes_cast', e.target.value)}
-                                    className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white font-mono focus:outline-none focus:border-blue-500"
-                                    placeholder="0" required />
-                                {errors.total_votes_cast && <p className="text-red-400 text-xs mt-1">{errors.total_votes_cast}</p>}
-                            </div>
-
-                            <div>
-                                <label className="block text-gray-300 text-sm font-semibold mb-2">
-                                    Valid Votes <span className="text-red-400">*</span>
-                                </label>
-                                <input type="number" min="0"
-                                    value={data.valid_votes}
-                                    onChange={(e) => setData('valid_votes', e.target.value)}
-                                    className="w-full px-4 py-3 bg-slate-900/50 border border-teal-600/50 rounded-lg text-teal-300 font-mono focus:outline-none focus:border-teal-500"
-                                    placeholder="0" required />
-                            </div>
-
-                            <div>
-                                <label className="block text-gray-300 text-sm font-semibold mb-2">
-                                    Rejected Ballots <span className="text-red-400">*</span>
-                                </label>
-                                <input type="number" min="0"
-                                    value={data.rejected_votes}
-                                    onChange={(e) => setData('rejected_votes', e.target.value)}
-                                    className="w-full px-4 py-3 bg-slate-900/50 border border-red-600/30 rounded-lg text-red-300 font-mono focus:outline-none focus:border-red-500"
-                                    placeholder="0" required />
-                            </div>
-                        </div>
-
-                        {totalsError && (
-                            <div className="mt-3 p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-red-300 text-xs">
-                                ⚠ {totalsError}
-                            </div>
-                        )}
-
-                        {data.total_votes_cast && data.registered_voters && !totalsError && (
-                            <div className="mt-3 p-3 bg-slate-900/50 rounded-lg">
-                                <div className="flex justify-between text-xs text-gray-400 mb-1">
-                                    <span>Voter Turnout</span>
-                                    <span className="font-bold text-white">{turnout}%</span>
-                                </div>
-                                <div className="w-full bg-slate-700 rounded-full h-2">
-                                    <div className="bg-gradient-to-r from-blue-600 to-teal-500 h-2 rounded-full transition-all"
-                                        style={{ width: `${Math.min(turnout, 100)}%` }} />
-                                </div>
-                            </div>
-                        )}
-                    </div>
-
                     {candidates.length > 0 && (
                         <div className="bg-slate-800/40 rounded-xl p-6 border border-slate-700/50">
                             <div className="flex justify-between items-start mb-1">
@@ -311,6 +239,78 @@ export default function ResultSubmit({ auth, station, election, candidates = [],
                             <input type="file" accept="image/*" onChange={handlePhotoChange} className="hidden" />
                         </label>
                         {errors.photo && <p className="text-red-400 text-xs mt-1">{errors.photo}</p>}
+                    </div>
+
+                    <div className="bg-slate-800/40 rounded-xl p-6 border border-slate-700/50">
+                        <h2 className="text-white font-bold text-lg mb-1">Vote Totals</h2>
+                        <p className="text-gray-500 text-xs mb-4">Valid + Rejected must equal Total Votes Cast</p>
+
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="col-span-2 sm:col-span-1">
+                                <label className="block text-gray-300 text-sm font-semibold mb-2">
+                                    Registered Voters <span className="text-red-400">*</span>
+                                </label>
+                                <input type="number" min="1"
+                                    value={data.registered_voters}
+                                    onChange={(e) => setData('registered_voters', e.target.value)}
+                                    className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white font-mono focus:outline-none focus:border-blue-500"
+                                    placeholder="0" required />
+                                {errors.registered_voters && <p className="text-red-400 text-xs mt-1">{errors.registered_voters}</p>}
+                            </div>
+
+                            <div className="col-span-2 sm:col-span-1">
+                                <label className="block text-gray-300 text-sm font-semibold mb-2">
+                                    Calculated total votes <span className="text-red-400">*</span>
+                                </label>
+                                <input type="number" min="0"
+                                    value={data.total_votes_cast}
+                                    onChange={(e) => setData('total_votes_cast', e.target.value)}
+                                    className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white font-mono focus:outline-none focus:border-blue-500"
+                                    placeholder="0" required />
+                                {errors.total_votes_cast && <p className="text-red-400 text-xs mt-1">{errors.total_votes_cast}</p>}
+                            </div>
+
+                            <div>
+                                <label className="block text-gray-300 text-sm font-semibold mb-2">
+                                    Valid Votes <span className="text-red-400">*</span>
+                                </label>
+                                <input type="number" min="0"
+                                    value={data.valid_votes}
+                                    onChange={(e) => setData('valid_votes', e.target.value)}
+                                    className="w-full px-4 py-3 bg-slate-900/50 border border-teal-600/50 rounded-lg text-teal-300 font-mono focus:outline-none focus:border-teal-500"
+                                    placeholder="0" required />
+                            </div>
+
+                            <div>
+                                <label className="block text-gray-300 text-sm font-semibold mb-2">
+                                    Invalid Votes <span className="text-red-400">*</span>
+                                </label>
+                                <input type="number" min="0"
+                                    value={data.rejected_votes}
+                                    onChange={(e) => setData('rejected_votes', e.target.value)}
+                                    className="w-full px-4 py-3 bg-slate-900/50 border border-red-600/30 rounded-lg text-red-300 font-mono focus:outline-none focus:border-red-500"
+                                    placeholder="0" required />
+                            </div>
+                        </div>
+
+                        {totalsError && (
+                            <div className="mt-3 p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-red-300 text-xs">
+                                ⚠ {totalsError}
+                            </div>
+                        )}
+
+                        {data.total_votes_cast && data.registered_voters && !totalsError && (
+                            <div className="mt-3 p-3 bg-slate-900/50 rounded-lg">
+                                <div className="flex justify-between text-xs text-gray-400 mb-1">
+                                    <span>Voter Turnout</span>
+                                    <span className="font-bold text-white">{turnout}%</span>
+                                </div>
+                                <div className="w-full bg-slate-700 rounded-full h-2">
+                                    <div className="bg-gradient-to-r from-blue-600 to-teal-500 h-2 rounded-full transition-all"
+                                        style={{ width: `${Math.min(turnout, 100)}%` }} />
+                                </div>
+                            </div>
+                        )}
                     </div>
 
                     <div className="flex gap-4">
