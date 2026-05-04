@@ -67,7 +67,7 @@ class CertificationWorkflowService
 
             // Transition to certified status for this level
             $certifiedStatus = self::CERTIFIED_LEVELS[$level];
-            $result->update(['certification_status' => $certifiedStatus]);
+            $result->forceFill(['certification_status' => $certifiedStatus])->save();
 
             // Auto-promote to next pending level
             $this->promoteToNextLevel($result);
@@ -210,7 +210,7 @@ class CertificationWorkflowService
         };
 
         if ($next) {
-            $result->update(['certification_status' => $next]);
+            $result->forceFill(['certification_status' => $next])->save();
         }
     }
 

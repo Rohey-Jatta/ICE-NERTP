@@ -47,30 +47,40 @@ class AcceptanceController extends Controller
             ], 403);
         }
 
-        $existing = PartyAcceptance::where('result_id', $result->id)
-            ->where('political_party_id', $partyRep->political_party_id)
-            ->first();
+        try {
+            $acceptance = DB::transaction(function () use ($result, $partyRep, $validated) {
+                $existing = PartyAcceptance::where('result_id', $result->id)
+                    ->where('political_party_id', $partyRep->political_party_id)
+                    ->lockForUpdate()
+                    ->first();
 
-        if ($existing && $existing->is_final) {
-            return response()->json([
-                'message' => 'Your party has already submitted a final decision for this result.',
-            ], 422);
+                if ($existing && $existing->is_final) {
+                    throw new \RuntimeException('FINAL_DECISION_EXISTS');
+                }
+
+                return PartyAcceptance::updateOrCreate(
+                    [
+                        'result_id'          => $result->id,
+                        'political_party_id' => $partyRep->political_party_id,
+                    ],
+                    [
+                        'party_representative_id' => $partyRep->id,
+                        'election_id'             => $result->election_id,
+                        'status'                  => $validated['status'],
+                        'comments'                => $validated['comments'],
+                        'decided_at'              => now(),
+                        'is_final'                => true,
+                    ]
+                );
+            });
+        } catch (\RuntimeException $e) {
+            if ($e->getMessage() === 'FINAL_DECISION_EXISTS') {
+                return response()->json([
+                    'message' => 'Your party has already submitted a final decision for this result.',
+                ], 422);
+            }
+            throw $e;
         }
-
-        $acceptance = PartyAcceptance::updateOrCreate(
-            [
-                'result_id'          => $result->id,
-                'political_party_id' => $partyRep->political_party_id,
-            ],
-            [
-                'party_representative_id' => $partyRep->id,
-                'election_id'             => $result->election_id,
-                'status'                  => $validated['status'],
-                'comments'                => $validated['comments'],
-                'decided_at'              => now(),
-                'is_final'                => true,
-            ]
-        );
 
         AuditLog::record(
             action:    'party_acceptance.submitted',
@@ -135,7 +145,7 @@ class AcceptanceController extends Controller
         // No party reps for this station — advance immediately
         if ($totalAssignedParties === 0) {
             if ($result->certification_status === Result::STATUS_PENDING_PARTY_ACCEPTANCE) {
-                $result->update(['certification_status' => Result::STATUS_PENDING_WARD]);
+                $result->forceFill(['certification_status' => Result::STATUS_PENDING_WARD])->save();
             }
             return;
         }
@@ -148,7 +158,7 @@ class AcceptanceController extends Controller
 
         if ($respondedParties >= $totalAssignedParties) {
             if ($result->certification_status === Result::STATUS_PENDING_PARTY_ACCEPTANCE) {
-                $result->update(['certification_status' => Result::STATUS_PENDING_WARD]);
+                $result->forceFill(['certification_status' => Result::STATUS_PENDING_WARD])->save();
             }
         }
     }

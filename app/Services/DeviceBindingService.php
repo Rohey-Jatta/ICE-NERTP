@@ -11,7 +11,7 @@ use Illuminate\Support\Facades\Cache;
 class DeviceBindingService
 {
     const DEVICE_COOKIE_NAME = 'iec_device_id';
-    const DEVICE_COOKIE_TTL = 365;
+    const DEVICE_COOKIE_TTL = 30;
     const PENDING_DEVICE_KEY = 'iec_pending_device_';
 
     public function checkDevice(User $user, Request $request): string
