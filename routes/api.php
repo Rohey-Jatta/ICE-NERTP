@@ -21,7 +21,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
         // Submit result - requires GPS validation middleware
         Route::post('/submit', [ResultSubmissionController::class, 'submit'])
             ->name('submit')
-            ->middleware(['role:polling-officer', 'gps.validate']);
+            ->middleware(['role:polling-officer', 'gps.validate', 'throttle:10,1']);
         
         // Get officer's submitted results
         Route::get('/my-submissions', [ResultSubmissionController::class, 'mySubmissions'])
@@ -37,7 +37,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
         // Submit acceptance decision
         Route::post('/', [AcceptanceController::class, 'submit'])
             ->name('submit')
-            ->middleware(['role:party-representative']);
+            ->middleware(['role:party-representative', 'throttle:30,1']);
         
         // Get pending acceptances for party rep
         Route::get('/pending', [AcceptanceController::class, 'pending'])
@@ -49,7 +49,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
 // -------------------------------------------------------------------------
 // Public Results API (NO authentication required)
 // -------------------------------------------------------------------------
-Route::prefix('public/results')->name('public.results.')->group(function () {
+Route::prefix('public/results')->name('public.results.')->middleware('throttle:60,1')->group(function () {
     
     Route::get('/elections', [\App\Http\Controllers\Api\PublicResultsController::class, 'elections'])
         ->name('elections');
@@ -79,10 +79,12 @@ Route::middleware(['auth:sanctum'])->prefix('approval')->name('approval.')->grou
         ->name('index');
     
     Route::post('/approve', [\App\Http\Controllers\ApprovalController::class, 'approve'])
-        ->name('approve');
-    
+        ->name('approve')
+        ->middleware('throttle:30,1');
+
     Route::post('/reject', [\App\Http\Controllers\ApprovalController::class, 'reject'])
-        ->name('reject');
+        ->name('reject')
+        ->middleware('throttle:30,1');
     
     Route::get('/{result}', [\App\Http\Controllers\ApprovalController::class, 'show'])
         ->name('show');

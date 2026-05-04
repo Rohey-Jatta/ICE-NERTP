@@ -25,8 +25,11 @@ class TwoFactorAuthService
         $cacheKey = "2fa_code_{$user->id}";
         Cache::put($cacheKey, $code, now()->addMinutes(10));
 
-        // Always log the code so it's accessible during development/testing
-        Log::info("[2FA] Code generated for {$user->email}: {$code}");
+        if (app()->environment('local')) {
+            Log::debug("[2FA] Code generated for {$user->email}: {$code}");
+        } else {
+            Log::info("[2FA] Code generated for user_id={$user->id}");
+        }
 
         return $code;
     }
