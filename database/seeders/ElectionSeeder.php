@@ -11,7 +11,7 @@ class ElectionSeeder extends Seeder
 {
     public function run()
     {
-       
+
     // Ensure role exists FIRST
     $role = \Spatie\Permission\Models\Role::firstOrCreate([
         'name' => 'iec-administrator'
@@ -33,7 +33,7 @@ class ElectionSeeder extends Seeder
         [
             'name'        => 'System Administrator',
             'password'    => Hash::make('password123'),
-            'phone'       => '+2203329739',
+            'phone'       => '+2205872319',
             'employee_id' => 'IEC-ADMIN-002',
             'status'      => 'active',
         ]
@@ -43,13 +43,14 @@ class ElectionSeeder extends Seeder
     $admin->syncRoles([$role->name]);
     $visibleAdmin->syncRoles([$role->name]);
 
-
-        Election::factory()->create([
+    Election::firstOrCreate(
+        ['slug' => 'gambia-2021-presidential'],
+        [
             'name' => '2021 Gambian Presidential Election',
-            'slug' => 'gambia-2021-presidential',
             'status' => 'active',
             'created_by' => $admin->id,
-        ]);
+        ]
+    );
     }
 }
 

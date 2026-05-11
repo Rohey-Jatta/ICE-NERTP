@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Models\Election;
 use App\Models\User;
 use App\Models\ElectionMonitor;
 use App\Models\AdministrativeHierarchy;
@@ -13,6 +14,10 @@ class UserSeeder extends Seeder
 {
     public function run()
     {
+        $electionId = Election::where('slug', 'gambia-2021-presidential')->value('id');
+        if (!$electionId) {
+            throw new \RuntimeException('Election gambia-2021-presidential must exist before running UserSeeder.');
+        }
         // Use the canonical role names (hyphenated) used across the app
         Role::firstOrCreate(['name' => 'iec-chairman']);
         Role::firstOrCreate(['name' => 'iec-administrator']);
@@ -38,7 +43,7 @@ class UserSeeder extends Seeder
                 $u = User::factory()->create(['name' => $ward->name . ' Monitor', 'email' => 'monitor.' . ($created + 1) . '@iec.local']);
                 $u->assignRole('election-monitor');
                 $monitor = ElectionMonitor::create([
-                    'election_id' => 1,
+                    'election_id' => $electionId,
                     'user_id' => $u->id,
                     'type' => 'domestic',
                     'is_active' => true,
@@ -58,7 +63,7 @@ class UserSeeder extends Seeder
         }
 
         // Party agents: one per party
-        $parties = \App\Models\PoliticalParty::where('election_id', 1)->get();
+        $parties = \App\Models\PoliticalParty::where('election_id', $electionId)->get();
         foreach ($parties as $p) {
             $u = User::factory()->create(['name' => $p->abbreviation . ' Agent', 'email' => 'agent.' . strtolower($p->abbreviation) . '@iec.local']);
             $u->assignRole('party-representative');
