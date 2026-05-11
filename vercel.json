@@ -1,20 +1,14 @@
 {
-    "version": 2,
-    "outputDirectory": "public",
-    "functions": {
-        "api/lambda.php": {
-            "runtime": "vercel-php@0.7.4"
-        }
-    },
-    "rewrites": [
-        { "source": "/(.*)", "destination": "/api/lambda.php"}
-    ],
-    "headers": [
-        {
-            "source": "/(.*)",
-            "headers": [
-                { "key": "Content-Type", "value": "text/html" }
-            ]
-        }
-    ]
+  "version": 2,
+  "functions": {
+    "api/index.php": {
+      "runtime": "vercel-php@0.7.4"
+    }
+  },
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "/api/index.php"
+    }
+  ]
 }
