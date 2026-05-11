@@ -10,7 +10,7 @@ use App\Models\Candidate;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 
-class UserAssignmentSeeder extends Seeder
+class MassUserSeeder extends Seeder
 {
     public function run(): void
     {

@@ -33,4 +33,23 @@ return Application::configure(basePath: dirname(__DIR__))
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         //
-    })->create();
+    })
+    // CRITICAL: This section tells Laravel how to behave on Vercel
+    ->booting(function () {
+        if (env('VERCEL')) {
+            // Set the compiled view path to /tmp (the only writable folder on Vercel)
+            $compiledPath = '/tmp/storage/framework/views';
+            
+            if (!is_dir($compiledPath)) {
+                mkdir($compiledPath, 0755, true);
+            }
+            
+            config(['view.compiled' => $compiledPath]);
+            
+            // Also ensure the session and cache have a place to go if using file driver
+            if (!is_dir('/tmp/storage/framework/sessions')) {
+                mkdir('/tmp/storage/framework/sessions', 0755, true);
+            }
+        }
+    })
+    ->create();
