@@ -97,9 +97,6 @@ export default function AdminDashboard({ auth, statistics, systemStatus }) {
         <AppLayout user={auth.user}>
             <div className="ws-page">
 
-                {/* Thin pink accent bar */}
-                <div className="ws-topbar" />
-
                 {/* ── Page Header ─────────────────────────────────────── */}
                 <div className="ws-header">
                     <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -112,7 +109,7 @@ export default function AdminDashboard({ auth, statistics, systemStatus }) {
                         </div>
                         <Link
                             href="/admin/users/create"
-                            className="inline-flex items-center gap-2 self-start rounded-lg bg-iec-pink-500 px-4 py-2.5 text-sm font-semibold text-white transition-all hover:bg-iec-pink-600 hover:shadow-[0_4px_16px_rgba(233,30,140,0.35)] active:scale-95 shrink-0"
+                            className="inline-flex items-center gap-2 self-start rounded bg-iec-pink-500 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-iec-pink-600 active:bg-iec-pink-700 shrink-0"
                         >
                             <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                                 <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>

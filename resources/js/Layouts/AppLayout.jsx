@@ -237,7 +237,7 @@ const AuthenticatedShell = ({ children, user, url, onLogout, isLoggingOut }) => 
     );
 
     return (
-        <div className="min-h-screen bg-[#040C16] text-slate-100 md:flex">
+        <div className="min-h-screen bg-[#0a1520] text-slate-100 md:flex">
             {/* Desktop fixed sidebar */}
             <div className="hidden md:fixed md:inset-y-0 md:left-0 md:z-40 md:block">
                 {sidebar}
@@ -249,7 +249,7 @@ const AuthenticatedShell = ({ children, user, url, onLogout, isLoggingOut }) => 
                     <button
                         type="button"
                         aria-label="Close navigation"
-                        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+                        className="absolute inset-0 bg-black/50"
                         onClick={() => setSidebarOpen(false)}
                     />
                     <div className="relative h-full w-72">
@@ -261,7 +261,7 @@ const AuthenticatedShell = ({ children, user, url, onLogout, isLoggingOut }) => 
             {/* Main content area */}
             <div className="min-h-screen flex-1 md:pl-72">
                 {/* Mobile top bar */}
-                <div className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-white/5 bg-[#040C16]/95 px-4 backdrop-blur md:hidden">
+                <div className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-[#1a2b3c] bg-[#0D1B2A] px-4 md:hidden">
                     <button
                         type="button"
                         onClick={() => setSidebarOpen(true)}
