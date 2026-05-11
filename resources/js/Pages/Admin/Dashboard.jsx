@@ -203,7 +203,7 @@ export default function AdminDashboard({ auth, statistics, systemStatus }) {
                         <div className="ws-panel">
                             <div className="ws-panel-header flex items-center justify-between">
                                 <h2 className="ws-panel-title">Readiness check</h2>
-                                <span className="text-[0.6rem] font-mono text-slate-600">
+                                <span className="text-[0.6875rem] font-medium text-gray-400">
                                     {readinessItems.filter(i => i.ready).length}/{readinessItems.length} ready
                                 </span>
                             </div>

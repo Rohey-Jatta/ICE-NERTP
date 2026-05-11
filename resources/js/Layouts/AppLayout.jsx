@@ -237,7 +237,7 @@ const AuthenticatedShell = ({ children, user, url, onLogout, isLoggingOut }) => 
     );
 
     return (
-        <div className="min-h-screen bg-[#0a1520] text-slate-100 md:flex">
+        <div className="min-h-screen bg-gray-100 md:flex">
             {/* Desktop fixed sidebar */}
             <div className="hidden md:fixed md:inset-y-0 md:left-0 md:z-40 md:block">
                 {sidebar}
@@ -261,7 +261,7 @@ const AuthenticatedShell = ({ children, user, url, onLogout, isLoggingOut }) => 
             {/* Main content area */}
             <div className="min-h-screen flex-1 md:pl-72">
                 {/* Mobile top bar */}
-                <div className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-[#1a2b3c] bg-[#0D1B2A] px-4 md:hidden">
+                <div className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-gray-200 bg-white px-4 md:hidden">
                     <button
                         type="button"
                         onClick={() => setSidebarOpen(true)}
@@ -273,7 +273,7 @@ const AuthenticatedShell = ({ children, user, url, onLogout, isLoggingOut }) => 
                         </svg>
                     </button>
                     <div className="flex items-center gap-2">
-                        <span className="text-xs font-mono text-iec-pink-500 bg-iec-pink-500/10 border border-iec-pink-500/20 rounded px-2 py-0.5">
+                        <span className="text-xs font-medium text-iec-pink-600 bg-iec-pink-50 border border-iec-pink-200 rounded px-2 py-0.5">
                             {roleLabel(role)}
                         </span>
                     </div>

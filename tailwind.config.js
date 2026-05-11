@@ -12,8 +12,7 @@ export default {
     theme: {
         extend: {
             fontFamily: {
-                sans: ['Plus Jakarta Sans', 'Inter', ...defaultTheme.fontFamily.sans],
-                mono: ['DM Mono', 'JetBrains Mono', ...defaultTheme.fontFamily.mono],
+                sans: ['Poppins', 'Inter', ...defaultTheme.fontFamily.sans],
             },
             colors: {
                 'iec-pink': {
