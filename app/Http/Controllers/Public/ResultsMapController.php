@@ -19,12 +19,13 @@ class ResultsMapController extends Controller
         $availableElections = Election::where('allow_provisional_public_display', true)
             ->whereIn('status', ['active', 'certifying', 'results_pending', 'certified'])
             ->orderByDesc('start_date')
-            ->get(['id', 'name', 'type', 'status'])
+            ->get(['id', 'name', 'type', 'status', 'start_date'])
             ->map(fn($e) => [
-                'id'     => $e->id,
-                'name'   => $e->name,
-                'type'   => $e->type,
-                'status' => $e->status,
+                'id'         => $e->id,
+                'name'       => $e->name,
+                'type'       => $e->type,
+                'status'     => $e->status,
+                'start_date' => $e->start_date?->toDateString(),
             ]);
 
         $election = null;
@@ -49,44 +50,57 @@ class ResultsMapController extends Controller
 
         $cacheKey = "results_map_{$election->id}";
         $stations = Cache::remember($cacheKey, 300, function () use ($election) {
-            $stationsRaw = DB::select("
-                SELECT
-                    ps.id,
-                    ps.code,
-                    ps.name,
-                    ps.registered_voters,
-                    ps.latitude,
-                    ps.longitude,
-                    COALESCE(r.certification_status, 'not_reported')  AS status,
-                    r.total_votes_cast,
-                    r.valid_votes,
-                    r.rejected_votes,
-                    (
-                        SELECT json_agg(
-                            json_build_object(
-                                'name',  c.name,
-                                'party', COALESCE(pp.abbreviation, 'IND'),
-                                'color', COALESCE(pp.color, '#6b7280'),
-                                'votes', rcv.votes
-                            )
-                            ORDER BY rcv.votes DESC
-                        )
-                        FROM result_candidate_votes rcv
-                        JOIN candidates c ON c.id = rcv.candidate_id
-                        LEFT JOIN political_parties pp ON pp.id = c.political_party_id
-                        WHERE rcv.result_id = r.id
-                    ) AS candidate_votes
-                FROM polling_stations ps
-                LEFT JOIN results r
-                    ON  r.polling_station_id = ps.id
-                    AND r.election_id        = ?
-                WHERE ps.election_id    = ?
-                  AND ps.latitude       IS NOT NULL
-                  AND ps.longitude      IS NOT NULL
-            ", [$election->id, $election->id]);
+            $stationsRaw = DB::table('polling_stations as ps')
+                ->selectRaw("
+                    ps.id, ps.code, ps.name, ps.registered_voters,
+                    ps.latitude, ps.longitude,
+                    aa.name AS admin_area_name,
+                    cst.name AS constituency_name,
+                    w.name AS ward_name,
+                    COALESCE(r.certification_status, 'not_reported') AS status,
+                    r.id AS result_id,
+                    r.total_votes_cast, r.valid_votes, r.rejected_votes
+                ")
+                ->leftJoin('administrative_hierarchy as w', 'w.id', '=', 'ps.ward_id')
+                ->leftJoin('administrative_hierarchy as cst', 'cst.id', '=', 'w.parent_id')
+                ->leftJoin('administrative_hierarchy as aa', 'aa.id', '=', 'cst.parent_id')
+                ->leftJoin('results as r', function ($join) use ($election) {
+                    $join->on('r.polling_station_id', '=', 'ps.id')
+                         ->where('r.election_id', $election->id);
+                })
+                ->where('ps.election_id', $election->id)
+                ->whereNotNull('ps.latitude')
+                ->whereNotNull('ps.longitude')
+                ->get();
 
-            return collect($stationsRaw)->map(function ($station) {
-                $station->candidate_votes = json_decode($station->candidate_votes ?? '[]', true) ?? [];
+            $resultIds = $stationsRaw->pluck('result_id')->filter()->unique()->values()->all();
+
+            $votesByResult = collect();
+            if (!empty($resultIds)) {
+                $votesByResult = DB::table('result_candidate_votes as rcv')
+                    ->selectRaw("
+                        rcv.result_id,
+                        c.name,
+                        COALESCE(pp.abbreviation, 'IND') AS party,
+                        COALESCE(pp.color, '#6b7280')    AS color,
+                        rcv.votes
+                    ")
+                    ->join('candidates as c', 'c.id', '=', 'rcv.candidate_id')
+                    ->leftJoin('political_parties as pp', 'pp.id', '=', 'c.political_party_id')
+                    ->whereIn('rcv.result_id', $resultIds)
+                    ->orderByDesc('rcv.votes')
+                    ->get()
+                    ->groupBy('result_id');
+            }
+
+            return $stationsRaw->map(function ($station) use ($votesByResult) {
+                $votes = $votesByResult->get($station->result_id, collect());
+                $station->candidate_votes = $votes->map(fn($v) => [
+                    'name'  => $v->name,
+                    'party' => $v->party,
+                    'color' => $v->color,
+                    'votes' => $v->votes,
+                ])->values()->all();
                 return $station;
             })->toArray();
         });
@@ -94,9 +108,11 @@ class ResultsMapController extends Controller
         return Inertia::render('Public/ResultsMap', [
             'stations'           => $stations,
             'election'           => [
-                'id'   => $election->id,
-                'name' => $election->name,
-                'type' => $election->type,
+                'id'         => $election->id,
+                'name'       => $election->name,
+                'type'       => $election->type,
+                'status'     => $election->status,
+                'start_date' => $election->start_date?->toDateString(),
             ],
             'elections'          => $availableElections,
             'selectedElectionId' => $election->id,
