@@ -6,7 +6,7 @@
     "keywords": ["laravel", "framework"],
     "license": "MIT",
     "require": {
-        "php": "^8.2",
+        "php": "^8.3",
         "africastalking/africastalking": "*",
         "brick/geo": "^0.13.1",
         "inertiajs/inertia-laravel": "^2.0",
