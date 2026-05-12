@@ -1,6 +1,6 @@
 FROM php:8.3-cli
 
-# Install system dependencies
+# Install system dependencies and PHP extensions
 RUN apt-get update && apt-get install -y \
     git \
     curl \
@@ -14,6 +14,7 @@ RUN apt-get update && apt-get install -y \
     gnupg \
     && docker-php-ext-configure gd --with-freetype --with-jpeg \
     && docker-php-ext-install \
+        pdo \
         pdo_pgsql \
         pgsql \
         zip \
@@ -31,6 +32,7 @@ RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
 # Install Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
+# Set working directory
 WORKDIR /app
 
 # Copy project files
@@ -42,12 +44,25 @@ RUN composer install --no-dev --optimize-autoloader
 # Install frontend dependencies
 RUN npm install
 
-# Build frontend
+# Build Vite frontend
 RUN npm run build
 
-# Set permissions
+# Laravel storage permissions
 RUN chmod -R 775 storage bootstrap/cache
 
+# Cache Laravel configs/routes/views
+RUN php artisan config:clear || true
+RUN php artisan cache:clear || true
+RUN php artisan route:clear || true
+RUN php artisan view:clear || true
+
+# Expose Render port
 EXPOSE 10000
 
-CMD ["php", "artisan", "serve", "--host=0.0.0.0", "--port=10000"]
+# Start application
+CMD php artisan migrate --force && \
+    php artisan db:seed --force && \
+    php artisan config:cache && \
+    php artisan route:cache && \
+    php artisan view:cache && \
+    php artisan serve --host=0.0.0.0 --port=10000
