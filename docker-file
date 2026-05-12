@@ -1,14 +1,23 @@
-FROM php:8.2-cli
+FROM php:8.3-cli
 
-# Install system dependencies
+# Install system dependencies + libraries needed for gd
 RUN apt-get update && apt-get install -y \
     git \
     curl \
     unzip \
     zip \
     libzip-dev \
+    libpng-dev \
+    libjpeg62-turbo-dev \
+    libfreetype6-dev \
     gnupg \
-    && docker-php-ext-install pdo pdo_mysql zip
+    && docker-php-ext-configure gd --with-freetype --with-jpeg \
+    && docker-php-ext-install \
+        pdo \
+        pdo_mysql \
+        zip \
+        pcntl \
+        gd
 
 # Install Node.js
 RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
@@ -31,7 +40,7 @@ RUN npm install
 # Build Vite frontend
 RUN npm run build
 
-# Laravel permissions
+# Set permissions
 RUN chmod -R 775 storage bootstrap/cache
 
 EXPOSE 10000
