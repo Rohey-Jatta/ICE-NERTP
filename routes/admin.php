@@ -42,7 +42,11 @@ Route::middleware(['auth', 'role:iec-administrator'])
     })->name('dashboard');
 
     // ── Users ─────────────────────────────────────────────────────────────────
-    Route::get('/users', function () {
+    Route::get('/users', function (Request $request) {
+        $search = trim((string) $request->query('search', ''));
+        $role   = trim((string) $request->query('role', ''));
+        $status = trim((string) $request->query('status', ''));
+
         $users = User::with('roles')
             ->leftJoin('model_has_roles', function ($join) {
                 $join->on('users.id', '=', 'model_has_roles.model_id')
@@ -50,6 +54,15 @@ Route::middleware(['auth', 'role:iec-administrator'])
             })
             ->leftJoin('roles', 'model_has_roles.role_id', '=', 'roles.id')
             ->select('users.*')
+            ->when($search !== '', function ($query) use ($search) {
+                $query->where(function ($q) use ($search) {
+                    $q->where('users.name', 'like', "%{$search}%")
+                        ->orWhere('users.email', 'like', "%{$search}%")
+                        ->orWhere('users.phone', 'like', "%{$search}%");
+                });
+            })
+            ->when($role !== '', fn ($query) => $query->where('roles.name', $role))
+            ->when($status !== '', fn ($query) => $query->where('users.status', $status))
             ->orderByRaw("CASE roles.name
                 WHEN 'iec-administrator'     THEN 1
                 WHEN 'iec-chairman'          THEN 2
@@ -61,13 +74,19 @@ Route::middleware(['auth', 'role:iec-administrator'])
                 WHEN 'election-monitor'      THEN 8
                 ELSE 9 END")
             ->orderBy('users.name')
-            ->paginate(20);
+            ->paginate(20)
+            ->withQueryString();
 
         return Inertia::render('Admin/Users', [
-            'auth'  => ['user' => Auth::user()],
-            'users' => $users,
+            'auth'    => ['user' => Auth::user()],
+            'users'   => $users,
+            'filters' => [
+                'search' => $search,
+                'role'   => $role,
+                'status' => $status,
+            ],
         ]);
-    })->name('users');
+    })->name('users')->middleware('permission:manage-users');
 
     Route::get('/users/create', function () {
         return Inertia::render('Admin/UserCreate', [
@@ -77,7 +96,7 @@ Route::middleware(['auth', 'role:iec-administrator'])
             'constituencies'  => AdministrativeHierarchy::where('level', 'constituency')->select('id', 'name')->orderBy('name')->get(),
             'adminAreas'      => AdministrativeHierarchy::where('level', 'admin_area')->select('id', 'name')->orderBy('name')->get(),
         ]);
-    })->name('users.create');
+    })->name('users.create')->middleware(['permission:manage-users', 'permission:assign-roles']);
 
     Route::post('/users', function (Request $request) {
         $request->validate([
@@ -121,7 +140,7 @@ Route::middleware(['auth', 'role:iec-administrator'])
         } catch (\Exception $e) {
             return back()->withErrors(['error' => 'Failed to create user: ' . $e->getMessage()]);
         }
-    })->name('users.store');
+    })->name('users.store')->middleware(['permission:manage-users', 'permission:assign-roles']);
 
     Route::get('/users/{user}/edit', function (User $user) {
         return Inertia::render('Admin/UserEdit', [
@@ -134,7 +153,7 @@ Route::middleware(['auth', 'role:iec-administrator'])
             'adminAreas'      => AdministrativeHierarchy::where('level', 'admin_area')->select('id', 'name')->get(),
             'parties'         => PoliticalParty::select('id', 'name')->get(),
         ]);
-    })->name('users.edit');
+    })->name('users.edit')->middleware(['permission:manage-users', 'permission:assign-roles']);
 
     Route::put('/users/{user}', function (Request $request, User $user) {
         $request->validate([
@@ -169,7 +188,7 @@ Route::middleware(['auth', 'role:iec-administrator'])
         } catch (\Exception $e) {
             return back()->withErrors(['error' => 'Failed to update user: ' . $e->getMessage()]);
         }
-    })->name('users.update');
+    })->name('users.update')->middleware(['permission:manage-users', 'permission:assign-roles']);
 
     Route::delete('/users/{user}', function (User $user) {
         try {
@@ -182,7 +201,7 @@ Route::middleware(['auth', 'role:iec-administrator'])
         } catch (\Exception $e) {
             return back()->withErrors(['error' => 'Failed to delete user: ' . $e->getMessage()]);
         }
-    })->name('users.destroy');
+    })->name('users.destroy')->middleware(['permission:manage-users', 'permission:deactivate-user']);
 
     // ── Party Representatives ─────────────────────────────────────────────────
     Route::get('/party-representatives', function () {
@@ -190,7 +209,7 @@ Route::middleware(['auth', 'role:iec-administrator'])
             'auth'            => ['user' => Auth::user()],
             'representatives' => \App\Models\PartyRepresentative::with(['user', 'politicalParty', 'pollingStations'])->paginate(20),
         ]);
-    })->name('party-representatives');
+    })->name('party-representatives')->middleware('permission:register-parties');
 
     Route::get('/party-representatives/create', function () {
         return Inertia::render('Admin/PartyRepresentativeCreate', [
@@ -202,7 +221,7 @@ Route::middleware(['auth', 'role:iec-administrator'])
             'parties'         => PoliticalParty::select('id', 'name')->get(),
             'pollingStations' => PollingStation::select('id', 'name', 'code')->get(),
         ]);
-    })->name('party-representatives.create');
+    })->name('party-representatives.create')->middleware('permission:register-parties');
 
     Route::get('/party-representatives/{id}/edit', function ($id) {
         $rep = \App\Models\PartyRepresentative::with(['user', 'politicalParty', 'pollingStations'])->findOrFail($id);
@@ -212,7 +231,7 @@ Route::middleware(['auth', 'role:iec-administrator'])
             'parties'         => PoliticalParty::select('id', 'name')->get(),
             'pollingStations' => PollingStation::select('id', 'name', 'code')->get(),
         ]);
-    })->name('party-representatives.edit');
+    })->name('party-representatives.edit')->middleware('permission:register-parties');
 
     Route::put('/party-representatives/{id}', function (Request $request, $id) {
         $rep = \App\Models\PartyRepresentative::findOrFail($id);
@@ -244,7 +263,7 @@ Route::middleware(['auth', 'role:iec-administrator'])
         } catch (\Exception $e) {
             return back()->withErrors(['error' => 'Failed: ' . $e->getMessage()]);
         }
-    })->name('party-representatives.update');
+    })->name('party-representatives.update')->middleware('permission:register-parties');
 
     Route::post('/party-representatives', function (Request $request) {
         $request->validate([
@@ -280,7 +299,7 @@ Route::middleware(['auth', 'role:iec-administrator'])
         } catch (\Exception $e) {
             return back()->withErrors(['error' => 'Failed: '.$e->getMessage()]);
         }
-    })->name('party-representatives.store');
+    })->name('party-representatives.store')->middleware('permission:register-parties');
 
     // ── Election Monitors ─────────────────────────────────────────────────────
     Route::get('/election-monitors', function () {
@@ -288,7 +307,7 @@ Route::middleware(['auth', 'role:iec-administrator'])
             'auth'     => ['user' => Auth::user()],
             'monitors' => \App\Models\ElectionMonitor::with(['user', 'pollingStations'])->paginate(20),
         ]);
-    })->name('election-monitors');
+    })->name('election-monitors')->middleware('permission:manage-election-monitors');
 
     Route::get('/election-monitors/create', function () {
         return Inertia::render('Admin/ElectionMonitorCreate', [
@@ -298,7 +317,7 @@ Route::middleware(['auth', 'role:iec-administrator'])
                 ->select('id', 'name', 'email')->get(),
             'pollingStations' => PollingStation::select('id', 'name', 'code')->get(),
         ]);
-    })->name('election-monitors.create');
+    })->name('election-monitors.create')->middleware('permission:manage-election-monitors');
 
     Route::post('/election-monitors', function (Request $request) {
         $request->validate([
@@ -334,7 +353,7 @@ Route::middleware(['auth', 'role:iec-administrator'])
         } catch (\Exception $e) {
             return back()->withErrors(['error' => 'Failed: '.$e->getMessage()]);
         }
-    })->name('election-monitors.store');
+    })->name('election-monitors.store')->middleware('permission:manage-election-monitors');
 
     // ── Roles ─────────────────────────────────────────────────────────────────
     Route::get('/roles', function () {
@@ -345,14 +364,14 @@ Route::middleware(['auth', 'role:iec-administrator'])
             'roles'          => $roles,
             'allPermissions' => $allPermissions,
         ]);
-    })->name('roles');
+    })->name('roles')->middleware('permission:assign-roles');
 
     Route::post('/roles/{id}/permissions', function (Request $request, $id) {
         $role = \Spatie\Permission\Models\Role::findOrFail($id);
         $role->syncPermissions($request->permissions ?? []);
         app()[\Spatie\Permission\PermissionRegistrar::class]->forgetCachedPermissions();
         return back()->with('success', "Permissions updated for role: {$role->name}");
-    })->name('roles.permissions.update');
+    })->name('roles.permissions.update')->middleware('permission:assign-roles');
 
     // ── Elections ─────────────────────────────────────────────────────────────
     Route::get('/elections', function () {
@@ -362,6 +381,7 @@ Route::middleware(['auth', 'role:iec-administrator'])
             'type'                => $e->type,
             'date'                => $e->start_date?->format('Y-m-d'),
             'status'              => $e->status,
+            'allow_provisional_public_display' => $e->allow_provisional_public_display,
             'participating_parties' => $e->participatingParties->map(fn($p) => [
                 'id'           => $p->id,
                 'name'         => $p->name,
@@ -378,20 +398,21 @@ Route::middleware(['auth', 'role:iec-administrator'])
             'allParties' => $allParties,
             'flash'     => session()->only(['success', 'error']),
         ]);
-    })->name('elections');
+    })->name('elections')->middleware('permission:create-election|edit-election');
 
     Route::get('/elections/create', function () {
         return Inertia::render('Admin/ElectionCreate', [
             'auth'       => ['user' => Auth::user()],
             'allParties' => PoliticalParty::select('id', 'name', 'abbreviation', 'color')->orderBy('name')->get(),
         ]);
-    })->name('elections.create');
+    })->name('elections.create')->middleware('permission:create-election');
 
     Route::post('/elections', function (Request $request) {
         $request->validate([
             'name'        => 'required|string|max:255',
             'type'        => 'required|string|in:presidential,parliamentary,local,referendum',
             'date'        => 'required|date',
+            'allow_provisional_public_display' => 'boolean',
             'party_ids'   => 'nullable|array',
             'party_ids.*' => 'exists:political_parties,id',
         ]);
@@ -403,6 +424,7 @@ Route::middleware(['auth', 'role:iec-administrator'])
                 'start_date' => $request->date,
                 'end_date'   => $request->date,
                 'status'     => 'active',
+                'allow_provisional_public_display' => $request->boolean('allow_provisional_public_display'),
                 'created_by' => Auth::id(),
             ]);
 
@@ -416,7 +438,7 @@ Route::middleware(['auth', 'role:iec-administrator'])
             Log::error('Election creation failed', ['error' => $e->getMessage()]);
             return back()->withErrors(['error' => 'Failed to create election: '.$e->getMessage()]);
         }
-    })->name('elections.store');
+    })->name('elections.store')->middleware('permission:create-election');
 
     Route::put('/elections/{election}', function (Request $request, Election $election) {
         $request->validate([
@@ -424,6 +446,7 @@ Route::middleware(['auth', 'role:iec-administrator'])
             'type'        => 'required|string|in:presidential,parliamentary,local,referendum',
             'date'        => 'required|date',
             'status'      => 'required|in:draft,configured,active,results_pending,certifying,certified,archived',
+            'allow_provisional_public_display' => 'boolean',
             'party_ids'   => 'nullable|array',
             'party_ids.*' => 'exists:political_parties,id',
         ]);
@@ -435,6 +458,7 @@ Route::middleware(['auth', 'role:iec-administrator'])
                 'start_date' => $request->date,
                 'end_date'   => $request->date,
                 'status'     => $request->status,
+                'allow_provisional_public_display' => $request->boolean('allow_provisional_public_display'),
             ]);
 
             $election->participatingParties()->sync($request->party_ids ?? []);
@@ -444,7 +468,7 @@ Route::middleware(['auth', 'role:iec-administrator'])
         } catch (\Exception $e) {
             return back()->withErrors(['error' => 'Failed to update election: ' . $e->getMessage()]);
         }
-    })->name('elections.update');
+    })->name('elections.update')->middleware('permission:edit-election');
 
     Route::patch('/elections/{election}/toggle-status', function (Election $election) {
         $newStatus = $election->status === 'archived' ? 'active' : 'archived';
@@ -453,7 +477,7 @@ Route::middleware(['auth', 'role:iec-administrator'])
             extra: ['outcome' => 'success', 'new_status' => $newStatus]);
         $verb = $newStatus === 'active' ? 'activated' : 'deactivated';
         return redirect()->route('admin.elections')->with('success', "Election {$verb} successfully!");
-    })->name('elections.toggle-status');
+    })->name('elections.toggle-status')->middleware('permission:edit-election');
 
     // ── Delete election ONLY — preserves all linked data ─────────────────────
     // Uses soft delete so DB-level CASCADE ON DELETE is NOT triggered.
@@ -477,7 +501,7 @@ Route::middleware(['auth', 'role:iec-administrator'])
             return redirect()->route('admin.elections')
                 ->with('error', 'Failed to delete election: ' . $e->getMessage());
         }
-    })->name('elections.destroy');
+    })->name('elections.destroy')->middleware('permission:edit-election');
 
     // ── Safe force-delete — ONLY removes the election record ─────────────────
     // This route is called from the Elections.jsx delete button.
@@ -506,7 +530,7 @@ Route::middleware(['auth', 'role:iec-administrator'])
         } catch (\Exception $e) {
             return back()->withErrors(['error' => 'Failed to delete election: ' . $e->getMessage()]);
         }
-    })->name('elections.force-destroy');
+    })->name('elections.force-destroy')->middleware('permission:edit-election');
 
     // ── Polling Stations ──────────────────────────────────────────────────────
     Route::get('/polling-stations', function () {
@@ -521,7 +545,7 @@ Route::middleware(['auth', 'role:iec-administrator'])
             'auth'     => ['user' => Auth::user()],
             'stations' => $stations,
         ]);
-    })->name('polling-stations');
+    })->name('polling-stations')->middleware('permission:manage-polling-stations');
 
     Route::get('/polling-stations/create', function () {
         $activeElection = Election::where('status', 'active')->latest()->first();
@@ -534,7 +558,7 @@ Route::middleware(['auth', 'role:iec-administrator'])
                 ->select('id', 'name', 'email')->get(),
             'election'         => $activeElection ? ['id' => $activeElection->id, 'name' => $activeElection->name] : null,
         ]);
-    })->name('polling-stations.create');
+    })->name('polling-stations.create')->middleware('permission:manage-polling-stations');
 
     Route::post('/polling-stations', function (Request $request) {
         $request->validate([
@@ -573,7 +597,7 @@ Route::middleware(['auth', 'role:iec-administrator'])
         } catch (\Exception $e) {
             return back()->withErrors(['error' => 'Failed: '.$e->getMessage()]);
         }
-    })->name('polling-stations.store');
+    })->name('polling-stations.store')->middleware('permission:manage-polling-stations');
 
     Route::get('/polling-stations/{id}/edit', function ($id) {
         $station = PollingStation::with(['ward', 'assignedOfficer'])->findOrFail($id);
@@ -584,7 +608,7 @@ Route::middleware(['auth', 'role:iec-administrator'])
             'officers' => User::role('polling-officer')->select('id', 'name', 'email')->get(),
             'election' => Election::where('status', 'active')->first(['id', 'name']),
         ]);
-    })->name('polling-stations.edit');
+    })->name('polling-stations.edit')->middleware('permission:manage-polling-stations');
 
     Route::put('/polling-stations/{id}', function (Request $request, $id) {
         $station = PollingStation::findOrFail($id);
@@ -618,7 +642,7 @@ Route::middleware(['auth', 'role:iec-administrator'])
         } catch (\Exception $e) {
             return back()->withErrors(['error' => 'Failed: '.$e->getMessage()]);
         }
-    })->name('polling-stations.update');
+    })->name('polling-stations.update')->middleware('permission:manage-polling-stations');
 
     Route::delete('/polling-stations/{id}', function ($id) {
         try {
@@ -632,7 +656,7 @@ Route::middleware(['auth', 'role:iec-administrator'])
         } catch (\Exception $e) {
             return back()->withErrors(['error' => 'Failed: ' . $e->getMessage()]);
         }
-    })->name('polling-stations.destroy');
+    })->name('polling-stations.destroy')->middleware('permission:manage-polling-stations');
 
     // ── Parties ───────────────────────────────────────────────────────────────
     Route::get('/parties', function () {
@@ -698,7 +722,7 @@ Route::middleware(['auth', 'role:iec-administrator'])
                 : null,
             'elections'      => $allElections,
         ]);
-    })->name('parties');
+    })->name('parties')->middleware('permission:register-parties');
 
     Route::get('/parties/create', function () {
         $activeElection = Election::where('status', 'active')->latest()->first();
@@ -706,7 +730,7 @@ Route::middleware(['auth', 'role:iec-administrator'])
             'auth'             => ['user' => Auth::user()],
             'activeElectionId' => $activeElection?->id,
         ]);
-    })->name('parties.create');
+    })->name('parties.create')->middleware('permission:register-parties');
 
     Route::post('/parties', function (Request $request) {
         $request->validate([
@@ -769,7 +793,7 @@ Route::middleware(['auth', 'role:iec-administrator'])
         } catch (\Exception $e) {
             return back()->withErrors(['error' => 'Failed to register party: '.$e->getMessage()]);
         }
-    })->name('parties.store');
+    })->name('parties.store')->middleware('permission:register-parties');
 
     Route::get('/parties/{id}/edit', function ($id) {
         $party          = PoliticalParty::findOrFail($id);
@@ -801,7 +825,7 @@ Route::middleware(['auth', 'role:iec-administrator'])
             'activeElectionId' => $activeElection?->id,
             'flash'            => session()->only(['success', 'error']),
         ]);
-    })->name('parties.edit');
+    })->name('parties.edit')->middleware('permission:register-parties');
 
     Route::post('/parties/{id}/update', function (Request $request, $id) {
         $party = PoliticalParty::findOrFail($id);
@@ -864,7 +888,7 @@ Route::middleware(['auth', 'role:iec-administrator'])
         } catch (\Exception $e) {
             return back()->withErrors(['error' => 'Failed: ' . $e->getMessage()]);
         }
-    })->name('parties.update-post');
+    })->name('parties.update-post')->middleware('permission:register-parties');
 
     Route::post('/parties/{id}/add-to-election', function (Request $request, $id) {
         $request->validate(['election_id' => 'required|exists:elections,id']);
@@ -878,7 +902,7 @@ Route::middleware(['auth', 'role:iec-administrator'])
         } catch (\Exception $e) {
             return back()->withErrors(['error' => 'Failed: ' . $e->getMessage()]);
         }
-    })->name('parties.add-to-election');
+    })->name('parties.add-to-election')->middleware('permission:register-parties');
 
     Route::delete('/parties/{partyId}/remove-from-election/{electionId}', function ($partyId, $electionId) {
         try {
@@ -889,7 +913,7 @@ Route::middleware(['auth', 'role:iec-administrator'])
         } catch (\Exception $e) {
             return back()->withErrors(['error' => 'Failed: ' . $e->getMessage()]);
         }
-    })->name('parties.remove-from-election');
+    })->name('parties.remove-from-election')->middleware('permission:register-parties');
 
     Route::delete('/parties/{id}', function ($id) {
         try {
@@ -913,7 +937,7 @@ Route::middleware(['auth', 'role:iec-administrator'])
         } catch (\Exception $e) {
             return back()->withErrors(['error' => 'Failed to delete party: ' . $e->getMessage()]);
         }
-    })->name('parties.destroy');
+    })->name('parties.destroy')->middleware('permission:register-parties');
 
     // ── Candidate Management ──────────────────────────────────────────────────
     Route::post('/parties/{party}/candidates', function (Request $request, PoliticalParty $party) {
@@ -955,7 +979,7 @@ Route::middleware(['auth', 'role:iec-administrator'])
                 'photo_url'     => $photoPath ? asset('storage/' . $photoPath) : null,
             ]
         ], 201);
-    })->name('parties.candidates.store');
+    })->name('parties.candidates.store')->middleware('permission:register-candidates');
 
     Route::delete('/candidates/{candidate}', function (Candidate $candidate) {
         if ($candidate->photo_path && Storage::disk('public')->exists($candidate->photo_path)) {
@@ -972,7 +996,7 @@ Route::middleware(['auth', 'role:iec-administrator'])
 
         $candidate->delete();
         return response()->json(['success' => true]);
-    })->name('candidates.destroy');
+    })->name('candidates.destroy')->middleware('permission:register-candidates');
 
     // ── Administrative Hierarchy ──────────────────────────────────────────────
     Route::get('/hierarchy/admin-areas', function () {
@@ -990,7 +1014,7 @@ Route::middleware(['auth', 'role:iec-administrator'])
             'adminAreas' => $adminAreas,
             'flash'      => session()->only(['success', 'error']),
         ]);
-    })->name('hierarchy.admin-areas');
+    })->name('hierarchy.admin-areas')->middleware('permission:configure-workflow');
 
     Route::get('/hierarchy/admin-areas/create', function () {
         return Inertia::render('Admin/Hierarchy/AdminAreaCreate', [
@@ -998,7 +1022,7 @@ Route::middleware(['auth', 'role:iec-administrator'])
             'elections' => Election::whereIn('status', ['active', 'draft', 'configured'])
                 ->orderByDesc('created_at')->get(['id', 'name']),
         ]);
-    })->name('hierarchy.admin-areas.create');
+    })->name('hierarchy.admin-areas.create')->middleware('permission:configure-workflow');
 
     Route::post('/hierarchy/admin-areas', function (Request $request) {
         $request->validate([
@@ -1018,7 +1042,7 @@ Route::middleware(['auth', 'role:iec-administrator'])
         } catch (\Exception $e) {
             return back()->withErrors(['error' => 'Failed: ' . $e->getMessage()]);
         }
-    })->name('hierarchy.admin-areas.store');
+    })->name('hierarchy.admin-areas.store')->middleware('permission:configure-workflow');
 
     Route::get('/hierarchy/admin-areas/{id}/edit', function ($id) {
         $adminArea = AdministrativeHierarchy::findOrFail($id);
@@ -1028,7 +1052,7 @@ Route::middleware(['auth', 'role:iec-administrator'])
             'elections' => Election::whereIn('status', ['active', 'draft', 'configured'])
                 ->orderByDesc('created_at')->get(['id', 'name']),
         ]);
-    })->name('hierarchy.admin-areas.edit');
+    })->name('hierarchy.admin-areas.edit')->middleware('permission:configure-workflow');
 
     Route::put('/hierarchy/admin-areas/{id}', function (Request $request, $id) {
         $request->validate([
@@ -1042,7 +1066,7 @@ Route::middleware(['auth', 'role:iec-administrator'])
             'name'        => $request->name,
         ]);
         return redirect()->route('admin.hierarchy.admin-areas')->with('success', 'Admin Area updated successfully!');
-    })->name('hierarchy.admin-areas.update');
+    })->name('hierarchy.admin-areas.update')->middleware('permission:configure-workflow');
 
     Route::delete('/hierarchy/admin-areas/{id}', function ($id) {
         try {
@@ -1055,7 +1079,7 @@ Route::middleware(['auth', 'role:iec-administrator'])
         } catch (\Exception $e) {
             return back()->withErrors(['error' => 'Failed: ' . $e->getMessage()]);
         }
-    })->name('hierarchy.admin-areas.destroy');
+    })->name('hierarchy.admin-areas.destroy')->middleware('permission:configure-workflow');
 
     Route::get('/hierarchy/constituencies', function () {
         $constituencies = AdministrativeHierarchy::where('level', 'constituency')
@@ -1072,14 +1096,14 @@ Route::middleware(['auth', 'role:iec-administrator'])
             'constituencies' => $constituencies,
             'flash'          => session()->only(['success', 'error']),
         ]);
-    })->name('hierarchy.constituencies');
+    })->name('hierarchy.constituencies')->middleware('permission:configure-workflow');
 
     Route::get('/hierarchy/constituencies/create', function () {
         return Inertia::render('Admin/Hierarchy/ConstituencyCreate', [
             'auth'       => ['user' => Auth::user()],
             'adminAreas' => AdministrativeHierarchy::where('level', 'admin_area')->orderBy('name')->get(['id', 'name']),
         ]);
-    })->name('hierarchy.constituencies.create');
+    })->name('hierarchy.constituencies.create')->middleware('permission:configure-workflow');
 
     Route::post('/hierarchy/constituencies', function (Request $request) {
         $request->validate([
@@ -1100,7 +1124,7 @@ Route::middleware(['auth', 'role:iec-administrator'])
         } catch (\Exception $e) {
             return back()->withErrors(['error' => 'Failed: ' . $e->getMessage()]);
         }
-    })->name('hierarchy.constituencies.store');
+    })->name('hierarchy.constituencies.store')->middleware('permission:configure-workflow');
 
     Route::get('/hierarchy/constituencies/{id}/edit', function ($id) {
         $constituency = AdministrativeHierarchy::findOrFail($id);
@@ -1109,7 +1133,7 @@ Route::middleware(['auth', 'role:iec-administrator'])
             'constituency' => $constituency,
             'adminAreas'   => AdministrativeHierarchy::where('level', 'admin_area')->orderBy('name')->get(['id', 'name']),
         ]);
-    })->name('hierarchy.constituencies.edit');
+    })->name('hierarchy.constituencies.edit')->middleware('permission:configure-workflow');
 
     Route::put('/hierarchy/constituencies/{id}', function (Request $request, $id) {
         $request->validate([
@@ -1125,7 +1149,7 @@ Route::middleware(['auth', 'role:iec-administrator'])
             'name'        => $request->name,
         ]);
         return redirect()->route('admin.hierarchy.constituencies')->with('success', 'Constituency updated successfully!');
-    })->name('hierarchy.constituencies.update');
+    })->name('hierarchy.constituencies.update')->middleware('permission:configure-workflow');
 
     Route::delete('/hierarchy/constituencies/{id}', function ($id) {
         try {
@@ -1138,7 +1162,7 @@ Route::middleware(['auth', 'role:iec-administrator'])
         } catch (\Exception $e) {
             return back()->withErrors(['error' => 'Failed: ' . $e->getMessage()]);
         }
-    })->name('hierarchy.constituencies.destroy');
+    })->name('hierarchy.constituencies.destroy')->middleware('permission:configure-workflow');
 
     Route::get('/hierarchy/wards', function () {
         $wards = AdministrativeHierarchy::where('level', 'ward')
@@ -1158,7 +1182,7 @@ Route::middleware(['auth', 'role:iec-administrator'])
             'wards' => $wards,
             'flash' => session()->only(['success', 'error']),
         ]);
-    })->name('hierarchy.wards');
+    })->name('hierarchy.wards')->middleware('permission:configure-workflow');
 
     Route::get('/hierarchy/wards/create', function () {
         $constituencies = AdministrativeHierarchy::where('level', 'constituency')
@@ -1168,7 +1192,7 @@ Route::middleware(['auth', 'role:iec-administrator'])
             'auth'           => ['user' => Auth::user()],
             'constituencies' => $constituencies,
         ]);
-    })->name('hierarchy.wards.create');
+    })->name('hierarchy.wards.create')->middleware('permission:configure-workflow');
 
     Route::post('/hierarchy/wards', function (Request $request) {
         $request->validate([
@@ -1189,7 +1213,7 @@ Route::middleware(['auth', 'role:iec-administrator'])
         } catch (\Exception $e) {
             return back()->withErrors(['error' => 'Failed: ' . $e->getMessage()]);
         }
-    })->name('hierarchy.wards.store');
+    })->name('hierarchy.wards.store')->middleware('permission:configure-workflow');
 
     Route::get('/hierarchy/wards/{id}/edit', function ($id) {
         $ward = AdministrativeHierarchy::findOrFail($id);
@@ -1201,7 +1225,7 @@ Route::middleware(['auth', 'role:iec-administrator'])
             'ward'           => $ward,
             'constituencies' => $constituencies,
         ]);
-    })->name('hierarchy.wards.edit');
+    })->name('hierarchy.wards.edit')->middleware('permission:configure-workflow');
 
     Route::put('/hierarchy/wards/{id}', function (Request $request, $id) {
         $request->validate([
@@ -1217,7 +1241,7 @@ Route::middleware(['auth', 'role:iec-administrator'])
             'name'        => $request->name,
         ]);
         return redirect()->route('admin.hierarchy.wards')->with('success', 'Ward updated successfully!');
-    })->name('hierarchy.wards.update');
+    })->name('hierarchy.wards.update')->middleware('permission:configure-workflow');
 
     Route::delete('/hierarchy/wards/{id}', function ($id) {
         try {
@@ -1230,21 +1254,23 @@ Route::middleware(['auth', 'role:iec-administrator'])
         } catch (\Exception $e) {
             return back()->withErrors(['error' => 'Failed: ' . $e->getMessage()]);
         }
-    })->name('hierarchy.wards.destroy');
+    })->name('hierarchy.wards.destroy')->middleware('permission:configure-workflow');
 
     // ── Audit Logs ────────────────────────────────────────────────────────────
     Route::get('/audit-logs', function (Request $request) {
         $query = \App\Models\AuditLog::with('user');
         if ($request->filled('user'))      $query->whereHas('user', fn($q) => $q->where('name', 'like', '%'.$request->user.'%')->orWhere('email', 'like', '%'.$request->user.'%'));
         if ($request->filled('action'))    $query->where('action', 'like', '%'.$request->action.'%');
+        if ($request->filled('module'))    $query->where('module', $request->module);
+        if ($request->filled('outcome'))   $query->where('outcome', $request->outcome);
         if ($request->filled('date_from')) $query->whereDate('created_at', '>=', $request->date_from);
         if ($request->filled('date_to'))   $query->whereDate('created_at', '<=', $request->date_to);
         return Inertia::render('Admin/AuditLogs', [
             'auth'    => ['user' => Auth::user()],
-            'logs'    => $query->latest()->paginate(50),
-            'filters' => $request->only(['user', 'action', 'date_from', 'date_to']),
+            'logs'    => $query->latest()->paginate(50)->withQueryString(),
+            'filters' => $request->only(['user', 'action', 'module', 'outcome', 'date_from', 'date_to']),
         ]);
-    })->name('audit-logs');
+    })->name('audit-logs')->middleware('permission:view-audit-logs');
 
     // ── Settings ──────────────────────────────────────────────────────────────
     Route::get('/settings', fn() => Inertia::render('Admin/Settings', [
@@ -1257,8 +1283,12 @@ Route::middleware(['auth', 'role:iec-administrator'])
             'gps_validation_enabled' => true,
             'max_file_size'          => 10240,
             'sms_enabled'            => false,
+            'public_results_enabled' => true,
+            'provisional_banner'     => true,
+            'audit_retention_days'   => 365,
+            'session_timeout_minutes'=> 30,
         ],
-    ]))->name('settings');
+    ]))->name('settings')->middleware('permission:system-settings');
 
     Route::post('/settings', function (Request $request) {
         $request->validate([
@@ -1269,15 +1299,28 @@ Route::middleware(['auth', 'role:iec-administrator'])
             'gps_validation_enabled' => 'boolean',
             'max_file_size'          => 'required|integer|min:1024|max:51200',
             'sms_enabled'            => 'boolean',
+            'public_results_enabled' => 'boolean',
+            'provisional_banner'     => 'boolean',
+            'audit_retention_days'   => 'required|integer|min:30|max:2555',
+            'session_timeout_minutes'=> 'required|integer|min:5|max:240',
         ]);
         Log::info('System settings updated', $request->all());
+        AuditLog::record(
+            action: 'settings.updated',
+            event: 'updated',
+            module: 'System',
+            extra: [
+                'outcome' => 'success',
+                'new_values' => $request->except(['_token']),
+            ]
+        );
         return back()->with('success', 'Settings saved successfully!');
-    })->name('settings.update');
+    })->name('settings.update')->middleware('permission:system-settings');
 
     // ── System Health ─────────────────────────────────────────────────────────
     Route::get('/system-health', fn() => Inertia::render('Admin/SystemHealth', [
         'auth' => ['user' => Auth::user()],
-    ]))->name('system-health');
+    ]))->name('system-health')->middleware('permission:system-settings');
 
     Route::get('/system-health/data', function () {
         $data = [];
@@ -1296,10 +1339,10 @@ Route::middleware(['auth', 'role:iec-administrator'])
         try { $data['logs'] = ['exists' => file_exists($logPath), 'size' => file_exists($logPath) ? round(filesize($logPath)/1048576, 2).' MB' : '0 MB', 'recent_errors' => file_exists($logPath) ? substr_count(file_get_contents($logPath), '['.now()->format('Y-m-d').']') : 0]; }
         catch (\Exception $e) { $data['logs'] = ['exists' => false, 'size' => '0 MB', 'recent_errors' => 0]; }
         return response()->json($data);
-    })->name('system-health.data');
+    })->name('system-health.data')->middleware('permission:system-settings');
 
     // ── Backups ───────────────────────────────────────────────────────────────
-    Route::get('/backups', fn() => Inertia::render('Admin/Backups', ['auth' => ['user' => Auth::user()]]))->name('backups');
+    Route::get('/backups', fn() => Inertia::render('Admin/Backups', ['auth' => ['user' => Auth::user()]]))->name('backups')->middleware('permission:system-settings');
 
     Route::get('/backups/list', function () {
         $backupDir = storage_path('app/backups');
@@ -1307,17 +1350,17 @@ Route::middleware(['auth', 'role:iec-administrator'])
         $files   = glob($backupDir . '/*.zip') ?: [];
         $backups = collect($files)->map(fn($file) => ['name' => basename($file), 'path' => basename($file), 'size' => round(filesize($file)/1048576, 2).' MB', 'date' => date('Y-m-d H:i:s', filemtime($file))])->sortByDesc('date')->values()->toArray();
         return response()->json($backups);
-    })->name('backups.list');
+    })->name('backups.list')->middleware('permission:system-settings');
 
     Route::post('/backups/create', function () {
         try { Artisan::call('backup:run --only-db'); return response()->json(['success' => true, 'message' => 'Backup created successfully!']); }
         catch (\Exception $e) { return response()->json(['success' => false, 'message' => 'Backup failed: '.$e->getMessage()], 500); }
-    })->name('backups.create');
+    })->name('backups.create')->middleware('permission:system-settings');
 
     Route::get('/backups/download', function (Request $request) {
         $filename = basename($request->query('file', ''));
         $path     = storage_path('app/backups/' . $filename);
         if (!$filename || !file_exists($path)) abort(404, 'Backup file not found.');
         return response()->download($path);
-    })->name('backups.download');
+    })->name('backups.download')->middleware('permission:system-settings');
 });

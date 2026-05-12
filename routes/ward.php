@@ -222,7 +222,7 @@ Route::middleware(['auth', 'role:ward-approver'])
             'filter'  => $filter,
             'counts'  => $counts,
         ]);
-    })->name('approval-queue');
+    })->name('approval-queue')->middleware('permission:view-ward-queue|view-ward-results');
 
     // ── Approve ───────────────────────────────────────────────────────────────
     Route::post('/approve/{result}', function (Request $request, Result $result) {
@@ -264,7 +264,7 @@ Route::middleware(['auth', 'role:ward-approver'])
         );
 
         return back()->with('success', 'Result certified at ward level and promoted to Constituency queue.');
-    })->name('approve');
+    })->name('approve')->middleware('permission:approve-ward-result');
 
     // ── Approve with Reservation ──────────────────────────────────────────────
     Route::post('/approve-with-reservation/{result}', function (Request $request, Result $result) {
@@ -306,7 +306,7 @@ Route::middleware(['auth', 'role:ward-approver'])
         );
 
         return back()->with('success', 'Result certified with reservation and promoted to Constituency queue.');
-    })->name('approve-with-reservation');
+    })->name('approve-with-reservation')->middleware('permission:reject-ward-result-with-reservation|approve-ward-result');
 
     // ── Reject ────────────────────────────────────────────────────────────────
     Route::post('/reject/{result}', function (Request $request, Result $result) {
@@ -353,7 +353,7 @@ Route::middleware(['auth', 'role:ward-approver'])
         );
 
         return back()->with('success', 'Result rejected and returned to the Polling Officer.');
-    })->name('reject');
+    })->name('reject')->middleware('permission:reject-ward-result');
 
     // ── Analytics ─────────────────────────────────────────────────────────────
     Route::get('/analytics', function () {
@@ -431,5 +431,5 @@ Route::middleware(['auth', 'role:ward-approver'])
             'stats'            => $stats,
             'stationBreakdown' => $stationBreakdown,
         ]);
-    })->name('analytics');
+    })->name('analytics')->middleware('permission:view-ward-analytics');
 });

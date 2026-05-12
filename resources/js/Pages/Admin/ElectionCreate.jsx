@@ -1,86 +1,65 @@
+import { Badge, Button, Field, PageHeader, Panel, inputClass } from '@/Components/AdminUI';
 import AppLayout from '@/Layouts/AppLayout';
-import { useForm, Link } from '@inertiajs/react';
+import { Link, useForm } from '@inertiajs/react';
 import { useState } from 'react';
 
-// ── Re-use the same PartySelector from Elections.jsx ─────────────────────────
 function PartySelector({ allParties = [], selectedIds = [], onChange }) {
     const [expanded, setExpanded] = useState(null);
 
     const toggle = (partyId) => {
-        if (selectedIds.includes(partyId)) {
-            onChange(selectedIds.filter(id => id !== partyId));
-        } else {
-            onChange([...selectedIds, partyId]);
-        }
+        onChange(selectedIds.includes(partyId)
+            ? selectedIds.filter((id) => id !== partyId)
+            : [...selectedIds, partyId]);
     };
 
     if (allParties.length === 0) {
         return (
-            <div className="text-center py-6 border-2 border-dashed border-slate-700 rounded-xl">
-                <p className="text-gray-500 text-sm">No parties registered yet.</p>
-                <Link href="/admin/parties/create"
-                    className="text-teal-400 hover:text-teal-300 text-sm underline mt-1 inline-block">
-                    Register a party first →
+            <div className="rounded-lg border border-dashed border-gray-300 p-6 text-center">
+                <p className="text-sm text-slate-500">No parties registered yet.</p>
+                <Link href="/admin/parties/create" className="mt-1 inline-block text-sm font-semibold text-iec-pink underline">
+                    Register a party first
                 </Link>
             </div>
         );
     }
 
     return (
-        <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
-            {allParties.map(party => {
+        <div className="max-h-80 space-y-2 overflow-y-auto pr-1">
+            {allParties.map((party) => {
                 const isSelected = selectedIds.includes(party.id);
                 const isExpanded = expanded === party.id;
                 const colorStyle = party.colors_array?.length > 1
                     ? { background: `linear-gradient(135deg, ${party.colors_array.join(', ')})` }
-                    : { background: party.colors_array?.[0] || party.color || '#3b82f6' };
+                    : { background: party.colors_array?.[0] || party.color || '#94a3b8' };
 
                 return (
-                    <div key={party.id}
-                        className={`rounded-xl border transition-colors ${
-                            isSelected
-                                ? 'border-teal-500/60 bg-teal-900/10'
-                                : 'border-slate-700/50 bg-slate-900/30 hover:border-slate-600'
-                        }`}>
-                        <div className="flex items-center gap-3 p-3">
-                            <div className="w-8 h-8 rounded-lg flex-shrink-0 border border-white/10" style={colorStyle} />
-                            <div className="flex-1 min-w-0">
+                    <div key={party.id} className={`ws-choice-card ${isSelected ? 'is-selected' : ''}`}>
+                        <div className="flex items-center gap-3">
+                            <div className="h-8 w-8 flex-shrink-0 rounded-md border border-gray-200" style={colorStyle} />
+                            <div className="min-w-0 flex-1">
                                 <div className="flex items-center gap-2">
-                                    <span className="text-white font-semibold text-sm truncate">{party.name}</span>
-                                    <span className="text-xs text-gray-500 font-mono flex-shrink-0">{party.abbreviation}</span>
+                                    <span className="truncate text-sm font-semibold text-slate-900">{party.name}</span>
+                                    <Badge tone="slate">{party.abbreviation}</Badge>
                                 </div>
-                                {party.leader_name && (
-                                    <div className="text-gray-500 text-xs truncate">Leader: {party.leader_name}</div>
-                                )}
+                                {party.leader_name && <div className="truncate text-xs text-slate-500">Leader: {party.leader_name}</div>}
                             </div>
                             {party.candidate_count > 0 && (
-                                <button type="button"
-                                    onClick={() => setExpanded(isExpanded ? null : party.id)}
-                                    className="text-xs text-gray-400 hover:text-teal-300 flex items-center gap-1 flex-shrink-0 px-2 py-1 rounded-lg hover:bg-slate-700/40 transition-colors">
-                                    <span>👤 {party.candidate_count}</span>
-                                    <span>{isExpanded ? '▲' : '▼'}</span>
+                                <button type="button" onClick={() => setExpanded(isExpanded ? null : party.id)} className="text-xs font-semibold text-slate-500 hover:text-iec-pink">
+                                    {party.candidate_count} candidates
                                 </button>
                             )}
-                            <button type="button" onClick={() => toggle(party.id)}
-                                className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
-                                    isSelected
-                                        ? 'bg-teal-600 hover:bg-red-600/80 text-white'
-                                        : 'bg-slate-700 hover:bg-teal-600/70 text-gray-300 hover:text-white'
-                                }`}>
-                                {isSelected ? '✓ Added' : '+ Add'}
-                            </button>
+                            <Button type="button" onClick={() => toggle(party.id)} variant={isSelected ? 'primary' : 'secondary'}>
+                                {isSelected ? 'Added' : 'Add'}
+                            </Button>
                         </div>
                         {isExpanded && party.candidates?.length > 0 && (
-                            <div className="border-t border-slate-700/50 px-3 pb-3 pt-2">
-                                <div className="text-xs text-gray-500 mb-2 uppercase tracking-wide">Candidates</div>
+                            <div className="mt-3 border-t border-gray-200 pt-3">
+                                <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Candidates</div>
                                 <div className="space-y-1">
-                                    {party.candidates.map(c => (
-                                        <div key={c.id} className="flex items-center gap-2 text-sm text-gray-300 py-1">
-                                            <span className="text-gray-600 font-mono text-xs w-6 text-right flex-shrink-0">
-                                                {c.ballot_number || '—'}
-                                            </span>
-                                            <span className="w-px h-4 bg-slate-700 flex-shrink-0" />
-                                            <span className="truncate">{c.name}</span>
+                                    {party.candidates.map((candidate) => (
+                                        <div key={candidate.id} className="flex items-center gap-2 text-sm text-slate-600">
+                                            <span className="w-6 flex-shrink-0 text-right font-mono text-xs text-slate-400">{candidate.ballot_number || '-'}</span>
+                                            <span className="truncate">{candidate.name}</span>
                                         </div>
                                     ))}
                                 </div>
@@ -95,114 +74,87 @@ function PartySelector({ allParties = [], selectedIds = [], onChange }) {
 
 export default function ElectionCreate({ auth, allParties = [] }) {
     const { data, setData, post, processing, errors } = useForm({
-        name:      '',
-        type:      'parliamentary',
-        date:      '',
+        name: '',
+        type: 'parliamentary',
+        date: '',
+        allow_provisional_public_display: true,
         party_ids: [],
     });
 
-    const handleSubmit = (e) => {
-        e.preventDefault();
+    const handleSubmit = (event) => {
+        event.preventDefault();
         post('/admin/elections');
     };
 
     return (
         <AppLayout user={auth?.user}>
-            <div className="container mx-auto px-4 py-8 max-w-3xl">
-                <div className="mb-6">
-                    <Link href="/admin/elections"
-                        className="text-gray-400 hover:text-white text-sm mb-2 inline-block">
-                        ← Back to Elections
-                    </Link>
-                    <h1 className="text-3xl font-bold text-white">Create Election</h1>
-                </div>
+            <div className="ws-container max-w-4xl">
+                <PageHeader
+                    title="Create Election"
+                    description="Set election details and choose the parties that will participate."
+                    backHref="/admin/elections"
+                    backLabel="Back to Elections"
+                />
 
-                <form onSubmit={handleSubmit} className="space-y-6">
-                    {/* Basic Details */}
-                    <div className="bg-slate-800/40 rounded-xl p-6 border border-slate-700/50">
-                        <h2 className="text-white font-bold text-lg mb-5 pb-3 border-b border-slate-700">
-                            Election Details
-                        </h2>
+                <form onSubmit={handleSubmit} className="space-y-5">
+                    <Panel className="p-5">
+                        <div className="mb-5">
+                            <h2 className="ws-section-title">Election Details</h2>
+                            <p className="ws-section-desc">Basic information used across admin and public results pages.</p>
+                        </div>
                         <div className="space-y-5">
-                            <div>
-                                <label className="block text-gray-300 mb-2 font-semibold">
-                                    Election Name <span className="text-red-400">*</span>
-                                </label>
-                                <input type="text" value={data.name}
-                                    onChange={e => setData('name', e.target.value)}
-                                    className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-teal-500"
-                                    placeholder="e.g., 2025 National Assembly Elections" required />
-                                {errors.name && <p className="text-red-400 text-sm mt-1">{errors.name}</p>}
-                            </div>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-gray-300 mb-2 font-semibold">
-                                        Election Type <span className="text-red-400">*</span>
-                                    </label>
-                                    <select value={data.type}
-                                        onChange={e => setData('type', e.target.value)}
-                                        className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-teal-500">
+                            <Field label="Election Name">
+                                <input type="text" value={data.name} onChange={(event) => setData('name', event.target.value)} className={inputClass} placeholder="e.g., 2025 National Assembly Elections" required />
+                                {errors.name && <p className="mt-1 text-sm text-rose-600">{errors.name}</p>}
+                            </Field>
+                            <div className="ws-form-grid">
+                                <Field label="Election Type">
+                                    <select value={data.type} onChange={(event) => setData('type', event.target.value)} className={inputClass}>
                                         <option value="presidential">Presidential</option>
-                                        <option value="parliamentary">Parliamentary</option>
-                                        <option value="local">Local Government</option>
-                                        <option value="referendum">By-Election / Referendum</option>
+                                        <option value="parliamentary">National Assembly</option>
+                                        <option value="local">Regional / Local Government</option>
+                                        <option value="referendum">Constituency / By-Election</option>
                                     </select>
-                                    {errors.type && <p className="text-red-400 text-sm mt-1">{errors.type}</p>}
-                                </div>
-                                <div>
-                                    <label className="block text-gray-300 mb-2 font-semibold">
-                                        Election Date <span className="text-red-400">*</span>
-                                    </label>
-                                    <input type="date" value={data.date}
-                                        onChange={e => setData('date', e.target.value)}
-                                        className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-teal-500"
-                                        required />
-                                    {errors.date && <p className="text-red-400 text-sm mt-1">{errors.date}</p>}
-                                </div>
+                                    {errors.type && <p className="mt-1 text-sm text-rose-600">{errors.type}</p>}
+                                </Field>
+                                <Field label="Election Date">
+                                    <input type="date" value={data.date} onChange={(event) => setData('date', event.target.value)} className={inputClass} required />
+                                    {errors.date && <p className="mt-1 text-sm text-rose-600">{errors.date}</p>}
+                                </Field>
                             </div>
                         </div>
-                    </div>
+                    </Panel>
 
-                    {/* Participating Parties */}
-                    <div className="bg-slate-800/40 rounded-xl p-6 border border-slate-700/50">
-                        <div className="flex items-center justify-between mb-1">
-                            <h2 className="text-white font-bold text-lg">Participating Parties</h2>
-                            <Link href="/admin/parties/create"
-                                className="text-xs text-teal-400 hover:text-teal-300 underline transition-colors">
-                                + Register new party
-                            </Link>
+                    <Panel className="p-5">
+                        <label className="ws-toggle-card">
+                            <span>
+                                <span className="block font-semibold text-slate-900">Show on public homepage</span>
+                                <span className="mt-1 block text-sm text-slate-500">When enabled, this election can be selected for public results, map, and station status pages.</span>
+                            </span>
+                            <input type="checkbox" checked={data.allow_provisional_public_display} onChange={(event) => setData('allow_provisional_public_display', event.target.checked)} />
+                        </label>
+                    </Panel>
+
+                    <Panel className="p-5">
+                        <div className="mb-5 flex items-start justify-between gap-3">
+                            <div>
+                                <h2 className="ws-section-title">Participating Parties</h2>
+                                <p className="ws-section-desc">Select the parties contesting this election.</p>
+                            </div>
+                            <Link href="/admin/parties/create" className="text-sm font-semibold text-iec-pink underline">Register party</Link>
                         </div>
-                        <p className="text-gray-500 text-sm mb-4">
-                            Select the parties contesting this election. Click the candidate count badge to preview a party's candidates.
-                        </p>
 
                         {data.party_ids.length > 0 && (
-                            <div className="mb-3 text-sm text-teal-300 font-medium">
-                                ✓ {data.party_ids.length} part{data.party_ids.length !== 1 ? 'ies' : 'y'} selected
-                            </div>
+                            <p className="mb-3 text-sm font-semibold text-slate-700">{data.party_ids.length} parties selected</p>
                         )}
 
-                        <PartySelector
-                            allParties={allParties}
-                            selectedIds={data.party_ids}
-                            onChange={(ids) => setData('party_ids', ids)}
-                        />
+                        <PartySelector allParties={allParties} selectedIds={data.party_ids} onChange={(ids) => setData('party_ids', ids)} />
+                        {errors.party_ids && <p className="mt-2 text-sm text-rose-600">{errors.party_ids}</p>}
+                    </Panel>
 
-                        {errors.party_ids && (
-                            <p className="text-red-400 text-sm mt-2">{errors.party_ids}</p>
-                        )}
-                    </div>
-
-                    {/* Submit */}
-                    <div className="flex gap-4">
-                        <button type="submit" disabled={processing}
-                            className="flex-1 px-6 py-3 bg-teal-600 hover:bg-teal-700 disabled:opacity-50 text-white font-bold rounded-lg transition-colors">
-                            {processing ? 'Creating…' : '✓ Create Election'}
-                        </button>
-                        <Link href="/admin/elections"
-                            className="px-6 py-3 bg-slate-700 hover:bg-slate-600 text-white font-bold rounded-lg text-center transition-colors">
-                            Cancel
-                        </Link>
+                    <div className="flex flex-wrap gap-3">
+                        <Button type="submit" disabled={processing}>{processing ? 'Creating...' : 'Create Election'}</Button>
+                        <Button href="/admin/elections" variant="secondary">Cancel</Button>
                     </div>
                 </form>
             </div>

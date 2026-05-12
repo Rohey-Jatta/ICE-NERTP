@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Services\TwoFactorAuthService;
+use App\Models\AuditLog;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -40,12 +41,32 @@ class AuthenticatedSessionController extends Controller
         $user = User::where('email', $request->email)->first();
 
         if (!$user || !Hash::check($request->password, $user->password)) {
+            AuditLog::record(
+                action: 'auth.login.failed',
+                event: 'failure',
+                module: 'Authentication',
+                extra: [
+                    'outcome' => 'failure',
+                    'failure_reason' => 'Invalid credentials',
+                    'new_values' => ['email' => $request->email],
+                ]
+            );
             throw ValidationException::withMessages([
                 'email' => ['These credentials do not match our records.'],
             ]);
         }
 
         if ($user->status !== 'active') {
+            AuditLog::record(
+                action: 'auth.login.blocked',
+                event: 'blocked',
+                module: 'Authentication',
+                auditable: $user,
+                extra: [
+                    'outcome' => 'blocked',
+                    'failure_reason' => "Account status: {$user->status}",
+                ]
+            );
             throw ValidationException::withMessages([
                 'email' => ['Your account has been deactivated. Contact IEC Administrator.'],
             ]);
@@ -85,6 +106,12 @@ class AuthenticatedSessionController extends Controller
 
     public function destroy(Request $request)
     {
+        AuditLog::record(
+            action: 'auth.logout',
+            event: 'action',
+            module: 'Authentication',
+            extra: ['outcome' => 'success']
+        );
         Auth::logout();
         $request->session()->invalidate();
         $request->session()->regenerateToken();

@@ -1,5 +1,6 @@
+import { Button, Field, PageHeader, Panel, inputClass } from '@/Components/AdminUI';
 import AppLayout from '@/Layouts/AppLayout';
-import { useForm, Link } from '@inertiajs/react';
+import { Link, useForm } from '@inertiajs/react';
 import { useState } from 'react';
 
 export default function PollingStationCreate({ auth, wards = [], officers = [], election, hasActiveElection = true }) {
@@ -22,8 +23,8 @@ export default function PollingStationCreate({ auth, wards = [], officers = [], 
         setLocating(true);
         navigator.geolocation.getCurrentPosition(
             (pos) => {
-                setData(prev => ({
-                    ...prev,
+                setData((current) => ({
+                    ...current,
                     latitude: pos.coords.latitude.toFixed(8),
                     longitude: pos.coords.longitude.toFixed(8),
                 }));
@@ -37,241 +38,142 @@ export default function PollingStationCreate({ auth, wards = [], officers = [], 
         );
     };
 
-    const handleSubmit = (e) => {
-        e.preventDefault();
+    const handleSubmit = (event) => {
+        event.preventDefault();
         if (!hasActiveElection) return;
         post('/admin/polling-stations');
     };
 
     return (
         <AppLayout user={auth?.user}>
-            <div className="container mx-auto px-4 py-8 max-w-3xl">
-                <div className="mb-6">
-                    <Link href="/admin/polling-stations" className="text-gray-400 hover:text-white text-sm mb-2 inline-block">
-                        ← Back to Polling Stations
-                    </Link>
-                    <h1 className="text-3xl font-bold text-white">Register New Polling Station</h1>
-                    {election && (
-                        <p className="text-gray-400 mt-1">Election: <span className="text-teal-300">{election.name}</span></p>
-                    )}
-                </div>
+            <div className="ws-container max-w-4xl">
+                <PageHeader
+                    title="Register New Polling Station"
+                    description={election ? `Election: ${election.name}` : 'Create a polling station for the active election.'}
+                    backHref="/admin/polling-stations"
+                    backLabel="Back to Polling Stations"
+                />
 
-                {/* FIX: Show backend error prominently */}
                 {errors.error && (
-                    <div className="mb-6 p-4 bg-red-500/20 border border-red-500/50 rounded-xl flex items-start gap-3">
-                        <span className="text-red-400 text-lg flex-shrink-0">⚠</span>
-                        <p className="text-red-300">{errors.error}</p>
-                    </div>
+                    <div className="ws-alert ws-alert-error">{errors.error}</div>
                 )}
 
-                {/* FIX: Warn when no active election */}
                 {!hasActiveElection && (
-                    <div className="mb-6 p-4 bg-amber-500/20 border border-amber-500/50 rounded-xl flex items-start gap-3">
-                        <span className="text-amber-400 text-lg flex-shrink-0">⚠</span>
-                        <div>
-                            <p className="text-amber-300 font-semibold">No active election found</p>
-                            <p className="text-amber-400 text-sm mt-1">
-                                You must create and activate an election before registering polling stations.{' '}
-                                <Link href="/admin/elections/create" className="underline hover:text-amber-200">
-                                    Create an election →
-                                </Link>
-                            </p>
-                        </div>
+                    <div className="ws-alert ws-alert-warning">
+                        <span>
+                            No active election found. Create and activate an election before registering polling stations.{' '}
+                            <Link href="/admin/elections/create" className="font-semibold underline">Create an election</Link>
+                        </span>
                     </div>
                 )}
 
-                <div className="bg-slate-800/40 rounded-xl p-6 border border-slate-700/50">
-                    <form onSubmit={handleSubmit} className="space-y-6">
-
-                        {/* Code & Name */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div>
-                                <label className="block text-gray-300 mb-2 font-semibold">Station Code <span className="text-red-400">*</span></label>
+                <Panel className="p-5">
+                    <form onSubmit={handleSubmit} className="space-y-5">
+                        <div className="ws-form-grid">
+                            <Field label="Station Code">
                                 <input
                                     type="text"
                                     value={data.code}
-                                    onChange={(e) => setData('code', e.target.value.toUpperCase())}
-                                    className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white font-mono"
+                                    onChange={(event) => setData('code', event.target.value.toUpperCase())}
+                                    className={`${inputClass} font-mono`}
                                     placeholder="e.g., BNJ-001"
                                     required
                                 />
-                                {errors.code && <p className="text-red-400 text-sm mt-1">{errors.code}</p>}
-                            </div>
-                            <div>
-                                <label className="block text-gray-300 mb-2 font-semibold">Station Name <span className="text-red-400">*</span></label>
+                                {errors.code && <p className="mt-1 text-sm text-rose-600">{errors.code}</p>}
+                            </Field>
+                            <Field label="Station Name">
                                 <input
                                     type="text"
                                     value={data.name}
-                                    onChange={(e) => setData('name', e.target.value)}
-                                    className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white"
+                                    onChange={(event) => setData('name', event.target.value)}
+                                    className={inputClass}
                                     placeholder="e.g., Central Primary School"
                                     required
                                 />
-                                {errors.name && <p className="text-red-400 text-sm mt-1">{errors.name}</p>}
-                            </div>
+                                {errors.name && <p className="mt-1 text-sm text-rose-600">{errors.name}</p>}
+                            </Field>
                         </div>
 
-                        {/* Address */}
-                        <div>
-                            <label className="block text-gray-300 mb-2 font-semibold">Address</label>
-                            <input
-                                type="text"
-                                value={data.address}
-                                onChange={(e) => setData('address', e.target.value)}
-                                className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white"
-                                placeholder="Full station address"
-                            />
-                        </div>
+                        <Field label="Address">
+                            <input type="text" value={data.address} onChange={(event) => setData('address', event.target.value)} className={inputClass} placeholder="Full station address" />
+                        </Field>
 
-                        {/* Ward */}
-                        <div>
-                            <label className="block text-gray-300 mb-2 font-semibold">Ward <span className="text-red-400">*</span></label>
+                        <Field label="Ward">
                             {wards.length === 0 ? (
-                                <div className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-lg">
-                                    <p className="text-amber-300 text-sm">No wards found. Please configure the administrative hierarchy first.</p>
-                                </div>
+                                <div className="ws-alert ws-alert-warning mb-0">No wards found. Configure the administrative hierarchy first.</div>
                             ) : (
-                                <select
-                                    value={data.ward_id}
-                                    onChange={(e) => setData('ward_id', e.target.value)}
-                                    className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white"
-                                    required
-                                >
-                                    <option value="">— Select a Ward —</option>
-                                    {wards.map((ward) => (
-                                        <option key={ward.id} value={ward.id}>{ward.name}</option>
-                                    ))}
+                                <select value={data.ward_id} onChange={(event) => setData('ward_id', event.target.value)} className={inputClass} required>
+                                    <option value="">Select a ward</option>
+                                    {wards.map((ward) => <option key={ward.id} value={ward.id}>{ward.name}</option>)}
                                 </select>
                             )}
-                            {errors.ward_id && <p className="text-red-400 text-sm mt-1">{errors.ward_id}</p>}
-                        </div>
+                            {errors.ward_id && <p className="mt-1 text-sm text-rose-600">{errors.ward_id}</p>}
+                        </Field>
 
-                        {/* GPS Coordinates */}
                         <div>
-                            <div className="flex items-center justify-between mb-2">
-                                <label className="text-gray-300 font-semibold">GPS Coordinates <span className="text-red-400">*</span></label>
-                                <button
-                                    type="button"
-                                    onClick={handleGPS}
-                                    disabled={locating}
-                                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-600/50 text-white text-sm rounded-lg"
-                                >
-                                    {locating ? '📍 Getting location…' : '📍 Use My GPS'}
-                                </button>
+                            <div className="mb-2 flex items-center justify-between gap-3">
+                                <span className="ws-label mb-0">GPS Coordinates</span>
+                                <Button type="button" onClick={handleGPS} disabled={locating} variant="secondary">
+                                    {locating ? 'Getting Location' : 'Use My GPS'}
+                                </Button>
                             </div>
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-gray-400 text-xs mb-1">Latitude</label>
-                                    <input
-                                        type="number"
-                                        step="0.00000001"
-                                        value={data.latitude}
-                                        onChange={(e) => setData('latitude', e.target.value)}
-                                        className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white font-mono"
-                                        placeholder="13.4549"
-                                        required
-                                    />
-                                    {errors.latitude && <p className="text-red-400 text-sm mt-1">{errors.latitude}</p>}
-                                </div>
-                                <div>
-                                    <label className="block text-gray-400 text-xs mb-1">Longitude</label>
-                                    <input
-                                        type="number"
-                                        step="0.00000001"
-                                        value={data.longitude}
-                                        onChange={(e) => setData('longitude', e.target.value)}
-                                        className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white font-mono"
-                                        placeholder="-16.5790"
-                                        required
-                                    />
-                                    {errors.longitude && <p className="text-red-400 text-sm mt-1">{errors.longitude}</p>}
-                                </div>
+                            <div className="ws-form-grid">
+                                <Field label="Latitude">
+                                    <input type="number" step="0.00000001" value={data.latitude} onChange={(event) => setData('latitude', event.target.value)} className={`${inputClass} font-mono`} placeholder="13.4549" required />
+                                    {errors.latitude && <p className="mt-1 text-sm text-rose-600">{errors.latitude}</p>}
+                                </Field>
+                                <Field label="Longitude">
+                                    <input type="number" step="0.00000001" value={data.longitude} onChange={(event) => setData('longitude', event.target.value)} className={`${inputClass} font-mono`} placeholder="-16.5790" required />
+                                    {errors.longitude && <p className="mt-1 text-sm text-rose-600">{errors.longitude}</p>}
+                                </Field>
                             </div>
-                            <p className="text-gray-500 text-xs mt-1">Used for GPS validation when officers submit results.</p>
+                            <p className="mt-1 text-xs text-slate-500">Used for GPS validation when officers submit results.</p>
                         </div>
 
-                        {/* Registered Voters */}
-                        <div>
-                            <label className="block text-gray-300 mb-2 font-semibold">Registered Voters <span className="text-red-400">*</span></label>
-                            <input
-                                type="number"
-                                min="0"
-                                value={data.registered_voters}
-                                onChange={(e) => setData('registered_voters', e.target.value)}
-                                className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white"
-                                placeholder="0"
-                                required
-                            />
-                            {errors.registered_voters && <p className="text-red-400 text-sm mt-1">{errors.registered_voters}</p>}
+                        <div className="ws-form-grid">
+                            <Field label="Registered Voters">
+                                <input type="number" min="0" value={data.registered_voters} onChange={(event) => setData('registered_voters', event.target.value)} className={inputClass} placeholder="0" required />
+                                {errors.registered_voters && <p className="mt-1 text-sm text-rose-600">{errors.registered_voters}</p>}
+                            </Field>
+                            <Field label="Assigned Polling Officer">
+                                <select value={data.assigned_officer_id} onChange={(event) => setData('assigned_officer_id', event.target.value)} className={inputClass}>
+                                    <option value="">No officer assigned yet</option>
+                                    {officers.map((officer) => <option key={officer.id} value={officer.id}>{officer.name} ({officer.email})</option>)}
+                                </select>
+                                {officers.length === 0 && (
+                                    <p className="mt-1 text-xs text-slate-500">
+                                        No polling officers found. <Link href="/admin/users/create" className="text-iec-pink underline">Create a polling officer</Link> first.
+                                    </p>
+                                )}
+                                {errors.assigned_officer_id && <p className="mt-1 text-sm text-rose-600">{errors.assigned_officer_id}</p>}
+                            </Field>
                         </div>
 
-                        {/* Assigned Officer */}
-                        <div>
-                            <label className="block text-gray-300 mb-2 font-semibold">Assigned Polling Officer</label>
-                            <select
-                                value={data.assigned_officer_id}
-                                onChange={(e) => setData('assigned_officer_id', e.target.value)}
-                                className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white"
-                            >
-                                <option value="">— No officer assigned yet —</option>
-                                {officers.map((officer) => (
-                                    <option key={officer.id} value={officer.id}>
-                                        {officer.name} ({officer.email})
-                                    </option>
-                                ))}
-                            </select>
-                            {errors.assigned_officer_id && <p className="text-red-400 text-sm mt-1">{errors.assigned_officer_id}</p>}
-                            {officers.length === 0 && (
-                                <p className="text-gray-500 text-xs mt-1">
-                                    No polling officers found. <Link href="/admin/users/create" className="text-teal-400 underline">Create a polling officer</Link> first.
-                                </p>
-                            )}
-                        </div>
-
-                        {/* Flags */}
-                        <div className="grid grid-cols-2 gap-4">
-                            <label className="flex items-center gap-3 p-4 bg-slate-900/30 rounded-lg cursor-pointer">
-                                <input
-                                    type="checkbox"
-                                    checked={data.is_active}
-                                    onChange={(e) => setData('is_active', e.target.checked)}
-                                    className="h-4 w-4 text-teal-600 bg-slate-900 border-slate-600 rounded"
-                                />
-                                <div>
-                                    <div className="text-white font-medium">Active Station</div>
-                                    <div className="text-gray-400 text-xs">Station is open for voting</div>
-                                </div>
+                        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                            <label className="ws-toggle-card">
+                                <span>
+                                    <span className="block font-semibold text-slate-900">Active Station</span>
+                                    <span className="mt-1 block text-sm text-slate-500">Station is open for voting.</span>
+                                </span>
+                                <input type="checkbox" checked={data.is_active} onChange={(event) => setData('is_active', event.target.checked)} />
                             </label>
-                            <label className="flex items-center gap-3 p-4 bg-slate-900/30 rounded-lg cursor-pointer">
-                                <input
-                                    type="checkbox"
-                                    checked={data.is_test_station}
-                                    onChange={(e) => setData('is_test_station', e.target.checked)}
-                                    className="h-4 w-4 text-amber-600 bg-slate-900 border-slate-600 rounded"
-                                />
-                                <div>
-                                    <div className="text-amber-300 font-medium">Test Station</div>
-                                    <div className="text-gray-400 text-xs">Results excluded from aggregation</div>
-                                </div>
+                            <label className="ws-toggle-card">
+                                <span>
+                                    <span className="block font-semibold text-slate-900">Test Station</span>
+                                    <span className="mt-1 block text-sm text-slate-500">Results excluded from aggregation.</span>
+                                </span>
+                                <input type="checkbox" checked={data.is_test_station} onChange={(event) => setData('is_test_station', event.target.checked)} />
                             </label>
                         </div>
 
-                        {/* Submit */}
-                        <div className="flex gap-4">
-                            <button
-                                type="submit"
-                                disabled={processing || !hasActiveElection}
-                                title={!hasActiveElection ? 'Create an election first' : ''}
-                                className="flex-1 px-6 py-3 bg-teal-600 hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold rounded-lg"
-                            >
-                                {processing ? 'Registering…' : !hasActiveElection ? 'No Active Election' : 'Register Polling Station'}
-                            </button>
-                            <Link href="/admin/polling-stations" className="flex-1 px-6 py-3 bg-slate-700 hover:bg-slate-600 text-white font-bold rounded-lg text-center">
-                                Cancel
-                            </Link>
+                        <div className="flex flex-wrap gap-3 pt-2">
+                            <Button type="submit" disabled={processing || !hasActiveElection}>
+                                {processing ? 'Registering...' : !hasActiveElection ? 'No Active Election' : 'Register Polling Station'}
+                            </Button>
+                            <Button href="/admin/polling-stations" variant="secondary">Cancel</Button>
                         </div>
                     </form>
-                </div>
+                </Panel>
             </div>
         </AppLayout>
     );

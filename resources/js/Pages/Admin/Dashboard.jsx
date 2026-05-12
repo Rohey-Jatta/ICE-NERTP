@@ -1,5 +1,6 @@
 import AppLayout from '@/Layouts/AppLayout';
 import { Link } from '@inertiajs/react';
+import { can, canAny } from '@/Utils/permissions';
 
 const formatNumber = (value) =>
     new Intl.NumberFormat().format(value || 0);
@@ -61,6 +62,7 @@ const ReadinessItem = ({ label, ready, value }) => (
 
 // ── Page ───────────────────────────────────────────────────────────────────
 export default function AdminDashboard({ auth, statistics, systemStatus }) {
+    const user = auth.user;
     const stats = {
         totalUsers:      statistics?.totalUsers      || 0,
         totalStations:   statistics?.totalStations   || 0,
@@ -93,8 +95,23 @@ export default function AdminDashboard({ auth, statistics, systemStatus }) {
         },
     ];
 
+    const shortcuts = [
+        { href: '/admin/users', title: 'Manage users', description: 'Accounts, roles, and access control', permissions: ['manage-users'] },
+        { href: '/admin/elections', title: 'Election setup', description: 'Create and configure election records', permissions: ['create-election', 'edit-election'] },
+        { href: '/admin/polling-stations', title: 'Polling stations', description: 'Station registry and officer assignments', permissions: ['manage-polling-stations'] },
+        { href: '/admin/party-representatives', title: 'Party representatives', description: 'Party agents and station coverage', permissions: ['register-parties'] },
+        { href: '/admin/election-monitors', title: 'Election monitors', description: 'Monitor accreditation and assignments', permissions: ['manage-election-monitors'] },
+        { href: '/admin/audit-logs', title: 'Audit logs', description: 'Administrative and workflow activity', permissions: ['view-audit-logs'] },
+    ].filter((shortcut) => canAny(user, shortcut.permissions));
+
+    const hierarchyShortcuts = [
+        { href: '/admin/hierarchy/admin-areas', title: 'Administrative areas', description: 'Top-level regional units' },
+        { href: '/admin/hierarchy/constituencies', title: 'Constituencies', description: 'Subdivisions under administrative areas' },
+        { href: '/admin/hierarchy/wards', title: 'Wards', description: 'Ward-level approval and station grouping' },
+    ].filter(() => can(user, 'configure-workflow'));
+
     return (
-        <AppLayout user={auth.user}>
+        <AppLayout user={user}>
             <div className="ws-page">
 
                 {/* ── Page Header ─────────────────────────────────────── */}
@@ -107,15 +124,17 @@ export default function AdminDashboard({ auth, statistics, systemStatus }) {
                                 Platform health, user coverage, station readiness, and election configuration at a glance.
                             </p>
                         </div>
-                        <Link
-                            href="/admin/users/create"
-                            className="inline-flex items-center gap-2 self-start rounded bg-iec-pink-500 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-iec-pink-600 active:bg-iec-pink-700 shrink-0"
-                        >
-                            <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                                <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
-                            </svg>
-                            Create User
-                        </Link>
+                        {can(user, 'manage-users') && can(user, 'assign-roles') ? (
+                            <Link
+                                href="/admin/users/create"
+                                className="inline-flex items-center gap-2 self-start rounded bg-iec-pink-500 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-iec-pink-700 active:bg-iec-pink-700 shrink-0"
+                            >
+                                <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                                    <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
+                                </svg>
+                                Create User
+                            </Link>
+                        ) : null}
                     </div>
                 </div>
 
@@ -166,36 +185,9 @@ export default function AdminDashboard({ auth, statistics, systemStatus }) {
                                 <h2 className="ws-panel-title">Operational shortcuts</h2>
                             </div>
                             <div className="ws-panel-body grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                                <ActionTile
-                                    href="/admin/users"
-                                    title="Manage users"
-                                    description="Accounts, roles, and access control"
-                                />
-                                <ActionTile
-                                    href="/admin/elections"
-                                    title="Election setup"
-                                    description="Create and configure election records"
-                                />
-                                <ActionTile
-                                    href="/admin/polling-stations"
-                                    title="Polling stations"
-                                    description="Station registry and officer assignments"
-                                />
-                                <ActionTile
-                                    href="/admin/party-representatives"
-                                    title="Party representatives"
-                                    description="Party agents and station coverage"
-                                />
-                                <ActionTile
-                                    href="/admin/election-monitors"
-                                    title="Election monitors"
-                                    description="Monitor accreditation and assignments"
-                                />
-                                <ActionTile
-                                    href="/admin/audit-logs"
-                                    title="Audit logs"
-                                    description="Administrative and workflow activity"
-                                />
+                                {shortcuts.map((shortcut) => (
+                                    <ActionTile key={shortcut.href} {...shortcut} />
+                                ))}
                             </div>
                         </div>
 
@@ -203,7 +195,7 @@ export default function AdminDashboard({ auth, statistics, systemStatus }) {
                         <div className="ws-panel">
                             <div className="ws-panel-header flex items-center justify-between">
                                 <h2 className="ws-panel-title">Readiness check</h2>
-                                <span className="text-[0.6875rem] font-medium text-gray-400">
+                                <span className="text-[0.6875rem] font-medium text-slate-500">
                                     {readinessItems.filter(i => i.ready).length}/{readinessItems.length} ready
                                 </span>
                             </div>
@@ -223,21 +215,9 @@ export default function AdminDashboard({ auth, statistics, systemStatus }) {
                             <h2 className="ws-panel-title">Administrative structure</h2>
                         </div>
                         <div className="ws-panel-body grid grid-cols-1 gap-2 sm:grid-cols-3">
-                            <ActionTile
-                                href="/admin/hierarchy/admin-areas"
-                                title="Administrative areas"
-                                description="Top-level regional units"
-                            />
-                            <ActionTile
-                                href="/admin/hierarchy/constituencies"
-                                title="Constituencies"
-                                description="Subdivisions under administrative areas"
-                            />
-                            <ActionTile
-                                href="/admin/hierarchy/wards"
-                                title="Wards"
-                                description="Ward-level approval and station grouping"
-                            />
+                            {hierarchyShortcuts.map((shortcut) => (
+                                <ActionTile key={shortcut.href} {...shortcut} />
+                            ))}
                         </div>
                     </div>
 

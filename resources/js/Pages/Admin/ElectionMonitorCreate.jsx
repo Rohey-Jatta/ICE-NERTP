@@ -36,27 +36,27 @@ export default function ElectionMonitorCreate({ auth, users, pollingStations }) 
             <div className="container mx-auto px-4 py-8 max-w-4xl">
                 <div className="flex items-center justify-between mb-6">
                     <div>
-                        <Link href="/admin/election-monitors" className="text-gray-400 hover:text-white text-sm mb-2 inline-block">
+                        <Link href="/admin/election-monitors" className="text-slate-500 hover:text-iec-navy text-sm mb-2 inline-block">
                             ← Back to Election Monitors
                         </Link>
-                        <h1 className="text-3xl font-bold text-white">Add Election Monitor</h1>
+                        <h1 className="text-3xl font-bold text-iec-navy">Add Election Monitor</h1>
                     </div>
                 </div>
 
-                <div className="bg-slate-800/40 rounded-xl p-6 border border-slate-700/50">
+                <div className="bg-white rounded-xl p-6 border border-slate-200">
                     <form onSubmit={handleSubmit} className="space-y-6">
 
                         {/* Select election-monitor user */}
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div>
-                                <label className="block text-gray-300 mb-2 font-semibold">
+                                <label className="block text-slate-600 mb-2 font-semibold">
                                     Select Election Monitor User
-                                    <span className="text-gray-500 font-normal text-xs ml-2">(users with election-monitor role)</span>
+                                    <span className="text-slate-500 font-normal text-xs ml-2">(users with election-monitor role)</span>
                                 </label>
                                 <select
                                     value={data.user_id}
                                     onChange={(e) => setData('user_id', e.target.value)}
-                                    className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white"
+                                    className="w-full px-4 py-3 bg-white border border-slate-200 rounded-lg text-iec-navy"
                                     required
                                 >
                                     <option value="">— Choose a monitor user —</option>
@@ -71,20 +71,20 @@ export default function ElectionMonitorCreate({ auth, users, pollingStations }) 
                                     )}
                                 </select>
                                 {errors.user_id && <p className="text-red-400 text-sm mt-1">{errors.user_id}</p>}
-                                <p className="text-gray-500 text-xs mt-1">
+                                <p className="text-slate-500 text-xs mt-1">
                                     To add users here, go to{' '}
-                                    <Link href="/admin/users/create" className="text-teal-400 underline">User Management</Link>{' '}
-                                    and assign the <strong className="text-gray-300">election-monitor</strong> role.
+                                    <Link href="/admin/users/create" className="text-iec-pink-600 underline">User Management</Link>{' '}
+                                    and assign the <strong className="text-slate-600">election-monitor</strong> role.
                                 </p>
                             </div>
 
                             <div>
-                                <label className="block text-gray-300 mb-2 font-semibold">Organization (Optional)</label>
+                                <label className="block text-slate-600 mb-2 font-semibold">Organization (Optional)</label>
                                 <input
                                     type="text"
                                     value={data.organization}
                                     onChange={(e) => setData('organization', e.target.value)}
-                                    className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white"
+                                    className="w-full px-4 py-3 bg-white border border-slate-200 rounded-lg text-iec-navy"
                                     placeholder="e.g., Civil Society Organization"
                                 />
                                 {errors.organization && <p className="text-red-400 text-sm mt-1">{errors.organization}</p>}
@@ -93,11 +93,11 @@ export default function ElectionMonitorCreate({ auth, users, pollingStations }) 
 
                         {/* Monitor Type */}
                         <div>
-                            <label className="block text-gray-300 mb-2 font-semibold">Monitor Type</label>
+                            <label className="block text-slate-600 mb-2 font-semibold">Monitor Type</label>
                             <select
                                 value={data.type}
                                 onChange={(e) => setData('type', e.target.value)}
-                                className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white"
+                                className="w-full px-4 py-3 bg-white border border-slate-200 rounded-lg text-iec-navy"
                             >
                                 <option value="domestic">Domestic</option>
                                 <option value="international">International</option>
@@ -108,9 +108,9 @@ export default function ElectionMonitorCreate({ auth, users, pollingStations }) 
 
                         {/* Polling Station Assignment */}
                         <div>
-                            <label className="block text-gray-300 mb-2 font-semibold">
+                            <label className="block text-slate-600 mb-2 font-semibold">
                                 Assign to Polling Stations
-                                <span className="text-gray-500 font-normal text-xs ml-2">
+                                <span className="text-slate-500 font-normal text-xs ml-2">
                                     ({selectedStations.length} selected)
                                 </span>
                             </label>
@@ -121,13 +121,13 @@ export default function ElectionMonitorCreate({ auth, users, pollingStations }) 
                                 placeholder="Search stations by name or code..."
                                 value={stationSearch}
                                 onChange={(e) => setStationSearch(e.target.value)}
-                                className="w-full px-4 py-2 mb-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white text-sm"
+                                className="w-full px-4 py-2 mb-3 bg-white border border-slate-200 rounded-lg text-iec-navy text-sm"
                             />
 
                             {pollingStations.length === 0 ? (
                                 <div className="p-6 bg-amber-500/10 border border-amber-500/30 rounded-lg text-center">
                                     <p className="text-amber-300 text-sm">No polling stations found. Please create polling stations first.</p>
-                                    <Link href="/admin/polling-stations/create" className="text-teal-400 underline text-sm mt-2 inline-block">
+                                    <Link href="/admin/polling-stations/create" className="text-iec-pink-600 underline text-sm mt-2 inline-block">
                                         Create Polling Station →
                                     </Link>
                                 </div>
@@ -139,18 +139,18 @@ export default function ElectionMonitorCreate({ auth, users, pollingStations }) 
                                             className={`flex items-center space-x-3 p-3 rounded-lg cursor-pointer border transition-colors ${
                                                 selectedStations.includes(station.id)
                                                     ? 'bg-teal-900/30 border-teal-500/50'
-                                                    : 'bg-slate-900/30 border-slate-700/30 hover:bg-slate-900/50'
+                                                    : 'bg-slate-50 border-slate-200 hover:bg-white'
                                             }`}
                                         >
                                             <input
                                                 type="checkbox"
                                                 checked={selectedStations.includes(station.id)}
                                                 onChange={() => handleStationToggle(station.id)}
-                                                className="h-4 w-4 text-teal-600 bg-slate-900 border-slate-600 rounded"
+                                                className="h-4 w-4 text-iec-pink-600 bg-white border-slate-200 rounded"
                                             />
                                             <div>
-                                                <div className="text-white font-medium text-sm">{station.code}</div>
-                                                <div className="text-gray-400 text-xs">{station.name}</div>
+                                                <div className="text-iec-navy font-medium text-sm">{station.code}</div>
+                                                <div className="text-slate-500 text-xs">{station.name}</div>
                                             </div>
                                         </label>
                                     ))}
@@ -167,11 +167,11 @@ export default function ElectionMonitorCreate({ auth, users, pollingStations }) 
                             <button
                                 type="submit"
                                 disabled={processing || selectedStations.length === 0}
-                                className="flex-1 px-6 py-3 bg-teal-600 hover:bg-teal-700 disabled:bg-teal-600/50 disabled:cursor-not-allowed text-white font-bold rounded-lg"
+                                className="flex-1 px-6 py-3 bg-iec-pink-600 hover:bg-iec-pink-700 disabled:bg-iec-pink-600/50 disabled:cursor-not-allowed text-white font-bold rounded-lg"
                             >
                                 {processing ? 'Creating…' : 'Create Election Monitor'}
                             </button>
-                            <Link href="/admin/election-monitors" className="flex-1 px-6 py-3 bg-slate-700 hover:bg-slate-600 text-white font-bold rounded-lg text-center">
+                            <Link href="/admin/election-monitors" className="flex-1 px-6 py-3 bg-white hover:bg-slate-100 text-iec-navy font-bold rounded-lg text-center">
                                 Cancel
                             </Link>
                         </div>

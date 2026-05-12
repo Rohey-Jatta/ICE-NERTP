@@ -19,12 +19,13 @@ class ResultsStationsController extends Controller
         $availableElections = Election::where('allow_provisional_public_display', true)
             ->whereIn('status', ['active', 'certifying', 'results_pending', 'certified'])
             ->orderByDesc('start_date')
-            ->get(['id', 'name', 'type', 'status'])
+            ->get(['id', 'name', 'type', 'status', 'start_date'])
             ->map(fn($e) => [
-                'id'     => $e->id,
-                'name'   => $e->name,
-                'type'   => $e->type,
-                'status' => $e->status,
+                'id'         => $e->id,
+                'name'       => $e->name,
+                'type'       => $e->type,
+                'status'     => $e->status,
+                'start_date' => $e->start_date?->toDateString(),
             ]);
 
         $election = null;
@@ -209,8 +210,11 @@ class ResultsStationsController extends Controller
 
         return [
             'election' => [
-                'id'   => $election->id,
-                'name' => $election->name,
+                'id'         => $election->id,
+                'name'       => $election->name,
+                'type'       => $election->type,
+                'status'     => $election->status,
+                'start_date' => $election->start_date?->toDateString(),
             ],
             'stations' => $mappedStations,
         ];

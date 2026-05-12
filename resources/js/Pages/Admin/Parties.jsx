@@ -1,17 +1,7 @@
 import AppLayout from '@/Layouts/AppLayout';
-import { Link, router } from '@inertiajs/react';
+import { router } from '@inertiajs/react';
 import { useState } from 'react';
-
-function ColorStripe({ colorsArray }) {
-    if (!colorsArray || colorsArray.length === 0) {
-        return <div className="w-full h-2 rounded-full bg-slate-600" />;
-    }
-    if (colorsArray.length === 1) {
-        return <div className="w-full h-2 rounded-full" style={{ backgroundColor: colorsArray[0] }} />;
-    }
-    const gradient = `linear-gradient(to right, ${colorsArray.join(', ')})`;
-    return <div className="w-full h-2 rounded-full" style={{ background: gradient }} />;
-}
+import { Badge, Button, DataTable, PageHeader, Panel } from '@/Components/AdminUI';
 
 function ColorDots({ colorsArray }) {
     if (!colorsArray || colorsArray.length === 0) return null;
@@ -20,18 +10,19 @@ function ColorDots({ colorsArray }) {
             {colorsArray.map((color, i) => (
                 <span
                     key={i}
-                    className="w-5 h-5 rounded-full border-2 border-white/20 flex-shrink-0"
+                    className="w-5 h-5 rounded-full border-2 border-slate-200 flex-shrink-0"
                     style={{ backgroundColor: color }}
                     title={color}
                 />
             ))}
-            <span className="text-gray-500 text-xs ml-1">{colorsArray.join(' · ')}</span>
+            <span className="ws-row-muted ml-1">{colorsArray.join(' · ')}</span>
         </div>
     );
 }
 
 export default function Parties({ auth, parties = [], flash, activeElection }) {
     const [deletingId, setDeletingId] = useState(null);
+    const [view, setView] = useState('table');
 
     const handleRegister = () => router.visit('/admin/parties/create');
     const handleEdit = (id) => router.visit(`/admin/parties/${id}/edit`);
@@ -50,31 +41,91 @@ export default function Parties({ auth, parties = [], flash, activeElection }) {
         });
     };
 
-    return (
-        <AppLayout user={auth?.user}>
-            <div className="container mx-auto px-4 py-8">
-                <div className="mb-6">
-                    <Link href="/admin/dashboard" className="text-gray-400 hover:text-white text-sm mb-2 inline-block">
-                        ← Back to Dashboard
-                    </Link>
-                    <div className="flex justify-between items-center">
-                        <div>
-                            <h1 className="text-3xl font-bold text-white">Political Party Management</h1>
-                            {activeElection ? (
-                                <p className="text-teal-300 text-sm mt-1">
-                                    Showing parties for: <strong>{activeElection.name}</strong>
-                                </p>
-                            ) : (
-                                <p className="text-amber-400 text-sm mt-1">
-                                    ⚠ No active election — activate an election to manage parties and candidates.
-                                </p>
-                            )}
+    const columns = [
+        {
+            key: 'party',
+            header: 'Party',
+            render: (party) => (
+                <div className="flex items-center gap-3">
+                    {party.symbol_url ? (
+                        <img
+                            src={party.symbol_url}
+                            alt={`${party.name} symbol`}
+                            className="h-10 w-10 rounded-md border border-gray-200 bg-white object-contain p-1"
+                        />
+                    ) : (
+                        <div className="flex h-10 w-10 items-center justify-center rounded-md border border-gray-200 bg-gray-50 text-sm font-bold text-slate-600">
+                            {party.abbreviation?.slice(0, 2)}
                         </div>
-                        <button onClick={handleRegister} className="px-6 py-3 bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-lg">
-                            + Register Party
-                        </button>
+                    )}
+                    <div>
+                        <div className="ws-row-strong">{party.name}</div>
+                        <div className="ws-row-muted">{party.abbreviation}</div>
                     </div>
                 </div>
+            ),
+        },
+        {
+            key: 'colors',
+            header: 'Colors',
+            render: (party) => <ColorDots colorsArray={party.colors_array} />,
+        },
+        {
+            key: 'candidates',
+            header: 'Candidates',
+            align: 'center',
+            render: (party) => party.candidates?.length ?? 0,
+        },
+        {
+            key: 'leader',
+            header: 'Leader',
+            render: (party) => party.leader_name || 'Not set',
+        },
+        {
+            key: 'actions',
+            header: 'Actions',
+            align: 'right',
+            render: (party) => (
+                <div className="flex justify-end gap-2">
+                    <Button onClick={() => handleEdit(party.id)} variant="secondary">Edit</Button>
+                    <Button onClick={() => handleDelete(party)} disabled={deletingId === party.id} variant="danger">
+                        {deletingId === party.id ? 'Deleting...' : 'Delete'}
+                    </Button>
+                </div>
+            ),
+        },
+    ];
+
+    return (
+        <AppLayout user={auth?.user}>
+            <div className="ws-container">
+                <PageHeader
+                    title="Political Party Management"
+                    description={activeElection
+                        ? `Showing parties for ${activeElection.name}`
+                        : 'No active election. Activate an election to manage parties and candidates.'}
+                    actions={(
+                        <>
+                            <div className="inline-flex rounded-md border border-gray-200 bg-white p-1">
+                                <button
+                                    type="button"
+                                    onClick={() => setView('table')}
+                                    className={`rounded px-3 py-1.5 text-sm font-semibold ${view === 'table' ? 'bg-iec-pink text-white' : 'text-slate-600 hover:bg-gray-50'}`}
+                                >
+                                    Table
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setView('cards')}
+                                    className={`rounded px-3 py-1.5 text-sm font-semibold ${view === 'cards' ? 'bg-iec-pink text-white' : 'text-slate-600 hover:bg-gray-50'}`}
+                                >
+                                    Cards
+                                </button>
+                            </div>
+                            <Button onClick={handleRegister}>Register Party</Button>
+                        </>
+                    )}
+                />
 
                 {flash?.success && (
                     <div className="mb-6 p-4 bg-green-500/20 border border-green-500/50 rounded-lg text-green-300">
@@ -88,47 +139,41 @@ export default function Parties({ auth, parties = [], flash, activeElection }) {
                 )}
 
                 {parties.length === 0 ? (
-                    <div className="bg-slate-800/40 rounded-xl p-12 border border-slate-700/50 text-center">
-                        <div className="text-5xl mb-4">🏛️</div>
-                        <p className="text-gray-400 mb-2">
+                    <Panel className="p-12 text-center">
+                        <p className="mb-4 text-slate-400">
                             {activeElection
                                 ? `No parties registered for ${activeElection.name} yet.`
                                 : 'No active election found.'}
                         </p>
                         {activeElection && (
-                            <button
-                                onClick={handleRegister}
-                                className="px-6 py-3 bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-lg mt-2"
-                            >
-                                Register First Party
-                            </button>
+                            <Button onClick={handleRegister}>Register First Party</Button>
                         )}
-                    </div>
+                    </Panel>
+                ) : view === 'table' ? (
+                    <DataTable columns={columns} rows={parties} empty="No parties registered for the active election." />
                 ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
                         {parties.map((party) => {
                             const primaryColor = party.colors_array?.[0] || '#6b7280';
 
                             return (
-                                <div
+                                <Panel
                                     key={party.id}
-                                    className="bg-slate-800/40 rounded-xl overflow-hidden border border-slate-700/50 flex flex-col"
+                                    className="p-5"
                                 >
-                                    <ColorStripe colorsArray={party.colors_array} />
-
-                                    <div className="p-6 flex-1 flex flex-col">
-                                        <div className="flex items-start gap-4 mb-4">
+                                    <div className="flex min-h-full flex-col">
+                                        <div className="mb-5 flex items-start gap-4">
                                             <div className="flex-shrink-0">
                                                 {party.symbol_url ? (
                                                     <img
                                                         src={party.symbol_url}
                                                         alt={`${party.name} symbol`}
-                                                        className="w-16 h-16 object-contain rounded-lg bg-white p-1 border border-slate-600"
+                                                        className="h-14 w-14 rounded-lg border border-gray-200 bg-white object-contain p-1"
                                                     />
                                                 ) : (
                                                     <div
-                                                        className="w-16 h-16 rounded-lg flex items-center justify-center text-white font-bold text-xl border border-slate-600"
-                                                        style={{ backgroundColor: primaryColor + '44' }}
+                                                        className="flex h-14 w-14 items-center justify-center rounded-lg border border-gray-200 text-lg font-bold text-slate-600"
+                                                        style={{ backgroundColor: primaryColor + '22' }}
                                                     >
                                                         {party.abbreviation?.slice(0, 2)}
                                                     </div>
@@ -136,21 +181,23 @@ export default function Parties({ auth, parties = [], flash, activeElection }) {
                                             </div>
 
                                             <div className="flex-1 min-w-0">
-                                                <h3 className="text-xl font-bold text-white leading-tight">{party.name}</h3>
-                                                <p className="text-gray-400 text-sm font-mono mt-0.5">{party.abbreviation}</p>
+                                                <div className="flex flex-wrap items-center gap-2">
+                                                    <h3 className="text-lg font-bold leading-tight text-slate-900">{party.name}</h3>
+                                                    <Badge tone="slate">{party.abbreviation}</Badge>
+                                                </div>
                                                 {party.motto && (
-                                                    <p className="text-gray-500 text-xs italic mt-1">"{party.motto}"</p>
+                                                    <p className="mt-1 text-xs italic text-slate-500">{party.motto}</p>
                                                 )}
                                             </div>
                                         </div>
 
-                                        <div className="mb-4">
-                                            <p className="text-gray-500 text-xs uppercase tracking-wide mb-1">Party Colors</p>
+                                        <div className="mb-5">
+                                            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Party Colors</p>
                                             <ColorDots colorsArray={party.colors_array} />
                                         </div>
 
                                         {(party.leader_name || party.leader_photo_url) && (
-                                            <div className="flex items-center gap-3 mb-4 p-3 bg-slate-900/50 rounded-lg border border-slate-700/30">
+                                            <div className="mb-5 flex items-center gap-3 rounded-lg border border-gray-200 bg-gray-50 p-3">
                                                 {party.leader_photo_url ? (
                                                     <img
                                                         src={party.leader_photo_url}
@@ -160,96 +207,86 @@ export default function Parties({ auth, parties = [], flash, activeElection }) {
                                                     />
                                                 ) : (
                                                     <div
-                                                        className="w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0"
+                                                        className="w-12 h-12 rounded-full flex items-center justify-center text-iec-navy font-bold text-sm flex-shrink-0"
                                                         style={{ backgroundColor: primaryColor + '44' }}
                                                     >
                                                         {party.leader_name?.charAt(0) || '?'}
                                                     </div>
                                                 )}
                                                 <div className="min-w-0">
-                                                    <p className="text-gray-400 text-xs uppercase tracking-wide">Party Leader</p>
-                                                    <p className="text-white font-semibold text-sm truncate">{party.leader_name || '—'}</p>
+                                                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Party Leader</p>
+                                                    <p className="truncate text-sm font-semibold text-slate-900">{party.leader_name || '-'}</p>
                                                 </div>
                                             </div>
                                         )}
 
-                                        <div className="mb-4">
-                                            <p className="text-gray-500 text-xs uppercase tracking-wide mb-2">
+                                        <div className="mb-5">
+                                            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
                                                 Candidates ({party.candidates?.length ?? 0})
                                                 {activeElection && (
-                                                    <span className="text-gray-600 normal-case ml-1">for {activeElection.name}</span>
+                                                    <span className="ml-1 normal-case text-slate-500">for {activeElection.name}</span>
                                                 )}
                                             </p>
                                             {party.candidates && party.candidates.length > 0 ? (
                                                 <div className="flex flex-wrap gap-2">
                                                     {party.candidates.map((candidate) => (
-                                                        <div key={candidate.id} className="flex items-center gap-2 bg-slate-900/50 rounded-lg px-2 py-1.5 border border-slate-700/30">
+                                                        <div key={candidate.id} className="flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-2 py-1.5">
                                                             {candidate.photo_url ? (
                                                                 <img
                                                                     src={candidate.photo_url}
                                                                     alt={candidate.name}
-                                                                    className="w-7 h-7 rounded-full object-cover flex-shrink-0 border border-slate-600"
+                                                                    className="w-7 h-7 rounded-full object-cover flex-shrink-0 border border-slate-200"
                                                                 />
                                                             ) : (
                                                                 <div
-                                                                    className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
+                                                                    className="w-7 h-7 rounded-full flex items-center justify-center text-iec-navy text-xs font-bold flex-shrink-0"
                                                                     style={{ backgroundColor: primaryColor + '66' }}
                                                                 >
                                                                     {candidate.name?.charAt(0) || '?'}
                                                                 </div>
                                                             )}
                                                             <div>
-                                                                <span className="text-gray-300 text-xs font-medium truncate max-w-[120px] block">
+                                                                <span className="block max-w-[160px] truncate text-xs font-medium text-slate-700">
                                                                     {candidate.name}
                                                                 </span>
                                                                 {candidate.ballot_number && (
-                                                                    <span className="text-gray-600 text-xs">#{candidate.ballot_number}</span>
+                                                                    <span className="text-xs text-slate-600">#{candidate.ballot_number}</span>
                                                                 )}
                                                             </div>
                                                         </div>
                                                     ))}
                                                 </div>
                                             ) : (
-                                                <p className="text-gray-600 text-xs italic">
-                                                    No candidates yet — add them via Edit Party.
+                                                <p className="text-xs italic text-slate-600">
+                                                    No candidates yet. Add them from Edit Party.
                                                 </p>
                                             )}
                                         </div>
 
-                                        <div className="space-y-1 mb-4 text-sm">
+                                        <div className="mb-5 space-y-1 text-sm">
                                             {party.headquarters && (
-                                                <p className="text-gray-400">
-                                                    <span className="text-gray-500">HQ:</span> {party.headquarters}
+                                                <p className="text-slate-400">
+                                                    <span className="text-slate-500">HQ:</span> {party.headquarters}
                                                 </p>
                                             )}
                                             {party.website && (
-                                                <p className="text-gray-400">
-                                                    <span className="text-gray-500">Web:</span>{' '}
-                                                    <a href={party.website} target="_blank" rel="noopener noreferrer" className="text-teal-400 hover:text-teal-300 underline">
+                                                <p className="text-slate-400">
+                                                    <span className="text-slate-500">Web:</span>{' '}
+                                                    <a href={party.website} target="_blank" rel="noopener noreferrer" className="text-iec-pink-300 hover:text-iec-pink-200">
                                                         {party.website.replace(/^https?:\/\//, '')}
                                                     </a>
                                                 </p>
                                             )}
                                         </div>
 
-                                        {/* Action Buttons */}
                                         <div className="mt-auto flex gap-2">
-                                            <button
-                                                onClick={() => handleEdit(party.id)}
-                                                className="flex-1 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition-colors text-sm"
-                                            >
-                                                Edit Party & Candidates
-                                            </button>
-                                            <button
-                                                onClick={() => handleDelete(party)}
-                                                disabled={deletingId === party.id}
-                                                className="px-4 py-2.5 bg-red-600/80 hover:bg-red-600 disabled:opacity-50 text-white rounded-lg font-semibold transition-colors text-sm"
-                                            >
-                                                {deletingId === party.id ? '…' : '🗑'}
-                                            </button>
+                                            <Button onClick={() => handleEdit(party.id)} variant="secondary" className="flex-1">Edit Party & Candidates</Button>
+                                            <Button onClick={() => handleDelete(party)} disabled={deletingId === party.id} variant="danger">
+                                                {deletingId === party.id ? 'Deleting...' : 'Delete'}
+                                            </Button>
                                         </div>
                                     </div>
-                                </div>
+                                </Panel>
                             );
                         })}
                     </div>

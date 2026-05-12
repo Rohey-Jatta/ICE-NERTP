@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import { Link, router, usePage } from '@inertiajs/react';
 import useInertiaPrefetch from '@/Hooks/useInertiaPrefetch';
+import { canAny } from '@/Utils/permissions';
 
 // ── Social icon paths ──────────────────────────────────────────────────────
 const SocialIcon = ({ name }) => {
@@ -85,52 +86,52 @@ const roleLabel = (role) => ROLE_LABELS[role] || 'Staff';
 const NAV_ITEMS = {
     'iec-administrator': [
         { href: '/admin/dashboard', label: 'Dashboard', icon: 'dashboard' },
-        { href: '/admin/users', label: 'Users', icon: 'users' },
-        { href: '/admin/elections', label: 'Elections', icon: 'elections' },
-        { href: '/admin/polling-stations', label: 'Polling Stations', icon: 'stations' },
-        { href: '/admin/parties', label: 'Parties', icon: 'results' },
-        { href: '/admin/audit-logs', label: 'Audit Logs', icon: 'queue' },
-        { href: '/admin/settings', label: 'Settings', icon: 'settings' },
+        { href: '/admin/users', label: 'Users', icon: 'users', permissions: ['manage-users'] },
+        { href: '/admin/elections', label: 'Elections', icon: 'elections', permissions: ['create-election', 'edit-election'] },
+        { href: '/admin/polling-stations', label: 'Polling Stations', icon: 'stations', permissions: ['manage-polling-stations'] },
+        { href: '/admin/parties', label: 'Parties', icon: 'results', permissions: ['register-parties'] },
+        { href: '/admin/audit-logs', label: 'Audit Logs', icon: 'queue', permissions: ['view-audit-logs'] },
+        { href: '/admin/settings', label: 'Settings', icon: 'settings', permissions: ['system-settings'] },
     ],
     'iec-chairman': [
         { href: '/chairman/dashboard', label: 'Dashboard', icon: 'dashboard' },
-        { href: '/chairman/national-queue', label: 'National Queue', icon: 'queue' },
-        { href: '/chairman/all-results', label: 'All Results', icon: 'results' },
-        { href: '/chairman/analytics', label: 'Analytics', icon: 'monitor' },
-        { href: '/chairman/publish', label: 'Publish', icon: 'elections' },
+        { href: '/chairman/national-queue', label: 'National Queue', icon: 'queue', permissions: ['view-national-queue'] },
+        { href: '/chairman/all-results', label: 'All Results', icon: 'results', permissions: ['view-all-results'] },
+        { href: '/chairman/analytics', label: 'Analytics', icon: 'monitor', permissions: ['access-full-analytics'] },
+        { href: '/chairman/publish', label: 'Publish', icon: 'elections', permissions: ['publish-results'] },
     ],
     'admin-area-approver': [
         { href: '/admin-area/dashboard', label: 'Dashboard', icon: 'dashboard' },
-        { href: '/admin-area/approval-queue', label: 'Approval Queue', icon: 'queue' },
-        { href: '/admin-area/analytics', label: 'Analytics', icon: 'monitor' },
+        { href: '/admin-area/approval-queue', label: 'Approval Queue', icon: 'queue', permissions: ['view-admin-area-queue', 'view-admin-area-results'] },
+        { href: '/admin-area/analytics', label: 'Analytics', icon: 'monitor', permissions: ['access-analytics'] },
     ],
     'constituency-approver': [
         { href: '/constituency/dashboard', label: 'Dashboard', icon: 'dashboard' },
-        { href: '/constituency/approval-queue', label: 'Approval Queue', icon: 'queue' },
-        { href: '/constituency/reports', label: 'Reports', icon: 'results' },
-        { href: '/constituency/ward-breakdowns', label: 'Ward Breakdowns', icon: 'stations' },
+        { href: '/constituency/approval-queue', label: 'Approval Queue', icon: 'queue', permissions: ['view-constituency-queue', 'view-constituency-results'] },
+        { href: '/constituency/reports', label: 'Reports', icon: 'results', permissions: ['generate-constituency-report'] },
+        { href: '/constituency/ward-breakdowns', label: 'Ward Breakdowns', icon: 'stations', permissions: ['view-ward-breakdowns'] },
     ],
     'ward-approver': [
         { href: '/ward/dashboard', label: 'Dashboard', icon: 'dashboard' },
-        { href: '/ward/approval-queue', label: 'Approval Queue', icon: 'queue' },
-        { href: '/ward/analytics', label: 'Analytics', icon: 'monitor' },
+        { href: '/ward/approval-queue', label: 'Approval Queue', icon: 'queue', permissions: ['view-ward-queue', 'view-ward-results'] },
+        { href: '/ward/analytics', label: 'Analytics', icon: 'monitor', permissions: ['view-ward-analytics'] },
     ],
     'polling-officer': [
         { href: '/officer/dashboard', label: 'Dashboard', icon: 'dashboard' },
-        { href: '/officer/results/submit', label: 'Submit Result', icon: 'results' },
-        { href: '/officer/submissions', label: 'Submissions', icon: 'queue' },
+        { href: '/officer/results/submit', label: 'Submit Result', icon: 'results', permissions: ['submit-result', 'edit-pending-result'] },
+        { href: '/officer/submissions', label: 'Submissions', icon: 'queue', permissions: ['view-own-result'] },
     ],
     'party-representative': [
-        { href: '/party/dashboard', label: 'Dashboard', icon: 'dashboard' },
-        { href: '/party/stations', label: 'Stations', icon: 'stations' },
-        { href: '/party/pending-acceptance', label: 'Pending Acceptance', icon: 'queue' },
+        { href: '/party/dashboard', label: 'Dashboard', icon: 'dashboard', permissions: ['view-party-dashboard'] },
+        { href: '/party/stations', label: 'Stations', icon: 'stations', permissions: ['view-assigned-stations'] },
+        { href: '/party/pending-acceptance', label: 'Pending Acceptance', icon: 'queue', permissions: ['view-assigned-stations'] },
     ],
     'election-monitor': [
         { href: '/monitor/dashboard', label: 'Dashboard', icon: 'dashboard' },
-        { href: '/monitor/stations', label: 'Stations', icon: 'stations' },
-        { href: '/monitor/observations', label: 'Observations', icon: 'queue' },
-        { href: '/monitor/results', label: 'Results', icon: 'results' },
-        { href: '/monitor/observations/submit', label: 'Submit Observation', icon: 'monitor' },
+        { href: '/monitor/stations', label: 'Stations', icon: 'stations', permissions: ['view-assigned-stations'] },
+        { href: '/monitor/observations', label: 'Observations', icon: 'queue', permissions: ['view-observation-history'] },
+        { href: '/monitor/results', label: 'Results', icon: 'results', permissions: ['view-assigned-stations'] },
+        { href: '/monitor/submit-observation', label: 'Submit Observation', icon: 'monitor', permissions: ['submit-observation'] },
     ],
 };
 
@@ -155,8 +156,22 @@ const isWorkspaceRoute = (url = '/') => WORKSPACE_PREFIXES.some(
 
 const AuthenticatedShell = ({ children, user, url, onLogout, isLoggingOut }) => {
     const [sidebarOpen, setSidebarOpen] = useState(false);
+
+    // Sidebar collapsed state — persisted in localStorage
+    const [collapsed, setCollapsed] = useState(() => {
+        if (typeof window === 'undefined') return false;
+        try { return window.localStorage.getItem('iec.sidebar.collapsed') === '1'; }
+        catch { return false; }
+    });
+
+    useEffect(() => {
+        try { window.localStorage.setItem('iec.sidebar.collapsed', collapsed ? '1' : '0'); }
+        catch { /* ignore */ }
+    }, [collapsed]);
+
     const role = getPrimaryRole(user, url);
-    const navItems = NAV_ITEMS[role] || [{ href: '/dashboard', label: 'Dashboard', icon: 'dashboard' }];
+    const navItems = (NAV_ITEMS[role] || [{ href: '/dashboard', label: 'Dashboard', icon: 'dashboard' }])
+        .filter((item) => canAny(user, item.permissions));
 
     // Derive user initials for the avatar
     const initials = user?.name
@@ -166,8 +181,21 @@ const AuthenticatedShell = ({ children, user, url, onLogout, isLoggingOut }) => 
         .join('')
         .toUpperCase() || '??';
 
-    const sidebar = (
-        <aside className="sidebar-shell">
+    const sidebar = (isCollapsed = false) => (
+        <aside className={`sidebar-shell ${isCollapsed ? 'is-collapsed' : ''}`}>
+            {/* ── Collapse toggle (desktop only) ── */}
+            <button
+                type="button"
+                onClick={() => setCollapsed((v) => !v)}
+                className="sidebar-collapse-btn hidden md:flex"
+                aria-label={isCollapsed ? 'Expand navigation' : 'Collapse navigation'}
+                title={isCollapsed ? 'Expand' : 'Collapse'}
+            >
+                <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 18l-6-6 6-6" />
+                </svg>
+            </button>
+
             {/* ── Header ── */}
             <div className="sidebar-header">
                 <div className="sidebar-logo-ring">
@@ -191,8 +219,9 @@ const AuthenticatedShell = ({ children, user, url, onLogout, isLoggingOut }) => 
             </div>
 
             {/* ── Navigation ── */}
+            <div className="sidebar-section-label">Workspace</div>
             <nav className="sidebar-nav" aria-label="Main navigation">
-                {navItems.map((item, i) => {
+                {navItems.map((item) => {
                     const active = isActiveNav(url, item.href);
                     return (
                         <Link
@@ -200,11 +229,11 @@ const AuthenticatedShell = ({ children, user, url, onLogout, isLoggingOut }) => 
                             href={item.href}
                             onClick={() => setSidebarOpen(false)}
                             aria-current={active ? 'page' : undefined}
+                            data-label={item.label}
                             className={`sidebar-nav-item ${active ? 'sidebar-nav-active' : 'sidebar-nav-idle'}`}
-                            style={{ animationDelay: `${i * 35}ms` }}
                         >
                             <span className="sidebar-nav-icon" aria-hidden="true">
-                                <Icon name={item.icon} className="h-4 w-4" />
+                                <Icon name={item.icon} className="h-[18px] w-[18px]" />
                             </span>
                             <span className="sidebar-nav-label">{item.label}</span>
                             {active && <span className="sidebar-nav-dot" aria-hidden="true" />}
@@ -215,7 +244,7 @@ const AuthenticatedShell = ({ children, user, url, onLogout, isLoggingOut }) => 
 
             {/* ── User / Logout ── */}
             <div className="sidebar-footer">
-                <div className="sidebar-user">
+                <div className="sidebar-user" title={isCollapsed ? `${user?.name} — ${user?.email}` : undefined}>
                     <div className="sidebar-avatar" aria-hidden="true">{initials}</div>
                     <div className="sidebar-user-info">
                         <p className="sidebar-user-name">{user?.name}</p>
@@ -228,6 +257,7 @@ const AuthenticatedShell = ({ children, user, url, onLogout, isLoggingOut }) => 
                     disabled={isLoggingOut}
                     className="sidebar-signout"
                     aria-label="Sign out of your account"
+                    title="Sign out"
                 >
                     <Icon name="signout" className="h-4 w-4" aria-hidden="true" />
                     <span>{isLoggingOut ? 'Signing out…' : 'Sign out'}</span>
@@ -237,13 +267,13 @@ const AuthenticatedShell = ({ children, user, url, onLogout, isLoggingOut }) => 
     );
 
     return (
-        <div className="min-h-screen bg-gray-100 md:flex">
+        <div className={`ws-shell ${collapsed ? 'is-collapsed' : ''}`}>
             {/* Desktop fixed sidebar */}
             <div className="hidden md:fixed md:inset-y-0 md:left-0 md:z-40 md:block">
-                {sidebar}
+                {sidebar(collapsed)}
             </div>
 
-            {/* Mobile sidebar overlay */}
+            {/* Mobile sidebar overlay (always full-width when open) */}
             {sidebarOpen && (
                 <div className="fixed inset-0 z-50 md:hidden">
                     <button
@@ -252,20 +282,20 @@ const AuthenticatedShell = ({ children, user, url, onLogout, isLoggingOut }) => 
                         className="absolute inset-0 bg-black/50"
                         onClick={() => setSidebarOpen(false)}
                     />
-                    <div className="relative h-full w-72">
-                        {sidebar}
+                    <div className="relative h-full">
+                        {sidebar(false)}
                     </div>
                 </div>
             )}
 
             {/* Main content area */}
-            <div className="min-h-screen flex-1 md:pl-72">
+            <div className="ws-shell-main min-h-screen">
                 {/* Mobile top bar */}
                 <div className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-gray-200 bg-white px-4 md:hidden">
                     <button
                         type="button"
                         onClick={() => setSidebarOpen(true)}
-                        className="rounded-md border border-white/10 p-1.5 text-slate-400 hover:text-white transition-colors"
+                        className="rounded-md border border-gray-200 p-1.5 text-slate-600 hover:bg-gray-50 transition-colors"
                         aria-label="Open navigation"
                     >
                         <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -279,7 +309,7 @@ const AuthenticatedShell = ({ children, user, url, onLogout, isLoggingOut }) => 
                     </div>
                 </div>
 
-                <main className="min-h-screen">
+                <main className="workspace-light-surface min-h-screen">
                     {children}
                 </main>
             </div>

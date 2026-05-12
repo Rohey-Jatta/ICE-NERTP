@@ -225,7 +225,7 @@ Route::middleware(['auth', 'role:admin-area-approver'])
             'filter'    => $filter,
             'counts'    => $counts,
         ]);
-    })->name('approval-queue');
+    })->name('approval-queue')->middleware('permission:view-admin-area-queue|view-admin-area-results');
 
     // ── Approve ───────────────────────────────────────────────────────────────
     Route::post('/approve/{result}', function (Request $request, Result $result) {
@@ -269,7 +269,7 @@ Route::middleware(['auth', 'role:admin-area-approver'])
         );
 
         return back()->with('success', 'Result certified at admin-area level and promoted to IEC Chairman queue.');
-    })->name('approve');
+    })->name('approve')->middleware('permission:approve-admin-area-result');
 
     // ── Approve with Reservation ──────────────────────────────────────────────
     Route::post('/approve-with-reservation/{result}', function (Request $request, Result $result) {
@@ -313,7 +313,7 @@ Route::middleware(['auth', 'role:admin-area-approver'])
         );
 
         return back()->with('success', 'Result certified with reservation and promoted to IEC Chairman queue.');
-    })->name('approve-with-reservation');
+    })->name('approve-with-reservation')->middleware('permission:approve-admin-area-result-with-reservation|approve-admin-area-result');
 
     // ── Reject ────────────────────────────────────────────────────────────────
     Route::post('/reject/{result}', function (Request $request, Result $result) {
@@ -362,7 +362,7 @@ Route::middleware(['auth', 'role:admin-area-approver'])
         );
 
         return back()->with('success', 'Result rejected and returned to constituency level.');
-    })->name('reject');
+    })->name('reject')->middleware('permission:reject-admin-area-result');
 
     // ── Constituency Breakdowns ───────────────────────────────────────────────
     Route::get('/constituency-breakdowns', function () {
@@ -480,7 +480,7 @@ Route::middleware(['auth', 'role:admin-area-approver'])
             'constituencies' => $constituencies,
             'stats'          => $stats,
         ]);
-    })->name('constituency-breakdowns');
+    })->name('constituency-breakdowns')->middleware('permission:view-constituency-breakdowns');
 
     // ── Analytics ─────────────────────────────────────────────────────────────
     Route::get('/analytics', function () {
@@ -560,5 +560,5 @@ Route::middleware(['auth', 'role:admin-area-approver'])
             'stats'          => $stats,
             'constituencies' => $constituencies,
         ]);
-    })->name('analytics');
+    })->name('analytics')->middleware('permission:access-analytics');
 });

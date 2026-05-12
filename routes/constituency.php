@@ -194,7 +194,7 @@ Route::middleware(['auth', 'role:constituency-approver'])
             'filter'       => $filter,
             'counts'       => $counts,
         ]);
-    })->name('approval-queue');
+    })->name('approval-queue')->middleware('permission:view-constituency-queue|view-constituency-results');
 
     // ── Approve ───────────────────────────────────────────────────────────────
     Route::post('/approve/{result}', function (Result $result, Request $request) {
@@ -234,7 +234,7 @@ Route::middleware(['auth', 'role:constituency-approver'])
         );
 
         return back()->with('success', 'Result certified at constituency level and promoted to Admin Area queue.');
-    })->name('approve');
+    })->name('approve')->middleware('permission:approve-constituency-result');
 
     // ── Approve with Reservation ──────────────────────────────────────────────
     Route::post('/approve-with-reservation/{result}', function (Result $result, Request $request) {
@@ -274,7 +274,7 @@ Route::middleware(['auth', 'role:constituency-approver'])
         );
 
         return back()->with('success', 'Result certified with reservation and promoted to Admin Area queue.');
-    })->name('approve-with-reservation');
+    })->name('approve-with-reservation')->middleware('permission:approve-constituency-result-with-reservation|approve-constituency-result');
 
     // ── Reject ────────────────────────────────────────────────────────────────
     Route::post('/reject/{result}', function (Result $result, Request $request) {
@@ -319,7 +319,7 @@ Route::middleware(['auth', 'role:constituency-approver'])
         );
 
         return back()->with('success', 'Result rejected and returned to Ward Approver.');
-    })->name('reject');
+    })->name('reject')->middleware('permission:reject-constituency-result');
 
     // ── Ward Breakdowns ───────────────────────────────────────────────────────
     Route::get('/ward-breakdowns', function () {
@@ -388,7 +388,7 @@ Route::middleware(['auth', 'role:constituency-approver'])
             'constituency' => $constituency,
             'wards'        => $wards,
         ]);
-    })->name('ward-breakdowns');
+    })->name('ward-breakdowns')->middleware('permission:view-ward-breakdowns');
 
     // ── Reports ───────────────────────────────────────────────────────────────
     Route::get('/reports', function () {
@@ -428,5 +428,5 @@ Route::middleware(['auth', 'role:constituency-approver'])
             'constituency' => $constituency,
             'reportData'   => $reportData,
         ]);
-    })->name('reports');
+    })->name('reports')->middleware('permission:generate-constituency-report');
 });

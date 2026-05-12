@@ -191,39 +191,39 @@ export default function LeafletMap({ stations = [] }) {
         renderMarkers(LRef.current, mapInstance.current, markersLayer.current, stations);
     }, [stations]);
 
-    return (
-        <div style={{ position: 'relative' }}>
-            <div ref={mapRef} style={{ height: '580px', width: '100%', borderRadius: '12px' }} />
+    const legendItems = [
+        ['nationally_certified', 'Certified'],
+        ['admin_area_certified', 'Area certified'],
+        ['constituency_certified', 'Constituency certified'],
+        ['ward_certified', 'Ward certified'],
+        ['pending_ward', 'Pending review'],
+        ['submitted', 'Submitted'],
+        ['not_reported', 'Not reported'],
+    ];
 
-            {/* Legend */}
-            <div style={{
-                position: 'absolute',
-                bottom: 24,
-                right: 12,
-                zIndex: 1000,
-                background: 'rgba(15,23,42,0.92)',
-                border: '1px solid rgba(100,116,139,0.4)',
-                borderRadius: 10,
-                padding: '10px 14px',
-                fontSize: 11,
-                color: '#cbd5e1',
-                pointerEvents: 'none',
-                backdropFilter: 'blur(8px)',
-            }}>
-                {[
-                    ['nationally_certified',   'Nationally Certified'],
-                    ['admin_area_certified',   'Area Certified'],
-                    ['constituency_certified', 'Constituency Cert.'],
-                    ['ward_certified',         'Ward Certified'],
-                    ['pending_ward',           'Pending / In Review'],
-                    ['submitted',              'Submitted'],
-                    ['not_reported',           'Not Reported'],
-                ].map(([key, label]) => (
-                    <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 5 }}>
-                        <span style={{ width: 10, height: 10, borderRadius: '50%', background: STATUS_COLORS[key], display: 'inline-block', flexShrink: 0 }} />
-                        {label}
+    return (
+        <div className="relative isolate z-0">
+            <div ref={mapRef} className="h-[460px] w-full rounded-xl sm:h-[560px] lg:h-[640px]" />
+
+            {stations.length === 0 && (
+                <div className="absolute inset-0 z-30 flex items-center justify-center rounded-xl bg-white/75 p-6 backdrop-blur-sm">
+                    <div className="max-w-sm rounded-xl border border-slate-200 bg-white p-5 text-center shadow-sm">
+                        <h3 className="text-lg font-extrabold text-slate-950">No mapped stations match</h3>
+                        <p className="mt-2 text-sm text-slate-500">Adjust the region, constituency, status, or search filters.</p>
                     </div>
-                ))}
+                </div>
+            )}
+
+            <div className="pointer-events-none absolute bottom-4 left-4 right-4 z-20 rounded-xl border border-slate-200 bg-white/95 p-3 text-xs text-slate-600 shadow-lg backdrop-blur sm:left-auto sm:right-4 sm:w-56">
+                <div className="mb-2 text-[0.65rem] font-bold uppercase tracking-[0.14em] text-slate-500">Result status</div>
+                <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 sm:grid-cols-1">
+                    {legendItems.map(([key, label]) => (
+                        <div key={key} className="flex items-center gap-2">
+                            <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: STATUS_COLORS[key] }} />
+                            <span className="truncate">{label}</span>
+                        </div>
+                    ))}
+                </div>
             </div>
         </div>
     );
@@ -245,12 +245,12 @@ function renderMarkers(L, map, layer, stations) {
         const color  = STATUS_COLORS[status] || '#64748b';
 
         const marker = L.circleMarker([lat, lng], {
-            radius:      7,
+            radius:      6,
             fillColor:   color,
             color:       '#fff',
-            weight:      2,
+            weight:      1.5,
             opacity:     1,
-            fillOpacity: 0.85,
+            fillOpacity: 0.82,
         });
 
         marker.bindPopup(buildPopupHtml(station), {
@@ -268,5 +268,7 @@ function renderMarkers(L, map, layer, stations) {
         try {
             map.fitBounds(bounds, { padding: [30, 30], maxZoom: 12 });
         } catch { /* ignore */ }
+    } else {
+        map.setView([13.45, -15.3], 9);
     }
 }

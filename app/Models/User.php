@@ -63,4 +63,42 @@ class User extends Authenticatable
     {
         return $this->hasOne(PollingStation::class, 'assigned_officer_id');
     }
+
+    public function toArray(): array
+    {
+        $array = parent::toArray();
+
+        if (auth()->check() && auth()->id() === $this->id) {
+            $role = $this->getRoleNames()->first();
+
+            $array['roles'] = $role ? [['name' => $role]] : [];
+            $array['permission_names'] = $this->getPermissionNamesAttribute();
+            $array['dashboard_url'] = $this->getDashboardUrlAttribute();
+        }
+
+        return $array;
+    }
+
+    public function getPermissionNamesAttribute(): array
+    {
+        return $this->getAllPermissions()
+            ->pluck('name')
+            ->values()
+            ->all();
+    }
+
+    public function getDashboardUrlAttribute(): string
+    {
+        return match ($this->getRoleNames()->first()) {
+            'polling-officer'       => '/officer/dashboard',
+            'ward-approver'         => '/ward/dashboard',
+            'constituency-approver' => '/constituency/dashboard',
+            'admin-area-approver'   => '/admin-area/dashboard',
+            'iec-chairman'          => '/chairman/dashboard',
+            'iec-administrator'     => '/admin/dashboard',
+            'party-representative'  => '/party/dashboard',
+            'election-monitor'      => '/monitor/dashboard',
+            default                 => '/',
+        };
+    }
 }

@@ -50,8 +50,8 @@ function MultiColorPicker({ colors, onChange, max = 3 }) {
     return (
         <div>
             <div className="flex items-center gap-3 mb-3">
-                <div className="w-16 h-10 rounded-lg border border-slate-600 flex-shrink-0" style={gradientStyle()} />
-                <div className="text-gray-300 text-sm">
+                <div className="w-16 h-10 rounded-lg border border-slate-200 flex-shrink-0" style={gradientStyle()} />
+                <div className="text-slate-600 text-sm">
                     {colors.length === 0 ? 'No colors selected' : colors.join(' + ')}
                 </div>
             </div>
@@ -62,15 +62,15 @@ function MultiColorPicker({ colors, onChange, max = 3 }) {
                         {color ? (
                             <div className="flex items-center gap-1">
                                 <button type="button" onClick={() => openSlot(i)}
-                                    className="w-10 h-10 rounded-lg border-2 border-white/30 hover:border-white/70 transition-colors"
+                                    className="w-10 h-10 rounded-lg border-2 border-slate-300 hover:border-slate-300 transition-colors"
                                     style={{ background: color }} title={`Color ${i + 1}: ${color}`} />
                                 <button type="button" onClick={() => removeSlot(i)}
-                                    className="text-gray-400 hover:text-red-400 text-lg leading-none">×</button>
+                                    className="text-slate-500 hover:text-red-400 text-lg leading-none">×</button>
                             </div>
                         ) : (
                             colors.length <= i && (
                                 <button type="button" onClick={() => openSlot(i)}
-                                    className="w-10 h-10 rounded-lg border-2 border-dashed border-slate-500 hover:border-teal-400 text-slate-500 hover:text-teal-400 transition-colors flex items-center justify-center text-xl">
+                                    className="w-10 h-10 rounded-lg border-2 border-dashed border-slate-500 hover:border-teal-400 text-slate-500 hover:text-iec-pink-600 transition-colors flex items-center justify-center text-xl">
                                     +
                                 </button>
                             )
@@ -79,16 +79,16 @@ function MultiColorPicker({ colors, onChange, max = 3 }) {
                 ))}
             </div>
 
-            <p className="text-gray-500 text-xs mb-3">
+            <p className="text-slate-500 text-xs mb-3">
                 Select up to {max} colors. Single-color parties pick one; tri-color flag parties pick three.
             </p>
 
             {showPicker && (
-                <div className="bg-slate-900/80 border border-slate-600 rounded-xl p-4 mt-2">
+                <div className="bg-white border border-slate-200 rounded-xl p-4 mt-2">
                     <div className="flex items-center justify-between mb-3">
-                        <span className="text-white text-sm font-semibold">Picking Color {activeSlot + 1}</span>
+                        <span className="text-iec-navy text-sm font-semibold">Picking Color {activeSlot + 1}</span>
                         <button type="button" onClick={() => setShowPicker(false)}
-                            className="text-gray-400 hover:text-white text-lg">×</button>
+                            className="text-slate-500 hover:text-iec-navy text-lg">×</button>
                     </div>
                     <div className="flex items-center gap-3 mb-4">
                         <input type="color"
@@ -98,9 +98,9 @@ function MultiColorPicker({ colors, onChange, max = 3 }) {
                         <input type="text" value={customInput}
                             onChange={(e) => setCustomInput(e.target.value)}
                             placeholder="#rrggbb" maxLength={7}
-                            className="flex-1 px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white font-mono text-sm" />
+                            className="flex-1 px-3 py-2 bg-white border border-slate-200 rounded-lg text-iec-navy font-mono text-sm" />
                         <button type="button" onClick={applyCustom}
-                            className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white text-sm rounded-lg font-semibold">
+                            className="px-4 py-2 bg-iec-pink-600 hover:bg-iec-pink-700 text-white text-sm rounded-lg font-semibold">
                             Apply
                         </button>
                     </div>
@@ -109,7 +109,7 @@ function MultiColorPicker({ colors, onChange, max = 3 }) {
                             <button key={c} type="button"
                                 onClick={() => { setSlotColor(activeSlot, c); setShowPicker(false); }}
                                 className={`w-7 h-7 rounded-md border-2 transition-transform hover:scale-110 ${
-                                    colors[activeSlot] === c ? 'border-white scale-110' : 'border-slate-600 hover:border-white/60'
+                                    colors[activeSlot] === c ? 'border-iec-pink-500 scale-110' : 'border-slate-200 hover:border-slate-300'
                                 }`}
                                 style={{ background: c }} title={c} />
                         ))}
@@ -165,12 +165,12 @@ export default function PartyCreate({ auth, activeElectionId }) {
 
     return (
         <AppLayout user={auth?.user}>
-            <div className="container mx-auto px-4 py-8 max-w-3xl">
+            <div className="ws-container max-w-4xl">
                 <div className="mb-6">
-                    <Link href="/admin/parties" className="text-gray-400 hover:text-white text-sm mb-2 inline-block">
-                        ← Back to Parties
+                    <Link href="/admin/parties" className="ws-page-back">
+                        Back to Parties
                     </Link>
-                    <h1 className="text-3xl font-bold text-white">Register New Political Party</h1>
+                    <h1 className="ws-page-title">Register New Political Party</h1>
                 </div>
 
                 {/* FIX: Show backend error (e.g., no election) */}
@@ -197,28 +197,28 @@ export default function PartyCreate({ auth, activeElectionId }) {
                     </div>
                 )}
 
-                <div className="bg-slate-800/40 rounded-xl p-6 border border-slate-700/50">
+                <div className="bg-white rounded-xl p-6 border border-slate-200">
                     <form onSubmit={handleSubmit} className="space-y-6">
 
                         {/* Party Name & Abbreviation */}
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                             <div className="md:col-span-2">
-                                <label className="block text-gray-300 mb-2 font-semibold">
+                                <label className="block text-slate-600 mb-2 font-semibold">
                                     Party Name <span className="text-red-400">*</span>
                                 </label>
                                 <input type="text" value={data.name}
                                     onChange={(e) => setData('name', e.target.value)}
-                                    className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white"
+                                    className="w-full px-4 py-3 bg-white border border-slate-200 rounded-lg text-iec-navy"
                                     placeholder="Party's full name" required />
                                 {errors.name && <p className="text-red-400 text-sm mt-1">{errors.name}</p>}
                             </div>
                             <div>
-                                <label className="block text-gray-300 mb-2 font-semibold">
+                                <label className="block text-slate-600 mb-2 font-semibold">
                                     Abbreviation <span className="text-red-400">*</span>
                                 </label>
                                 <input type="text" value={data.abbreviation}
                                     onChange={(e) => setData('abbreviation', e.target.value.toUpperCase().slice(0, 10))}
-                                    className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white font-mono"
+                                    className="w-full px-4 py-3 bg-white border border-slate-200 rounded-lg text-iec-navy font-mono"
                                     placeholder="e.g. IEC" maxLength={10} required />
                                 {errors.abbreviation && <p className="text-red-400 text-sm mt-1">{errors.abbreviation}</p>}
                             </div>
@@ -226,9 +226,9 @@ export default function PartyCreate({ auth, activeElectionId }) {
 
                         {/* Party Colors */}
                         <div>
-                            <label className="block text-gray-300 mb-2 font-semibold">
+                            <label className="block text-slate-600 mb-2 font-semibold">
                                 Party Colors
-                                <span className="text-gray-500 font-normal text-xs ml-2">(up to 3)</span>
+                                <span className="text-slate-500 font-normal text-xs ml-2">(up to 3)</span>
                             </label>
                             <MultiColorPicker
                                 colors={data.colors}
@@ -240,54 +240,54 @@ export default function PartyCreate({ auth, activeElectionId }) {
 
                         {/* Motto */}
                         <div>
-                            <label className="block text-gray-300 mb-2 font-semibold">Party Motto</label>
+                            <label className="block text-slate-600 mb-2 font-semibold">Party Motto</label>
                             <input type="text" value={data.motto}
                                 onChange={(e) => setData('motto', e.target.value)}
-                                className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white"
+                                className="w-full px-4 py-3 bg-white border border-slate-200 rounded-lg text-iec-navy"
                                 placeholder="Party's motto or slogan" />
                         </div>
 
                         {/* Headquarters & Website */}
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
-                                <label className="block text-gray-300 mb-2 font-semibold">Headquarters</label>
+                                <label className="block text-slate-600 mb-2 font-semibold">Headquarters</label>
                                 <input type="text" value={data.headquarters}
                                     onChange={(e) => setData('headquarters', e.target.value)}
-                                    className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white"
+                                    className="w-full px-4 py-3 bg-white border border-slate-200 rounded-lg text-iec-navy"
                                     placeholder="e.g., Banjul" />
                             </div>
                             <div>
-                                <label className="block text-gray-300 mb-2 font-semibold">Website</label>
+                                <label className="block text-slate-600 mb-2 font-semibold">Website</label>
                                 <input type="url" value={data.website}
                                     onChange={(e) => setData('website', e.target.value)}
-                                    className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white"
+                                    className="w-full px-4 py-3 bg-white border border-slate-200 rounded-lg text-iec-navy"
                                     placeholder="https://..." />
                             </div>
                         </div>
 
                         {/* Leader */}
-                        <div className="border border-slate-700 rounded-xl p-6">
-                            <h3 className="text-white font-bold text-lg mb-4">Party Leader</h3>
+                        <div className="border border-slate-200 rounded-xl p-6">
+                            <h3 className="text-iec-navy font-bold text-lg mb-4">Party Leader</h3>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <div>
-                                    <label className="block text-gray-300 mb-2 font-semibold">Leader's Full Name</label>
+                                    <label className="block text-slate-600 mb-2 font-semibold">Leader's Full Name</label>
                                     <input type="text" value={data.leader_name}
                                         onChange={(e) => setData('leader_name', e.target.value)}
-                                        className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white"
+                                        className="w-full px-4 py-3 bg-white border border-slate-200 rounded-lg text-iec-navy"
                                         placeholder="Candidate's full name" />
                                 </div>
                                 <div>
-                                    <label className="block text-gray-300 mb-2 font-semibold">Leader's Photo</label>
+                                    <label className="block text-slate-600 mb-2 font-semibold">Leader's Photo</label>
                                     <div className="flex items-center gap-4">
                                         {leaderPreview ? (
                                             <img src={leaderPreview} alt="Leader"
                                                 className="w-16 h-16 rounded-full object-cover border-2 border-teal-500 flex-shrink-0" />
                                         ) : (
-                                            <div className="w-16 h-16 rounded-full bg-slate-700 flex items-center justify-center border-2 border-slate-600 flex-shrink-0">
-                                                <span className="text-gray-400 text-xs text-center">No photo</span>
+                                            <div className="w-16 h-16 rounded-full bg-white flex items-center justify-center border-2 border-slate-200 flex-shrink-0">
+                                                <span className="text-slate-500 text-xs text-center">No photo</span>
                                             </div>
                                         )}
-                                        <label className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg cursor-pointer text-sm">
+                                        <label className="px-4 py-2 bg-white hover:bg-slate-100 text-iec-navy rounded-lg cursor-pointer text-sm">
                                             Upload Photo
                                             <input type="file" accept="image/*" className="hidden" onChange={handleLeaderPhoto} />
                                         </label>
@@ -297,23 +297,23 @@ export default function PartyCreate({ auth, activeElectionId }) {
                         </div>
 
                         {/* Symbol */}
-                        <div className="border border-slate-700 rounded-xl p-6">
-                            <h3 className="text-white font-bold text-lg mb-4">Party Symbol / Logo</h3>
+                        <div className="border border-slate-200 rounded-xl p-6">
+                            <h3 className="text-iec-navy font-bold text-lg mb-4">Party Symbol / Logo</h3>
                             <div className="flex items-center gap-6">
                                 {symbolPreview ? (
                                     <img src={symbolPreview} alt="Symbol"
-                                        className="w-24 h-24 object-contain border border-slate-600 rounded-lg bg-white p-1" />
+                                        className="w-24 h-24 object-contain border border-slate-200 rounded-lg bg-white p-1" />
                                 ) : (
-                                    <div className="w-24 h-24 bg-slate-700 border border-slate-600 rounded-lg flex items-center justify-center">
-                                        <span className="text-gray-400 text-xs text-center">No symbol</span>
+                                    <div className="w-24 h-24 bg-white border border-slate-200 rounded-lg flex items-center justify-center">
+                                        <span className="text-slate-500 text-xs text-center">No symbol</span>
                                     </div>
                                 )}
                                 <div>
-                                    <label className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg cursor-pointer text-sm inline-block">
+                                    <label className="px-4 py-2 bg-white hover:bg-slate-100 text-iec-navy rounded-lg cursor-pointer text-sm inline-block">
                                         Upload Symbol / Logo
                                         <input type="file" accept="image/*" className="hidden" onChange={handleSymbol} />
                                     </label>
-                                    <p className="text-gray-400 text-xs mt-2">PNG or SVG recommended</p>
+                                    <p className="text-slate-500 text-xs mt-2">PNG or SVG recommended</p>
                                 </div>
                             </div>
                         </div>
@@ -322,11 +322,11 @@ export default function PartyCreate({ auth, activeElectionId }) {
                         <div className="flex gap-4">
                             <button type="submit" disabled={!canSubmit}
                                 title={!activeElectionId ? 'Create an election first' : ''}
-                                className="flex-1 px-6 py-3 bg-teal-600 hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold rounded-lg transition-colors">
+                                className="flex-1 px-6 py-3 bg-iec-pink-600 hover:bg-iec-pink-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold rounded-lg transition-colors">
                                 {processing ? 'Registering…' : !activeElectionId ? 'No Active Election' : 'Register Party & Add Candidates'}
                             </button>
                             <Link href="/admin/parties"
-                                className="flex-1 px-6 py-3 bg-slate-700 hover:bg-slate-600 text-white font-bold rounded-lg text-center transition-colors">
+                                className="flex-1 px-6 py-3 bg-white hover:bg-slate-100 text-iec-navy font-bold rounded-lg text-center transition-colors">
                                 Cancel
                             </Link>
                         </div>

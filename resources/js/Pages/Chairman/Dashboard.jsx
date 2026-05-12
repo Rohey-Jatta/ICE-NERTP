@@ -23,9 +23,9 @@ export default function ChairmanDashboard({ auth, pendingNational, statistics = 
 
                 {/* Header */}
                 <div className="mb-8">
-                    <h1 className="text-3xl font-bold text-white">IEC Chairman Dashboard</h1>
-                    <p className="text-gray-400 mt-1 text-sm">
-                        Your role: <strong className="text-white">Final National Certification</strong> — the highest authority in the election results pipeline.
+                    <h1 className="text-3xl font-bold text-iec-navy">IEC Chairman Dashboard</h1>
+                    <p className="text-slate-500 mt-1 text-sm">
+                        Your role: <strong className="text-iec-navy">Final National Certification</strong> — the highest authority in the election results pipeline.
                     </p>
                 </div>
 
@@ -48,13 +48,13 @@ export default function ChairmanDashboard({ auth, pendingNational, statistics = 
                     {[
                         { label: 'Pending Your Approval', value: pendingNational || 0,                         color: 'text-amber-300' },
                         { label: 'Nationally Certified',  value: statistics.nationallyCertified || 0,           color: 'text-green-300' },
-                        { label: 'Total Stations',        value: statistics.totalStations || 0,                 color: 'text-white' },
-                        { label: 'Registered Voters',     value: (statistics.totalVoters || 0).toLocaleString(),color: 'text-white' },
-                        { label: 'National Progress',     value: `${statistics.nationalProgress || 0}%`,        color: 'text-teal-300' },
+                        { label: 'Total Stations',        value: statistics.totalStations || 0,                 color: 'text-iec-navy' },
+                        { label: 'Registered Voters',     value: (statistics.totalVoters || 0).toLocaleString(),color: 'text-iec-navy' },
+                        { label: 'National Progress',     value: `${statistics.nationalProgress || 0}%`,        color: 'text-iec-pink-600' },
                     ].map((card) => (
-                        <div key={card.label} className="bg-slate-800/40 rounded-xl p-5 border border-slate-700/50">
+                        <div key={card.label} className="bg-white rounded-xl p-5 border border-slate-200">
                             <div className={`text-2xl font-bold mb-1 ${card.color}`}>{card.value}</div>
-                            <div className="text-gray-400 text-xs">{card.label}</div>
+                            <div className="text-slate-500 text-xs">{card.label}</div>
                         </div>
                     ))}
                 </div>
@@ -63,7 +63,7 @@ export default function ChairmanDashboard({ auth, pendingNational, statistics = 
 
                     {/* Quick Actions */}
                     <div className="lg:col-span-1 space-y-3">
-                        <h2 className="text-white font-bold text-lg mb-4">Actions</h2>
+                        <h2 className="text-iec-navy font-bold text-lg mb-4">Actions</h2>
                         {[
                             { href: '/chairman/national-queue', icon: '🏛️', label: 'National Certification Queue',
                               desc: `${pendingNational} pending final approval`, highlight: pendingNational > 0 },
@@ -80,14 +80,14 @@ export default function ChairmanDashboard({ auth, pendingNational, statistics = 
                                 className={`block p-4 rounded-xl border transition-all ${
                                     action.highlight
                                         ? 'bg-amber-500/10 border-amber-500/40 hover:bg-amber-500/20'
-                                        : 'bg-slate-800/40 border-slate-700/50 hover:bg-slate-700/50'
+                                        : 'bg-white border-slate-200 hover:bg-slate-100'
                                 }`}
                             >
                                 <div className="flex items-center gap-3">
                                     <span className="text-2xl">{action.icon}</span>
                                     <div>
-                                        <div className="font-bold text-white text-sm">{action.label}</div>
-                                        <div className={`text-xs ${action.highlight ? 'text-amber-300' : 'text-gray-400'}`}>
+                                        <div className="font-bold text-iec-navy text-sm">{action.label}</div>
+                                        <div className={`text-xs ${action.highlight ? 'text-amber-300' : 'text-slate-500'}`}>
                                             {action.desc}
                                         </div>
                                     </div>
@@ -98,8 +98,8 @@ export default function ChairmanDashboard({ auth, pendingNational, statistics = 
 
                     {/* Pipeline Overview */}
                     <div className="lg:col-span-2">
-                        <h2 className="text-white font-bold text-lg mb-4">National Pipeline Overview</h2>
-                        <div className="bg-slate-800/40 rounded-xl border border-slate-700/50 p-5">
+                        <h2 className="text-iec-navy font-bold text-lg mb-4">National Pipeline Overview</h2>
+                        <div className="bg-white rounded-xl border border-slate-200 p-5">
                             <div className="space-y-2">
                                 {Object.entries(PIPELINE_LABELS).map(([key, label]) => {
                                     const count = pipeline[key] || 0;
@@ -110,16 +110,16 @@ export default function ChairmanDashboard({ auth, pendingNational, statistics = 
                                              className={`flex items-center gap-3 p-2.5 rounded-lg ${
                                                  isChairmanStage ? 'bg-amber-500/10 border border-amber-500/30' :
                                                  isFinal ? 'bg-green-500/10 border border-green-500/20' :
-                                                 'bg-slate-900/30'
+                                                 'bg-slate-50'
                                              }`}>
                                             <span className={`text-xs font-semibold w-36 ${
                                                 isChairmanStage ? 'text-amber-300' :
                                                 isFinal ? 'text-green-300' :
-                                                'text-gray-400'
+                                                'text-slate-500'
                                             }`}>
                                                 {label}
                                             </span>
-                                            <div className="flex-1 bg-slate-700 rounded-full h-2">
+                                            <div className="flex-1 bg-white rounded-full h-2">
                                                 <div
                                                     className="h-2 rounded-full transition-all"
                                                     style={{
@@ -131,7 +131,7 @@ export default function ChairmanDashboard({ auth, pendingNational, statistics = 
                                             </div>
                                             <span className={`text-sm font-bold w-8 text-right ${
                                                 isChairmanStage ? 'text-amber-300' :
-                                                isFinal ? 'text-green-300' : 'text-gray-300'
+                                                isFinal ? 'text-green-300' : 'text-slate-600'
                                             }`}>
                                                 {count}
                                             </span>
@@ -144,29 +144,29 @@ export default function ChairmanDashboard({ auth, pendingNational, statistics = 
                 </div>
 
                 {/* Recent Activity */}
-                <div className="bg-slate-800/40 rounded-xl p-6 border border-slate-700/50">
-                    <h2 className="text-white font-bold text-lg mb-4">Recent Certification Activity</h2>
+                <div className="bg-white rounded-xl p-6 border border-slate-200">
+                    <h2 className="text-iec-navy font-bold text-lg mb-4">Recent Certification Activity</h2>
                     {recentActivity.length > 0 ? (
                         <div className="space-y-2">
                             {recentActivity.map((activity, i) => (
                                 <div key={i}
-                                     className="flex items-center gap-3 p-3 bg-slate-900/40 rounded-lg border border-slate-700/20">
+                                     className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg border border-slate-100">
                                     <span className={`w-2 h-2 rounded-full flex-shrink-0 ${
                                         activity.outcome === 'success' ? 'bg-teal-400' :
                                         activity.outcome === 'rejected' ? 'bg-red-400' : 'bg-gray-400'
                                     }`} />
                                     <div className="flex-1 min-w-0">
-                                        <span className="text-gray-300 text-sm">
+                                        <span className="text-slate-600 text-sm">
                                             {activity.action.replace(/\./g, ' › ')}
                                         </span>
-                                        <span className="text-gray-600 text-xs ml-2">by {activity.user}</span>
+                                        <span className="text-slate-600 text-xs ml-2">by {activity.user}</span>
                                     </div>
-                                    <span className="text-gray-600 text-xs whitespace-nowrap">{activity.time}</span>
+                                    <span className="text-slate-600 text-xs whitespace-nowrap">{activity.time}</span>
                                 </div>
                             ))}
                         </div>
                     ) : (
-                        <p className="text-gray-500 text-sm text-center py-4">No recent activity</p>
+                        <p className="text-slate-500 text-sm text-center py-4">No recent activity</p>
                     )}
                 </div>
             </div>

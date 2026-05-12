@@ -3,7 +3,7 @@ import { useForm, Link } from '@inertiajs/react';
 import { useState } from 'react';
 
 const OBSERVATION_TYPES = [
-    { value: 'general',         label: 'General Observation',   color: 'text-blue-300',   icon: '📋' },
+    { value: 'general',         label: 'General Observation',   color: 'text-iec-pink-600',   icon: '📋' },
     { value: 'positive',        label: 'Positive Observation',  color: 'text-green-300',  icon: '✅' },
     { value: 'process_concern', label: 'Process Concern',       color: 'text-amber-300',  icon: '⚠️' },
     { value: 'irregularity',    label: 'Irregularity',          color: 'text-orange-300', icon: '🚨' },
@@ -96,11 +96,11 @@ export default function SubmitObservation({ auth, monitor, stations = [], presel
 
                 {/* Header */}
                 <div className="mb-6">
-                    <Link href="/monitor/dashboard" className="text-gray-400 hover:text-white text-sm mb-2 inline-flex items-center gap-1">
+                    <Link href="/monitor/dashboard" className="text-slate-500 hover:text-iec-navy text-sm mb-2 inline-flex items-center gap-1">
                         Back to Monitor Dashboard
                     </Link>
-                    <h1 className="text-3xl font-bold text-white">Submit Observation</h1>
-                    <p className="text-gray-400 mt-1">Record your findings from a polling station visit</p>
+                    <h1 className="text-3xl font-bold text-iec-navy">Submit Observation</h1>
+                    <p className="text-slate-500 mt-1">Record your findings from a polling station visit</p>
                 </div>
 
                 {!monitor ? (
@@ -111,8 +111,8 @@ export default function SubmitObservation({ auth, monitor, stations = [], presel
                     <form onSubmit={handleSubmit} className="space-y-6">
 
                         {/* Station Selection */}
-                        <div className="bg-slate-800/40 rounded-xl p-6 border border-slate-700/50">
-                            <h2 className="text-lg font-bold text-white mb-4">1. Select Polling Station</h2>
+                        <div className="bg-white rounded-xl p-6 border border-slate-200">
+                            <h2 className="text-lg font-bold text-iec-navy mb-4">1. Select Polling Station</h2>
                             {stations.length === 0 ? (
                                 <div className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-lg">
                                     <p className="text-amber-300 text-sm">
@@ -124,7 +124,7 @@ export default function SubmitObservation({ auth, monitor, stations = [], presel
                                     <select
                                         value={data.polling_station_id}
                                         onChange={(e) => setData('polling_station_id', e.target.value)}
-                                        className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white"
+                                        className="w-full px-4 py-3 bg-white border border-slate-200 rounded-lg text-iec-navy"
                                         required
                                     >
                                         <option value="">— Select a Polling Station —</option>
@@ -140,11 +140,11 @@ export default function SubmitObservation({ auth, monitor, stations = [], presel
                         </div>
 
                         {/* Observation Type & Severity */}
-                        <div className="bg-slate-800/40 rounded-xl p-6 border border-slate-700/50">
-                            <h2 className="text-lg font-bold text-white mb-4">2. Observation Type & Severity</h2>
+                        <div className="bg-white rounded-xl p-6 border border-slate-200">
+                            <h2 className="text-lg font-bold text-iec-navy mb-4">2. Observation Type & Severity</h2>
 
                             <div className="mb-4">
-                                <label className="block text-gray-300 mb-2 font-semibold">
+                                <label className="block text-slate-600 mb-2 font-semibold">
                                     Observation Type <span className="text-red-400">*</span>
                                 </label>
                                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
@@ -153,8 +153,8 @@ export default function SubmitObservation({ auth, monitor, stations = [], presel
                                             key={type.value}
                                             className={`flex items-center gap-2 p-3 rounded-lg cursor-pointer border transition-colors ${
                                                 data.observation_type === type.value
-                                                    ? 'bg-slate-700/60 border-teal-500/50'
-                                                    : 'bg-slate-900/30 border-slate-700/30 hover:bg-slate-800/50'
+                                                    ? 'bg-white/60 border-teal-500/50'
+                                                    : 'bg-slate-50 border-slate-200 hover:bg-white'
                                             }`}
                                         >
                                             <input
@@ -173,7 +173,7 @@ export default function SubmitObservation({ auth, monitor, stations = [], presel
                             </div>
 
                             <div>
-                                <label className="block text-gray-300 mb-2 font-semibold">
+                                <label className="block text-slate-600 mb-2 font-semibold">
                                     Severity <span className="text-red-400">*</span>
                                 </label>
                                 <div className="flex flex-wrap gap-3">
@@ -183,7 +183,7 @@ export default function SubmitObservation({ auth, monitor, stations = [], presel
                                             className={`flex items-center gap-2 px-4 py-2 rounded-lg cursor-pointer border transition-colors ${
                                                 data.severity === sev.value
                                                     ? sev.color + ' ring-2 ring-white/20'
-                                                    : 'bg-slate-900/30 border-slate-700/30 text-gray-400 hover:bg-slate-800/50'
+                                                    : 'bg-slate-50 border-slate-200 text-slate-500 hover:bg-white'
                                             }`}
                                         >
                                             <input
@@ -203,18 +203,18 @@ export default function SubmitObservation({ auth, monitor, stations = [], presel
                         </div>
 
                         {/* Observation Details */}
-                        <div className="bg-slate-800/40 rounded-xl p-6 border border-slate-700/50">
-                            <h2 className="text-lg font-bold text-white mb-4">3. Observation Details</h2>
+                        <div className="bg-white rounded-xl p-6 border border-slate-200">
+                            <h2 className="text-lg font-bold text-iec-navy mb-4">3. Observation Details</h2>
 
                             <div className="mb-4">
-                                <label className="block text-gray-300 mb-2 font-semibold">
+                                <label className="block text-slate-600 mb-2 font-semibold">
                                     Title <span className="text-red-400">*</span>
                                 </label>
                                 <input
                                     type="text"
                                     value={data.title}
                                     onChange={(e) => setData('title', e.target.value)}
-                                    className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white"
+                                    className="w-full px-4 py-3 bg-white border border-slate-200 rounded-lg text-iec-navy"
                                     placeholder={`e.g., ${selectedType?.label || 'Observation'} at station`}
                                     maxLength={255}
                                     required
@@ -223,60 +223,60 @@ export default function SubmitObservation({ auth, monitor, stations = [], presel
                             </div>
 
                             <div className="mb-4">
-                                <label className="block text-gray-300 mb-2 font-semibold">
+                                <label className="block text-slate-600 mb-2 font-semibold">
                                     Detailed Observation <span className="text-red-400">*</span>
                                 </label>
                                 <textarea
                                     value={data.observation}
                                     onChange={(e) => setData('observation', e.target.value)}
                                     rows={6}
-                                    className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white resize-none focus:outline-none focus:border-teal-500"
+                                    className="w-full px-4 py-3 bg-white border border-slate-200 rounded-lg text-iec-navy resize-none focus:outline-none focus:border-iec-pink-500"
                                     placeholder="Describe your observation in detail. Include time, persons involved, what you witnessed, and any relevant context…"
                                     maxLength={5000}
                                     required
                                 />
                                 <div className="flex justify-between mt-1">
                                     {errors.observation && <p className="text-red-400 text-sm">{errors.observation}</p>}
-                                    <span className="text-gray-500 text-xs ml-auto">{data.observation.length}/5000</span>
+                                    <span className="text-slate-500 text-xs ml-auto">{data.observation.length}/5000</span>
                                 </div>
                             </div>
 
                             <div className="mb-4">
-                                <label className="block text-gray-300 mb-2 font-semibold">
+                                <label className="block text-slate-600 mb-2 font-semibold">
                                     Date & Time of Observation <span className="text-red-400">*</span>
                                 </label>
                                 <input
                                     type="datetime-local"
                                     value={data.observed_at}
                                     onChange={(e) => setData('observed_at', e.target.value)}
-                                    className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white"
+                                    className="w-full px-4 py-3 bg-white border border-slate-200 rounded-lg text-iec-navy"
                                     required
                                 />
                                 {errors.observed_at && <p className="text-red-400 text-sm mt-1">{errors.observed_at}</p>}
                             </div>
 
                             {/* Visibility */}
-                            <label className="flex items-center gap-3 p-4 bg-slate-900/30 rounded-lg cursor-pointer">
+                            <label className="flex items-center gap-3 p-4 bg-slate-50 rounded-lg cursor-pointer">
                                 <input
                                     type="checkbox"
                                     checked={data.is_public}
                                     onChange={(e) => setData('is_public', e.target.checked)}
-                                    className="w-5 h-5 text-teal-600 bg-slate-900 border-slate-600 rounded"
+                                    className="w-5 h-5 text-iec-pink-600 bg-white border-slate-200 rounded"
                                 />
                                 <div>
-                                    <div className="text-white font-medium">Make this observation public</div>
-                                    <div className="text-gray-400 text-sm">Public observations are visible on the results dashboard</div>
+                                    <div className="text-iec-navy font-medium">Make this observation public</div>
+                                    <div className="text-slate-500 text-sm">Public observations are visible on the results dashboard</div>
                                 </div>
                             </label>
                         </div>
 
                         {/* Photos */}
-                        <div className="bg-slate-800/40 rounded-xl p-6 border border-slate-700/50">
-                            <h2 className="text-lg font-bold text-white mb-4">4. Supporting Photos (Optional)</h2>
-                            <p className="text-gray-400 text-sm mb-4">Upload up to 5 photos as evidence. Max 5MB each.</p>
+                        <div className="bg-white rounded-xl p-6 border border-slate-200">
+                            <h2 className="text-lg font-bold text-iec-navy mb-4">4. Supporting Photos (Optional)</h2>
+                            <p className="text-slate-500 text-sm mb-4">Upload up to 5 photos as evidence. Max 5MB each.</p>
 
                             {/* Photo upload */}
-                            <div className="border-2 border-dashed border-slate-600 rounded-lg p-6 text-center hover:border-teal-500/50 transition-colors">
+                            <div className="border-2 border-dashed border-slate-200 rounded-lg p-6 text-center hover:border-teal-500/50 transition-colors">
                                 <input
                                     type="file"
                                     accept="image/*"
@@ -287,8 +287,8 @@ export default function SubmitObservation({ auth, monitor, stations = [], presel
                                 />
                                 <label htmlFor="photo-upload" className="cursor-pointer">
                                     <div className="text-4xl mb-2">📷</div>
-                                    <p className="text-white font-semibold">Click to upload photos</p>
-                                    <p className="text-gray-400 text-sm mt-1">PNG, JPG up to 5MB each · Max 5 photos</p>
+                                    <p className="text-iec-navy font-semibold">Click to upload photos</p>
+                                    <p className="text-slate-500 text-sm mt-1">PNG, JPG up to 5MB each · Max 5 photos</p>
                                 </label>
                             </div>
 
@@ -300,7 +300,7 @@ export default function SubmitObservation({ auth, monitor, stations = [], presel
                                             <img
                                                 src={preview}
                                                 alt={`Photo ${i + 1}`}
-                                                className="w-full h-32 object-cover rounded-lg border border-slate-600"
+                                                className="w-full h-32 object-cover rounded-lg border border-slate-200"
                                             />
                                             <button
                                                 type="button"
@@ -317,9 +317,9 @@ export default function SubmitObservation({ auth, monitor, stations = [], presel
                         </div>
 
                         {/* GPS Location */}
-                        <div className="bg-slate-800/40 rounded-xl p-6 border border-slate-700/50">
-                            <h2 className="text-lg font-bold text-white mb-4">5. GPS Location (Optional)</h2>
-                            <p className="text-gray-400 text-sm mb-4">
+                        <div className="bg-white rounded-xl p-6 border border-slate-200">
+                            <h2 className="text-lg font-bold text-iec-navy mb-4">5. GPS Location (Optional)</h2>
+                            <p className="text-slate-500 text-sm mb-4">
                                 Your location helps verify where the observation was made.
                             </p>
 
@@ -328,7 +328,7 @@ export default function SubmitObservation({ auth, monitor, stations = [], presel
                                     type="button"
                                     onClick={handleGetLocation}
                                     disabled={locationLoading}
-                                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-semibold rounded-lg flex items-center gap-2"
+                                    className="px-4 py-2 bg-iec-pink-600 hover:bg-iec-pink-700 disabled:opacity-50 text-white text-sm font-semibold rounded-lg flex items-center gap-2"
                                 >
                                     {locationLoading ? (
                                         <>
@@ -341,7 +341,7 @@ export default function SubmitObservation({ auth, monitor, stations = [], presel
                                     ) : '📍 Use My Location'}
                                 </button>
                                 {(data.latitude || data.longitude) && (
-                                    <span className="text-teal-300 text-sm flex items-center gap-1">
+                                    <span className="text-iec-pink-600 text-sm flex items-center gap-1">
                                         ✓ Location captured ({parseFloat(data.latitude).toFixed(4)}, {parseFloat(data.longitude).toFixed(4)})
                                     </span>
                                 )}
@@ -349,24 +349,24 @@ export default function SubmitObservation({ auth, monitor, stations = [], presel
 
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <label className="block text-gray-400 text-xs mb-1">Latitude</label>
+                                    <label className="block text-slate-500 text-xs mb-1">Latitude</label>
                                     <input
                                         type="number"
                                         step="0.00000001"
                                         value={data.latitude}
                                         onChange={(e) => setData('latitude', e.target.value)}
-                                        className="w-full px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white text-sm font-mono"
+                                        className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-iec-navy text-sm font-mono"
                                         placeholder="e.g. 13.4549"
                                     />
                                 </div>
                                 <div>
-                                    <label className="block text-gray-400 text-xs mb-1">Longitude</label>
+                                    <label className="block text-slate-500 text-xs mb-1">Longitude</label>
                                     <input
                                         type="number"
                                         step="0.00000001"
                                         value={data.longitude}
                                         onChange={(e) => setData('longitude', e.target.value)}
-                                        className="w-full px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white text-sm font-mono"
+                                        className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-iec-navy text-sm font-mono"
                                         placeholder="e.g. -16.5790"
                                     />
                                 </div>
@@ -378,7 +378,7 @@ export default function SubmitObservation({ auth, monitor, stations = [], presel
                             <button
                                 type="submit"
                                 disabled={processing || stations.length === 0}
-                                className="flex-1 px-6 py-4 bg-teal-600 hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold rounded-lg text-lg"
+                                className="flex-1 px-6 py-4 bg-iec-pink-600 hover:bg-iec-pink-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold rounded-lg text-lg"
                             >
                                 {processing ? (
                                     <span className="flex items-center justify-center gap-2">
@@ -392,7 +392,7 @@ export default function SubmitObservation({ auth, monitor, stations = [], presel
                             </button>
                             <Link
                                 href="/monitor/dashboard"
-                                className="px-6 py-4 bg-slate-700 hover:bg-slate-600 text-white font-bold rounded-lg"
+                                className="px-6 py-4 bg-white hover:bg-slate-100 text-iec-navy font-bold rounded-lg"
                             >
                                 Cancel
                             </Link>

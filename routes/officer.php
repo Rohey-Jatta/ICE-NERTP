@@ -151,7 +151,7 @@ Route::middleware(['auth', 'role:polling-officer'])
             ] : null,
             'alreadySubmitted' => $existingResult !== null,
         ]);
-    })->name('results.submit');
+    })->name('results.submit')->middleware('permission:submit-result|edit-pending-result');
 
     // ── Submit / Resubmit Result ──────────────────────────────────────────────
     Route::post('/results/submit', function (Request $request) {
@@ -292,7 +292,7 @@ Route::middleware(['auth', 'role:polling-officer'])
             ]);
             return back()->withErrors(['error' => 'Submission failed: ' . $e->getMessage()])->withInput();
         }
-    })->name('results.store');
+    })->name('results.store')->middleware(['permission:submit-result|edit-pending-result', 'permission:upload-photo']);
 
     // ── My Submissions ────────────────────────────────────────────────────────
     Route::get('/submissions', function () {
@@ -340,5 +340,5 @@ Route::middleware(['auth', 'role:polling-officer'])
                 'code' => $station->code,
             ] : null,
         ]);
-    })->name('submissions');
+    })->name('submissions')->middleware('permission:view-own-result');
 });

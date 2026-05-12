@@ -1,8 +1,9 @@
+import { Button, Field, PageHeader, Panel, inputClass, roleLabel } from '@/Components/AdminUI';
 import AppLayout from '@/Layouts/AppLayout';
-import { useForm, router } from '@inertiajs/react';
+import { useForm } from '@inertiajs/react';
 import { useState } from 'react';
 
-export default function UserEdit({ auth, user, roles, pollingStations, wards, constituencies, adminAreas, parties }) {
+export default function UserEdit({ auth, user, roles, pollingStations, wards, constituencies, adminAreas }) {
     const { data, setData, put, processing, errors } = useForm({
         name:                user.name   || '',
         email:               user.email  || '',
@@ -27,163 +28,115 @@ export default function UserEdit({ auth, user, roles, pollingStations, wards, co
         setData('role', role);
     };
 
-    const handleSubmit = (e) => {
-        e.preventDefault();
+    const handleSubmit = (event) => {
+        event.preventDefault();
         put(`/admin/users/${user.id}`);
     };
 
     const renderRoleSpecificFields = () => {
-        switch (selectedRole) {
-            case 'polling-officer':
-                return (
-                    <div>
-                        <label className="block text-gray-300 mb-2 font-semibold">Assign to Polling Station</label>
-                        <select value={data.polling_station_id}
-                            onChange={(e) => setData('polling_station_id', e.target.value)}
-                            className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white">
-                            <option value="">Select Polling Station</option>
-                            {pollingStations.map((station) => (
-                                <option key={station.id} value={station.id}>
-                                    {station.code} - {station.name}
-                                </option>
-                            ))}
-                        </select>
-                    </div>
-                );
-            case 'ward-approver':
-                return (
-                    <div>
-                        <label className="block text-gray-300 mb-2 font-semibold">Assign to Ward</label>
-                        <select value={data.ward_id}
-                            onChange={(e) => setData('ward_id', e.target.value)}
-                            className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white">
-                            <option value="">Select Ward</option>
-                            {wards.map((ward) => (
-                                <option key={ward.id} value={ward.id}>{ward.name}</option>
-                            ))}
-                        </select>
-                    </div>
-                );
-            case 'constituency-approver':
-                return (
-                    <div>
-                        <label className="block text-gray-300 mb-2 font-semibold">Assign to Constituency</label>
-                        <select value={data.constituency_id}
-                            onChange={(e) => setData('constituency_id', e.target.value)}
-                            className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white">
-                            <option value="">Select Constituency</option>
-                            {constituencies.map((constituency) => (
-                                <option key={constituency.id} value={constituency.id}>{constituency.name}</option>
-                            ))}
-                        </select>
-                    </div>
-                );
-            case 'admin-area-approver':
-                return (
-                    <div>
-                        <label className="block text-gray-300 mb-2 font-semibold">Assign to Admin Area</label>
-                        <select value={data.admin_area_id}
-                            onChange={(e) => setData('admin_area_id', e.target.value)}
-                            className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white">
-                            <option value="">Select Admin Area</option>
-                            {adminAreas.map((area) => (
-                                <option key={area.id} value={area.id}>{area.name}</option>
-                            ))}
-                        </select>
-                    </div>
-                );
-            default:
-                return null;
+        if (selectedRole === 'polling-officer') {
+            return (
+                <Field label="Assign to Polling Station">
+                    <select value={data.polling_station_id} onChange={(event) => setData('polling_station_id', event.target.value)} className={inputClass}>
+                        <option value="">Select polling station</option>
+                        {pollingStations.map((station) => (
+                            <option key={station.id} value={station.id}>{station.code} - {station.name}</option>
+                        ))}
+                    </select>
+                </Field>
+            );
         }
+
+        if (selectedRole === 'ward-approver') {
+            return (
+                <Field label="Assign to Ward">
+                    <select value={data.ward_id} onChange={(event) => setData('ward_id', event.target.value)} className={inputClass}>
+                        <option value="">Select ward</option>
+                        {wards.map((ward) => <option key={ward.id} value={ward.id}>{ward.name}</option>)}
+                    </select>
+                </Field>
+            );
+        }
+
+        if (selectedRole === 'constituency-approver') {
+            return (
+                <Field label="Assign to Constituency">
+                    <select value={data.constituency_id} onChange={(event) => setData('constituency_id', event.target.value)} className={inputClass}>
+                        <option value="">Select constituency</option>
+                        {constituencies.map((constituency) => <option key={constituency.id} value={constituency.id}>{constituency.name}</option>)}
+                    </select>
+                </Field>
+            );
+        }
+
+        if (selectedRole === 'admin-area-approver') {
+            return (
+                <Field label="Assign to Administrative Area">
+                    <select value={data.admin_area_id} onChange={(event) => setData('admin_area_id', event.target.value)} className={inputClass}>
+                        <option value="">Select administrative area</option>
+                        {adminAreas.map((area) => <option key={area.id} value={area.id}>{area.name}</option>)}
+                    </select>
+                </Field>
+            );
+        }
+
+        return null;
     };
 
     return (
         <AppLayout user={auth?.user}>
-            <div className="container mx-auto px-4 py-8 max-w-2xl">
-                <div className="flex items-center justify-between mb-6">
-                    <h1 className="text-3xl font-bold text-white">Edit User: {user.name}</h1>
-                    <button onClick={() => router.visit('/admin/users')}
-                        className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg">
-                        ← Back to Users
-                    </button>
-                </div>
+            <div className="ws-container max-w-3xl">
+                <PageHeader
+                    title={`Edit User: ${user.name}`}
+                    description="Update account details, role assignment, and operational status."
+                    backHref="/admin/users"
+                    backLabel="Back to Users"
+                />
 
-                <div className="bg-slate-800/40 rounded-xl p-6 border border-slate-700/50">
-                    <form onSubmit={handleSubmit} className="space-y-6">
+                <Panel className="p-5">
+                    <form onSubmit={handleSubmit} className="space-y-5">
+                        <Field label="Name">
+                            <input type="text" value={data.name} onChange={(event) => setData('name', event.target.value)} className={inputClass} placeholder="Full name" required />
+                            {errors.name && <p className="mt-1 text-sm text-rose-600">{errors.name}</p>}
+                        </Field>
 
-                        <div>
-                            <label className="block text-gray-300 mb-2 font-semibold">Name <span className="text-red-400">*</span></label>
-                            <input type="text" value={data.name}
-                                onChange={(e) => setData('name', e.target.value)}
-                                className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white"
-                                placeholder="Full Name" required />
-                            {errors.name && <p className="text-red-400 text-sm mt-1">{errors.name}</p>}
-                        </div>
+                        <Field label="Email">
+                            <input type="email" value={data.email} onChange={(event) => setData('email', event.target.value)} className={inputClass} placeholder="user@iec.gm" required />
+                            {errors.email && <p className="mt-1 text-sm text-rose-600">{errors.email}</p>}
+                        </Field>
 
-                        <div>
-                            <label className="block text-gray-300 mb-2 font-semibold">Email <span className="text-red-400">*</span></label>
-                            <input type="email" value={data.email}
-                                onChange={(e) => setData('email', e.target.value)}
-                                className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white"
-                                placeholder="user@iec.gm" required />
-                            {errors.email && <p className="text-red-400 text-sm mt-1">{errors.email}</p>}
-                        </div>
+                        <Field label="Phone Number">
+                            <input type="tel" value={data.phone} onChange={(event) => setData('phone', event.target.value)} className={inputClass} placeholder="+220XXXXXXX" required />
+                            <p className="mt-1 text-xs text-slate-500">Used for 2FA verification code delivery. Include country code.</p>
+                            {errors.phone && <p className="mt-1 text-sm text-rose-600">{errors.phone}</p>}
+                        </Field>
 
-                        {/* Phone — critical for 2FA */}
-                        <div>
-                            <label className="block text-gray-300 mb-2 font-semibold">
-                                Phone Number <span className="text-red-400">*</span>
-                            </label>
-                            <input type="tel" value={data.phone}
-                                onChange={(e) => setData('phone', e.target.value)}
-                                className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white"
-                                placeholder="+220XXXXXXX" required />
-                            <p className="text-gray-500 text-xs mt-1">
-                                Used for 2FA verification code delivery. Include country code (e.g., +220 for Gambia).
-                            </p>
-                            {errors.phone && <p className="text-red-400 text-sm mt-1">{errors.phone}</p>}
-                        </div>
+                        <div className="ws-form-grid">
+                            <Field label="Status">
+                                <select value={data.status} onChange={(event) => setData('status', event.target.value)} className={inputClass}>
+                                    <option value="active">Active</option>
+                                    <option value="inactive">Inactive</option>
+                                    <option value="suspended">Suspended</option>
+                                </select>
+                                {errors.status && <p className="mt-1 text-sm text-rose-600">{errors.status}</p>}
+                            </Field>
 
-                        <div>
-                            <label className="block text-gray-300 mb-2 font-semibold">Status</label>
-                            <select value={data.status}
-                                onChange={(e) => setData('status', e.target.value)}
-                                className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white">
-                                <option value="active">Active</option>
-                                <option value="inactive">Inactive</option>
-                                <option value="suspended">Suspended</option>
-                            </select>
-                            {errors.status && <p className="text-red-400 text-sm mt-1">{errors.status}</p>}
-                        </div>
-
-                        <div>
-                            <label className="block text-gray-300 mb-2 font-semibold">Role</label>
-                            <select value={data.role}
-                                onChange={(e) => handleRoleChange(e.target.value)}
-                                className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white">
-                                {roles.map((role) => (
-                                    <option key={role} value={role}>
-                                        {role.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
-                                    </option>
-                                ))}
-                            </select>
-                            {errors.role && <p className="text-red-400 text-sm mt-1">{errors.role}</p>}
+                            <Field label="Role">
+                                <select value={data.role} onChange={(event) => handleRoleChange(event.target.value)} className={inputClass}>
+                                    {roles.map((role) => <option key={role} value={role}>{roleLabel(role)}</option>)}
+                                </select>
+                                {errors.role && <p className="mt-1 text-sm text-rose-600">{errors.role}</p>}
+                            </Field>
                         </div>
 
                         {renderRoleSpecificFields()}
 
-                        <div className="flex gap-4">
-                            <button type="submit" disabled={processing}
-                                className="flex-1 px-6 py-3 bg-teal-600 hover:bg-teal-700 disabled:bg-teal-600 text-white font-bold rounded-lg">
-                                {processing ? 'Updating...' : 'Update User'}
-                            </button>
-                            <button type="button" onClick={() => router.visit('/admin/users')}
-                                className="flex-1 px-6 py-3 bg-slate-700 hover:bg-slate-600 text-white font-bold rounded-lg">
-                                Cancel
-                            </button>
+                        <div className="flex flex-wrap gap-3 pt-2">
+                            <Button type="submit" disabled={processing}>{processing ? 'Updating...' : 'Update User'}</Button>
+                            <Button href="/admin/users" variant="secondary">Cancel</Button>
                         </div>
                     </form>
-                </div>
+                </Panel>
             </div>
         </AppLayout>
     );

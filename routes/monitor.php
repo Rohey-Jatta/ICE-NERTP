@@ -144,7 +144,7 @@ Route::middleware(['auth', 'role:election-monitor'])
             'monitor'  => $monitor,
             'stations' => $stations,
         ]);
-    })->name('stations');
+    })->name('stations')->middleware('permission:view-assigned-stations');
 
     // ── Submit Observation ────────────────────────────────────────────────────
     Route::get('/submit-observation', function (Request $request) {
@@ -171,7 +171,7 @@ Route::middleware(['auth', 'role:election-monitor'])
             'stations'           => $stations,
             'preselectedStation' => $preselectedStation,
         ]);
-    })->name('submit-observation');
+    })->name('submit-observation')->middleware('permission:submit-observation');
 
     Route::post('/observations', function (Request $request) {
         $request->validate([
@@ -260,7 +260,7 @@ Route::middleware(['auth', 'role:election-monitor'])
             Log::error('Monitor observation submission failed', ['error' => $e->getMessage()]);
             return back()->withErrors(['error' => 'Failed to submit observation: ' . $e->getMessage()]);
         }
-    })->name('observations.store');
+    })->name('observations.store')->middleware('permission:submit-observation');
 
     // ── View Observations History ─────────────────────────────────────────────
     Route::get('/observations', function (Request $request) {
@@ -331,7 +331,7 @@ Route::middleware(['auth', 'role:election-monitor'])
             'severityFilter' => $severityFilter,
             'typeCounts'     => $typeCounts,
         ]);
-    })->name('observations');
+    })->name('observations')->middleware('permission:view-observation-history');
 
     // ── Export Observations (CSV) ─────────────────────────────────────────────
     Route::get('/observations/export', function (Request $request) {
@@ -403,7 +403,7 @@ Route::middleware(['auth', 'role:election-monitor'])
             'Content-Type'        => 'text/csv',
             'Content-Disposition' => "attachment; filename=\"{$filename}\"",
         ]);
-    })->name('observations.export');
+    })->name('observations.export')->middleware('permission:export-observations');
 
     // ── View Results (read-only, assigned stations only) ─────────────────────
     Route::get('/results', function () {
@@ -446,5 +446,5 @@ Route::middleware(['auth', 'role:election-monitor'])
             'monitor' => $monitor,
             'results' => $results,
         ]);
-    })->name('results');
+    })->name('results')->middleware('permission:view-assigned-stations');
 });

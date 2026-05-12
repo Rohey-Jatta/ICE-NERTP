@@ -1,203 +1,158 @@
 import AppLayout from '@/Layouts/AppLayout';
 import { useForm, router } from '@inertiajs/react';
+import { Badge, Button, DataTable, Field, PageHeader, Pagination, Panel, Toolbar, inputClass } from '@/Components/AdminUI';
 import { useState } from 'react';
 
-export default function AuditLogs({ auth, logs, filters }) {
+const moduleOptions = ['Authentication', 'ElectionManagement', 'PartyManagement', 'PollingStation', 'UserManagement', 'System'];
+const outcomeTone = (outcome) => {
+    if (outcome === 'success') return 'teal';
+    if (outcome === 'blocked') return 'amber';
+    if (outcome === 'failure') return 'rose';
+    return 'slate';
+};
+
+export default function AuditLogs({ auth, logs = {}, filters = {} }) {
     const [selectedLog, setSelectedLog] = useState(null);
 
     const { data, setData, get, processing } = useForm({
         user: filters.user || '',
         action: filters.action || '',
+        module: filters.module || '',
+        outcome: filters.outcome || '',
         date_from: filters.date_from || '',
         date_to: filters.date_to || '',
     });
 
-    const applyFilters = (e) => {
-        e.preventDefault();
-        get('/admin/audit-logs', {
-            preserveState: true,
-            replace: true,
-        });
+    const applyFilters = (event) => {
+        event.preventDefault();
+        get('/admin/audit-logs', { preserveState: true, replace: true });
     };
 
     const clearFilters = () => {
-        setData({
-            user: '',
-            action: '',
-            date_from: '',
-            date_to: '',
-        });
-        router.get('/admin/audit-logs', {}, {
-            preserveState: false,
-            replace: true,
-        });
+        router.get('/admin/audit-logs', {}, { preserveState: false, replace: true });
     };
+
+    const rows = logs.data ?? [];
+    const columns = [
+        {
+            key: 'created_at',
+            header: 'Timestamp',
+            render: (log) => <span className="whitespace-nowrap ws-row-mono">{new Date(log.created_at).toLocaleString()}</span>,
+        },
+        {
+            key: 'user',
+            header: 'User',
+            render: (log) => (
+                <div>
+                    <div className="ws-row-strong">{log.user?.name || 'System'}</div>
+                    {log.user_role && <div className="ws-row-muted mt-0.5">{log.user_role.replace(/-/g, ' ')}</div>}
+                </div>
+            ),
+        },
+        { key: 'module', header: 'Module', render: (log) => <Badge tone="blue">{log.module}</Badge> },
+        { key: 'action', header: 'Action', render: (log) => <span className="ws-row-mono">{log.action}</span> },
+        { key: 'outcome', header: 'Outcome', render: (log) => <Badge tone={outcomeTone(log.outcome)}>{log.outcome || 'success'}</Badge> },
+        { key: 'ip_address', header: 'IP Address', render: (log) => <span className="ws-row-mono">{log.ip_address || '—'}</span> },
+        {
+            key: 'details',
+            header: 'Details',
+            align: 'right',
+            render: (log) => <Button variant="secondary" onClick={() => setSelectedLog(log)}>View</Button>,
+        },
+    ];
 
     return (
         <AppLayout user={auth.user}>
-            <div className="container mx-auto px-4 py-8">
-                <div className="flex justify-between items-center mb-6">
-                    <h1 className="text-3xl font-bold text-white">Audit Logs</h1>
-                    <a href="/admin/dashboard" className="px-4 py-2 bg-slate-500 text-white rounded-lg">
-                        Back to Admin
-                    </a>
-                </div>
+            <div className="ws-container">
+                <PageHeader
+                    title="Audit Logs"
+                    description="Authentication, configuration, and administrative activity with user, IP, and timestamp evidence."
+                />
 
-                {/* Filters */}
-                <div className="bg-slate-800/40 rounded-xl p-6 border border-slate-700/50 mb-6">
-                    <h2 className="text-xl font-bold text-white mb-4">Filters</h2>
-                    <form onSubmit={applyFilters} className="grid grid-cols-1 md:grid-cols-5 gap-4">
-                        <div>
-                            <input
-                                type="text"
-                                value={data.user}
-                                onChange={(e) => setData('user', e.target.value)}
-                                placeholder="Search by user name/email..."
-                                className="w-full px-4 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white"
-                            />
+                <form onSubmit={applyFilters}>
+                    <Toolbar>
+                        <Field label="User">
+                            <input value={data.user} onChange={(event) => setData('user', event.target.value)} placeholder="Name or email" className={inputClass} />
+                        </Field>
+                        <Field label="Action">
+                            <input value={data.action} onChange={(event) => setData('action', event.target.value)} placeholder="auth.login.success" className={inputClass} />
+                        </Field>
+                        <Field label="Module">
+                            <select value={data.module} onChange={(event) => setData('module', event.target.value)} className={inputClass}>
+                                <option value="">All modules</option>
+                                {moduleOptions.map((module) => <option key={module} value={module}>{module}</option>)}
+                            </select>
+                        </Field>
+                        <Field label="Outcome">
+                            <select value={data.outcome} onChange={(event) => setData('outcome', event.target.value)} className={inputClass}>
+                                <option value="">All outcomes</option>
+                                <option value="success">Success</option>
+                                <option value="failure">Failure</option>
+                                <option value="blocked">Blocked</option>
+                            </select>
+                        </Field>
+                        <div className="flex items-end gap-2">
+                            <Button type="submit" disabled={processing} className="flex-1">{processing ? 'Applying...' : 'Apply Filters'}</Button>
+                            <Button variant="secondary" onClick={clearFilters}>Clear</Button>
                         </div>
-                        <div>
-                            <input
-                                type="text"
-                                value={data.action}
-                                onChange={(e) => setData('action', e.target.value)}
-                                placeholder="Filter by action..."
-                                className="w-full px-4 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white"
-                            />
-                        </div>
-                        <div>
-                            <input
-                                type="date"
-                                value={data.date_from}
-                                onChange={(e) => setData('date_from', e.target.value)}
-                                className="w-full px-4 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white"
-                            />
-                        </div>
-                        <div>
-                            <input
-                                type="date"
-                                value={data.date_to}
-                                onChange={(e) => setData('date_to', e.target.value)}
-                                className="w-full px-4 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white"
-                            />
-                        </div>
-                        <div className="flex gap-2">
-                            <button
-                                type="submit"
-                                disabled={processing}
-                                className="px-4 py-2 bg-teal-600 hover:bg-teal-700 disabled:bg-teal-600 text-white rounded-lg flex-1"
-                            >
-                                {processing ? 'Filtering...' : 'Apply'}
-                            </button>
-                            <button
-                                type="button"
-                                onClick={clearFilters}
-                                className="px-4 py-2 bg-slate-600 hover:bg-slate-700 text-white rounded-lg"
-                            >
-                                Clear
-                            </button>
-                        </div>
-                    </form>
-                </div>
+                    </Toolbar>
+                </form>
 
-                {/* Audit Logs Table */}
-                <div className="bg-slate-800/40 rounded-xl border border-slate-700/50 overflow-hidden">
-                    <div className="overflow-x-auto">
-                        <table className="w-full">
-                            <thead className="bg-slate-900/50">
-                                <tr>
-                                    <th className="px-6 py-4 text-left text-white font-semibold">Timestamp</th>
-                                    <th className="px-6 py-4 text-left text-white font-semibold">User</th>
-                                    <th className="px-6 py-4 text-left text-white font-semibold">Action</th>
-                                    <th className="px-6 py-4 text-left text-white font-semibold">Model</th>
-                                    <th className="px-6 py-4 text-left text-white font-semibold">IP Address</th>
-                                    <th className="px-6 py-4 text-left text-white font-semibold">Details</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-700/30">
-                                {logs?.data?.length > 0 ? (
-                                    logs.data.map((log) => (
-                                        <tr key={log.id} className="hover:bg-slate-900/30">
-                                            <td className="px-6 py-4 text-gray-300 text-sm">
-                                                {new Date(log.created_at).toLocaleString()}
-                                            </td>
-                                            <td className="px-6 py-4 text-white">{log.user?.name || 'System'}</td>
-                                            <td className="px-6 py-4">
-                                                <span className="px-3 py-1 bg-teal-500/20 text-teal-300 rounded-full text-xs">
-                                                    {log.action}
-                                                </span>
-                                            </td>
-                                            <td className="px-6 py-4 text-gray-300">{log.model}</td>
-                                            <td className="px-6 py-4 text-gray-400 text-sm">{log.ip_address}</td>
-                                            <td className="px-6 py-4">
-                                                <button
-                                                    onClick={() => setSelectedLog(log)}
-                                                    className="text-teal-400 hover:text-teal-300 text-sm"
-                                                >
-                                                    View Details →
-                                                </button>
-                                            </td>
-                                        </tr>
-                                    ))
-                                ) : (
-                                    <tr>
-                                        <td colSpan="6" className="px-6 py-12 text-center text-gray-400">
-                                            No audit logs found
-                                        </td>
-                                    </tr>
-                                )}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
+                <DataTable columns={columns} rows={rows} empty="No audit logs match the current filters." />
+                <Pagination links={logs.links} />
 
-                {/* Detail Modal */}
                 {selectedLog && (
-                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-                        <div className="bg-slate-800 rounded-xl p-8 max-w-2xl w-full border border-slate-700">
-                            <div className="flex justify-between items-center mb-6">
-                                <h3 className="text-2xl font-bold text-white">Audit Log Details</h3>
-                                <button
-                                    onClick={() => setSelectedLog(null)}
-                                    className="text-gray-400 hover:text-white text-2xl"
-                                >
-                                    ×
-                                </button>
+                    <div className="ws-modal-backdrop" onClick={() => setSelectedLog(null)}>
+                        <div className="ws-modal" style={{ maxWidth: '52rem' }} onClick={(e) => e.stopPropagation()}>
+                            <div className="ws-modal-strip" />
+                            <div className="ws-modal-header">
+                                <div>
+                                    <h3 className="ws-modal-title">Audit Log Details</h3>
+                                    <p className="ws-modal-subtitle">{selectedLog.action}</p>
+                                </div>
+                                <button className="ws-modal-close" onClick={() => setSelectedLog(null)} aria-label="Close">×</button>
                             </div>
-
-                            <div className="space-y-4">
-                                <div>
-                                    <div className="text-sm text-gray-400">Action</div>
-                                    <div className="text-white font-semibold">{selectedLog.action}</div>
+                            <div className="ws-modal-body space-y-4">
+                                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                                    {[
+                                        ['Timestamp', new Date(selectedLog.created_at).toLocaleString()],
+                                        ['User', selectedLog.user?.name || 'System'],
+                                        ['Module', selectedLog.module],
+                                        ['Outcome', selectedLog.outcome || 'success'],
+                                        ['IP Address', selectedLog.ip_address || '—'],
+                                        ['Role', selectedLog.user_role || '—'],
+                                    ].map(([label, value]) => (
+                                        <div key={label} className="rounded-md border border-gray-200 bg-gray-50 p-3">
+                                            <div className="ws-label">{label}</div>
+                                            <div className="text-sm text-slate-800">{value}</div>
+                                        </div>
+                                    ))}
                                 </div>
-                                <div>
-                                    <div className="text-sm text-gray-400">User</div>
-                                    <div className="text-white">{selectedLog.user?.name}</div>
-                                </div>
-                                <div>
-                                    <div className="text-sm text-gray-400">IP Address</div>
-                                    <div className="text-white">{selectedLog.ip_address}</div>
-                                </div>
-                                <div>
-                                    <div className="text-sm text-gray-400">User Agent</div>
-                                    <div className="text-white text-sm">{selectedLog.user_agent}</div>
-                                </div>
-                                {selectedLog.old_values && (
+                                {selectedLog.user_agent && (
                                     <div>
-                                        <div className="text-sm text-gray-400 mb-2">Old Values</div>
-                                        <pre className="bg-slate-900/50 p-4 rounded-lg text-xs text-gray-300 overflow-x-auto">
-                                            {JSON.stringify(selectedLog.old_values, null, 2)}
-                                        </pre>
+                                        <div className="ws-label">User Agent</div>
+                                        <p className="rounded-md border border-gray-200 bg-gray-50 p-3 text-xs text-slate-700 break-words">{selectedLog.user_agent}</p>
                                     </div>
                                 )}
-                                {selectedLog.new_values && (
-                                    <div>
-                                        <div className="text-sm text-gray-400 mb-2">New Values</div>
-                                        <pre className="bg-slate-900/50 p-4 rounded-lg text-xs text-gray-300 overflow-x-auto">
-                                            {JSON.stringify(selectedLog.new_values, null, 2)}
-                                        </pre>
+                                {(selectedLog.old_values || selectedLog.new_values) && (
+                                    <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+                                        {selectedLog.old_values && (
+                                            <div>
+                                                <div className="ws-label">Old values</div>
+                                                <pre className="overflow-x-auto rounded-md border border-gray-200 bg-gray-50 p-3 text-xs text-slate-700">{JSON.stringify(selectedLog.old_values, null, 2)}</pre>
+                                            </div>
+                                        )}
+                                        {selectedLog.new_values && (
+                                            <div>
+                                                <div className="ws-label">New values</div>
+                                                <pre className="overflow-x-auto rounded-md border border-gray-200 bg-gray-50 p-3 text-xs text-slate-700">{JSON.stringify(selectedLog.new_values, null, 2)}</pre>
+                                            </div>
+                                        )}
                                     </div>
                                 )}
+                            </div>
+                            <div className="ws-modal-footer">
+                                <Button variant="secondary" onClick={() => setSelectedLog(null)}>Close</Button>
                             </div>
                         </div>
                     </div>

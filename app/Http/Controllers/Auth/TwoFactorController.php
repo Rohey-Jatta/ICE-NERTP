@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Services\TwoFactorAuthService;
+use App\Models\AuditLog;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -56,6 +57,13 @@ class TwoFactorController extends Controller
 
         // Verify the code
         if (!$this->twoFactorService->verifyCode($user, $request->code)) {
+            AuditLog::record(
+                action: 'auth.two_factor.failed',
+                event: 'failure',
+                module: 'Authentication',
+                auditable: $user,
+                extra: ['outcome' => 'failure', 'failure_reason' => 'Invalid verification code']
+            );
             return back()->withErrors(['code' => 'Invalid verification code. Please try again.']);
         }
 
@@ -67,6 +75,14 @@ class TwoFactorController extends Controller
 
         // Clean up 2FA session data
         $request->session()->forget(['2fa_user_id', '2fa_sms_sent', '2fa_expires_at']);
+
+        AuditLog::record(
+            action: 'auth.login.success',
+            event: 'action',
+            module: 'Authentication',
+            auditable: $user,
+            extra: ['outcome' => 'success']
+        );
 
         // Redirect based on role
         return $this->redirectByRole($user);

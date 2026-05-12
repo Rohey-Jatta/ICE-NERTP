@@ -128,7 +128,7 @@ Route::middleware(['auth', 'role:party-representative'])
             ],
             'noAssignment' => false,
         ]);
-    })->name('dashboard');
+    })->name('dashboard')->middleware('permission:view-party-dashboard');
 
     // ── Stations overview ─────────────────────────────────────────────────────
     Route::get('/stations', function () use ($getRep, $getActiveElection) {
@@ -189,7 +189,7 @@ Route::middleware(['auth', 'role:party-representative'])
                 'color'        => $rep->politicalParty->color,
             ],
         ]);
-    })->name('stations');
+    })->name('stations')->middleware('permission:view-assigned-stations');
 
     // ── Pending acceptance ────────────────────────────────────────────────────
     Route::get('/pending-acceptance', function () use ($getRep, $getActiveElection) {
@@ -290,7 +290,7 @@ Route::middleware(['auth', 'role:party-representative'])
                 'color'        => $rep->politicalParty->color,
             ],
         ]);
-    })->name('pending-acceptance');
+    })->name('pending-acceptance')->middleware('permission:view-assigned-stations');
 
     // ── View single result details ────────────────────────────────────────────
     Route::get('/result/{result}', function (Result $result) use ($getRep, $getActiveElection) {
@@ -373,7 +373,7 @@ Route::middleware(['auth', 'role:party-representative'])
                 'decided_at' => $myAcceptance->decided_at?->format('Y-m-d H:i'),
             ] : null,
         ]);
-    })->name('result.show');
+    })->name('result.show')->middleware('permission:view-assigned-stations');
 
     // ── Submit acceptance decision ────────────────────────────────────────────
     Route::post('/result/{result}/decide', function (Request $request, Result $result) use ($getRep, $getActiveElection) {
@@ -458,7 +458,7 @@ Route::middleware(['auth', 'role:party-representative'])
 
         return redirect()->route('party.pending-acceptance')
             ->with('success', "Result {$label} successfully. Your decision has been recorded.");
-    })->name('result.decide');
+    })->name('result.decide')->middleware('permission:accept-result|reject-result');
 
     // ── Dashboard overview ────────────────────────────────────────────────────
     Route::get('/dashboard-overview', function () use ($getRep) {
@@ -471,5 +471,5 @@ Route::middleware(['auth', 'role:party-representative'])
                 'color'        => $rep->politicalParty->color,
             ] : null,
         ]);
-    })->name('dashboard-overview');
+    })->name('dashboard-overview')->middleware('permission:view-party-dashboard');
 });

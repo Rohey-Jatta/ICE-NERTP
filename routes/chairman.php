@@ -162,7 +162,7 @@ Route::middleware(['auth', 'role:iec-chairman'])
             'pendingResults' => $results,
             'pendingCount'   => $results->count(),
         ]);
-    })->name('national-queue');
+    })->name('national-queue')->middleware('permission:view-national-queue');
 
     // ── Certify nationally ────────────────────────────────────────────────────
     Route::post('/certify/{result}', function (Request $request, Result $result) {
@@ -211,7 +211,7 @@ Route::middleware(['auth', 'role:iec-chairman'])
         );
 
         return back()->with('success', 'Result has been nationally certified.');
-    })->name('certify');
+    })->name('certify')->middleware('permission:national-certification');
 
     // ── Reject / Return to Admin Area ─────────────────────────────────────────
     Route::post('/reject/{result}', function (Request $request, Result $result) {
@@ -263,7 +263,7 @@ Route::middleware(['auth', 'role:iec-chairman'])
         );
 
         return back()->with('success', 'Result returned to Admin Area level for review.');
-    })->name('reject');
+    })->name('reject')->middleware('permission:override-rejection');
 
     // ── All Results ───────────────────────────────────────────────────────────
     Route::get('/all-results', function (Request $request) {
@@ -320,7 +320,7 @@ Route::middleware(['auth', 'role:iec-chairman'])
             'filter'  => $filter,
             'counts'  => $counts,
         ]);
-    })->name('all-results');
+    })->name('all-results')->middleware('permission:view-all-results');
 
     // ── Analytics ─────────────────────────────────────────────────────────────
     Route::get('/analytics', function () {
@@ -394,7 +394,7 @@ Route::middleware(['auth', 'role:iec-chairman'])
             ],
             'regionalBreakdown' => $adminAreas,
         ]);
-    })->name('analytics');
+    })->name('analytics')->middleware('permission:access-full-analytics');
 
     // ── Publish results ───────────────────────────────────────────────────────
     Route::get('/publish', function () {
@@ -424,7 +424,7 @@ Route::middleware(['auth', 'role:iec-chairman'])
                 'lastUpdated'     => now()->format('Y-m-d H:i'),
             ],
         ]);
-    })->name('publish');
+    })->name('publish')->middleware('permission:publish-results');
 
     Route::post('/publish-results', function () {
         $election = Election::where('status', 'active')->orWhere('status', 'certifying')->latest()->first();
@@ -440,5 +440,5 @@ Route::middleware(['auth', 'role:iec-chairman'])
             extra: ['outcome' => 'success']
         );
         return redirect('/results')->with('success', 'Results published successfully to the public!');
-    })->name('publish-results');
+    })->name('publish-results')->middleware('permission:publish-results');
 });

@@ -17,12 +17,13 @@ class ResultsSummaryController extends Controller
         $availableElections = Election::where('allow_provisional_public_display', true)
             ->whereIn('status', ['active', 'certifying', 'results_pending', 'certified'])
             ->orderByDesc('start_date')
-            ->get(['id', 'name', 'type', 'status'])
+            ->get(['id', 'name', 'type', 'status', 'start_date'])
             ->map(fn($e) => [
-                'id'     => $e->id,
-                'name'   => $e->name,
-                'type'   => $e->type,
-                'status' => $e->status,
+                'id'         => $e->id,
+                'name'       => $e->name,
+                'type'       => $e->type,
+                'status'     => $e->status,
+                'start_date' => $e->start_date?->toDateString(),
             ]);
 
         // ── 2. Determine the selected election ────────────────────────────────
@@ -34,13 +35,13 @@ class ResultsSummaryController extends Controller
         }
 
         if (!$electionModel) {
-            // Default: certified first, then active
+            // Default: certified first, then the latest administrator-enabled election.
             $electionModel = Election::where('allow_provisional_public_display', true)
                 ->where('status', 'certified')
                 ->latest('start_date')
                 ->first()
                 ?? Election::where('allow_provisional_public_display', true)
-                    ->where('status', 'active')
+                    ->whereIn('status', ['active', 'certifying', 'results_pending'])
                     ->latest('start_date')
                     ->first();
         }
@@ -56,8 +57,8 @@ class ResultsSummaryController extends Controller
         }
 
         // ── 3. Compute/fetch cached summary data ──────────────────────────────
-        $cacheKey = "results_summary_{$electionModel->id}";
-        $data     = Cache::remember($cacheKey, 300, fn() => $this->computeSummary($electionModel));
+        $cacheKey = "results_summary_v2_{$electionModel->id}";
+        $data     = Cache::remember($cacheKey, 30, fn() => $this->computeSummary($electionModel));
 
         return Inertia::render('Public/Results', array_merge($data, [
             'elections'          => $availableElections,
@@ -68,6 +69,9 @@ class ResultsSummaryController extends Controller
     private function computeSummary(Election $election): array
     {
         $publicStatuses = [
+            'submitted',
+            'pending_party_acceptance',
+            'pending_ward',
             'ward_certified',
             'pending_constituency',
             'constituency_certified',
@@ -98,13 +102,17 @@ class ResultsSummaryController extends Controller
             ->where('ps.election_id', $election->id)
             ->first();
 
-        if (!$stats || $stats->stations_reported == 0) {
+        $electionPayload = [
+            'id'         => $election->id,
+            'name'       => $election->name,
+            'type'       => $election->type,
+            'status'     => $election->status,
+            'start_date' => $election->start_date?->toDateString(),
+        ];
+
+        if (!$stats) {
             return [
-                'election' => [
-                    'id'   => $election->id,
-                    'name' => $election->name,
-                    'type' => $election->type,
-                ],
+                'election'   => $electionPayload,
                 'stats'      => null,
                 'candidates' => [],
                 'message'    => 'Results will be published after certification is complete.',
@@ -117,12 +125,13 @@ class ResultsSummaryController extends Controller
                 COALESCE(pp.name, 'Independent')  as party_name,
                 COALESCE(pp.abbreviation, 'IND')  as party_abbr,
                 COALESCE(pp.color, '#6b7280')      as party_color,
-                COALESCE(SUM(rcv.votes), 0)        as total_votes
+                COALESCE(SUM(CASE WHEN r.id IS NOT NULL THEN rcv.votes ELSE 0 END), 0) as total_votes
             ")
             ->leftJoin('political_parties as pp', 'c.political_party_id', '=', 'pp.id')
             ->leftJoin('result_candidate_votes as rcv', 'c.id', '=', 'rcv.candidate_id')
-            ->leftJoin('results as r', function ($join) use ($publicStatuses) {
+            ->leftJoin('results as r', function ($join) use ($election, $publicStatuses) {
                 $join->on('rcv.result_id', '=', 'r.id')
+                     ->where('r.election_id', $election->id)
                      ->whereIn('r.certification_status', $publicStatuses);
             })
             ->where('c.election_id', $election->id)
@@ -130,15 +139,17 @@ class ResultsSummaryController extends Controller
             ->orderByDesc('total_votes')
             ->get();
 
+        if ((int) $stats->stations_reported === 0) {
+            $candidates = collect();
+        }
+
         return [
-            'election' => [
-                'id'   => $election->id,
-                'name' => $election->name,
-                'type' => $election->type,
-            ],
+            'election'   => $electionPayload,
             'stats'      => $stats,
             'candidates' => $candidates,
-            'message'    => null,
+            'message'    => (int) $stats->stations_reported === 0
+                ? 'Results will be published after certification is complete.'
+                : null,
         ];
     }
 }

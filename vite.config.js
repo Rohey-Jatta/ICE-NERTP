@@ -48,8 +48,12 @@ export default defineConfig({
         },
     },
     server: {
+        host: '::',         // bind to IPv4 + IPv6 so [::1] resolves
+        port: 5173,
+        strictPort: true,
         hmr: {
             overlay: false,
+            host: 'localhost',
         },
     },
     optimizeDeps: {

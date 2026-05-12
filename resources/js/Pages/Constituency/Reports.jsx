@@ -20,8 +20,8 @@ export default function ConstituencyReports({ auth, constituency, reportData }) 
             name: 'Full Constituency Results',
             description: 'Complete results with all wards and polling stations, candidate votes, and certification status.',
             format: 'PDF',
-            color: 'border-blue-500/30 bg-blue-500/10',
-            btnColor: 'bg-blue-600 hover:bg-blue-700',
+            color: 'border-blue-500/30 bg-iec-pink-500/10',
+            btnColor: 'bg-iec-pink-600 hover:bg-iec-pink-700',
             icon: '📋',
         },
         {
@@ -29,8 +29,8 @@ export default function ConstituencyReports({ auth, constituency, reportData }) 
             name: 'Ward Summary Report',
             description: 'Summary of each ward with aggregated vote totals, turnout statistics, and certification progress.',
             format: 'PDF',
-            color: 'border-teal-500/30 bg-teal-500/10',
-            btnColor: 'bg-teal-600 hover:bg-teal-700',
+            color: 'border-teal-500/30 bg-iec-pink-500/10',
+            btnColor: 'bg-iec-pink-600 hover:bg-iec-pink-700',
             icon: '📊',
         },
         {
@@ -38,8 +38,8 @@ export default function ConstituencyReports({ auth, constituency, reportData }) 
             name: 'Turnout Analysis',
             description: 'Detailed turnout statistics by ward and polling station with comparisons.',
             format: 'PDF',
-            color: 'border-purple-500/30 bg-purple-500/10',
-            btnColor: 'bg-purple-600 hover:bg-purple-700',
+            color: 'border-iec-pink-100 bg-iec-pink-50',
+            btnColor: 'bg-iec-pink-600 hover:bg-iec-pink-700',
             icon: '📈',
         },
         {
@@ -59,33 +59,33 @@ export default function ConstituencyReports({ auth, constituency, reportData }) 
 
                 {/* Header with back link */}
                 <div className="mb-6">
-                    <Link href="/constituency/dashboard" className="text-gray-400 hover:text-white text-sm mb-2 inline-flex items-center gap-1">
+                    <Link href="/constituency/dashboard" className="text-slate-500 hover:text-iec-navy text-sm mb-2 inline-flex items-center gap-1">
                         Back to Constituency Dashboard
                     </Link>
-                    <h1 className="text-3xl font-bold text-white">Constituency Reports</h1>
-                    {constituency?.name && <p className="text-teal-300 mt-1">{constituency.name}</p>}
+                    <h1 className="text-3xl font-bold text-iec-navy">Constituency Reports</h1>
+                    {constituency?.name && <p className="text-iec-pink-600 mt-1">{constituency.name}</p>}
                 </div>
 
                 {/* Summary stats */}
                 {reportData && (
-                    <div className="bg-slate-800/40 rounded-xl p-6 border border-slate-700/50 mb-8">
-                        <h2 className="text-lg font-bold text-white mb-4">Constituency Summary</h2>
+                    <div className="bg-white rounded-xl p-6 border border-slate-200 mb-8">
+                        <h2 className="text-lg font-bold text-iec-navy mb-4">Constituency Summary</h2>
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                             {[
-                                { label: 'Registered Voters', value: reportData.total_registered?.toLocaleString() || '0', color: 'text-white' },
-                                { label: 'Total Votes Cast',  value: reportData.total_cast?.toLocaleString() || '0', color: 'text-white' },
-                                { label: 'Valid Votes',       value: reportData.total_valid?.toLocaleString() || '0', color: 'text-teal-300' },
-                                { label: 'Turnout',           value: `${reportData.turnout || 0}%`, color: 'text-blue-300' },
+                                { label: 'Registered Voters', value: reportData.total_registered?.toLocaleString() || '0', color: 'text-iec-navy' },
+                                { label: 'Total Votes Cast',  value: reportData.total_cast?.toLocaleString() || '0', color: 'text-iec-navy' },
+                                { label: 'Valid Votes',       value: reportData.total_valid?.toLocaleString() || '0', color: 'text-iec-pink-600' },
+                                { label: 'Turnout',           value: `${reportData.turnout || 0}%`, color: 'text-iec-pink-600' },
                             ].map(stat => (
-                                <div key={stat.label} className="bg-slate-900/50 p-4 rounded-lg">
-                                    <div className="text-gray-400 text-xs mb-1">{stat.label}</div>
+                                <div key={stat.label} className="bg-white p-4 rounded-lg">
+                                    <div className="text-slate-500 text-xs mb-1">{stat.label}</div>
                                     <div className={`text-2xl font-bold ${stat.color}`}>{stat.value}</div>
                                 </div>
                             ))}
                         </div>
-                        <div className="mt-4 pt-4 border-t border-slate-700/50 flex gap-6 text-sm text-gray-400">
-                            <span>Stations Reporting: <strong className="text-white">{reportData.total_stations}</strong></span>
-                            <span>Certified: <strong className="text-teal-300">{reportData.certified_count}</strong></span>
+                        <div className="mt-4 pt-4 border-t border-slate-200 flex gap-6 text-sm text-slate-500">
+                            <span>Stations Reporting: <strong className="text-iec-navy">{reportData.total_stations}</strong></span>
+                            <span>Certified: <strong className="text-iec-pink-600">{reportData.certified_count}</strong></span>
                             <span>Rejected: <strong className="text-amber-300">{reportData.total_rejected?.toLocaleString()}</strong> votes rejected</span>
                         </div>
                     </div>
@@ -99,11 +99,11 @@ export default function ConstituencyReports({ auth, constituency, reportData }) 
                                 <div className="flex items-center gap-3">
                                     <span className="text-2xl">{report.icon}</span>
                                     <div>
-                                        <h3 className="text-lg font-bold text-white">{report.name}</h3>
-                                        <p className="text-gray-400 text-sm mt-1">{report.description}</p>
+                                        <h3 className="text-lg font-bold text-iec-navy">{report.name}</h3>
+                                        <p className="text-slate-500 text-sm mt-1">{report.description}</p>
                                     </div>
                                 </div>
-                                <span className="px-2 py-1 bg-slate-700 text-gray-300 rounded text-xs font-mono flex-shrink-0 ml-2">
+                                <span className="px-2 py-1 bg-white text-slate-600 rounded text-xs font-mono flex-shrink-0 ml-2">
                                     {report.format}
                                 </span>
                             </div>
@@ -133,7 +133,7 @@ export default function ConstituencyReports({ auth, constituency, reportData }) 
                     <Link href="/constituency/approval-queue" className="px-6 py-3 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-lg">
                         Back to Approval Queue
                     </Link>
-                    <Link href="/constituency/ward-breakdowns" className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg">
+                    <Link href="/constituency/ward-breakdowns" className="px-6 py-3 bg-iec-pink-600 hover:bg-iec-pink-700 text-white font-bold rounded-lg">
                         View Ward Breakdowns
                     </Link>
                 </div>

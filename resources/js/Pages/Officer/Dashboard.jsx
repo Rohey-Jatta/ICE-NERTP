@@ -17,9 +17,9 @@ export default function OfficerDashboard({ auth, station, statistics = {}, hasSu
 
                 {/* Header */}
                 <div className="mb-8">
-                    <h1 className="text-3xl font-bold text-white">Polling Officer Dashboard</h1>
-                    <p className="text-gray-400 mt-1 text-sm">
-                        Your role: <strong className="text-white">Submit and manage election results</strong> from your assigned polling station.
+                    <h1 className="text-3xl font-bold text-iec-navy">Polling Officer Dashboard</h1>
+                    <p className="text-slate-500 mt-1 text-sm">
+                        Your role: <strong className="text-iec-navy">Submit and manage election results</strong> from your assigned polling station.
                     </p>
                 </div>
 
@@ -36,25 +36,25 @@ export default function OfficerDashboard({ auth, station, statistics = {}, hasSu
 
                 {/* Station Info */}
                 {station && (
-                    <div className="bg-slate-800/40 rounded-xl p-6 border border-slate-700/50 mb-6">
+                    <div className="bg-white rounded-xl p-6 border border-slate-200 mb-6">
                         <div className="flex flex-wrap gap-6 items-start justify-between">
                             <div>
-                                <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">Your Assigned Station</div>
-                                <h2 className="text-2xl font-bold text-white">{station.name}</h2>
+                                <div className="text-xs text-slate-500 uppercase tracking-wide mb-1">Your Assigned Station</div>
+                                <h2 className="text-2xl font-bold text-iec-navy">{station.name}</h2>
                                 <div className="flex items-center gap-4 mt-2 flex-wrap">
-                                    <span className="text-xs font-mono bg-slate-900/60 text-gray-300 px-2 py-1 rounded">
+                                    <span className="text-xs font-mono bg-white text-slate-600 px-2 py-1 rounded">
                                         {station.code}
                                     </span>
-                                    <span className="text-gray-400 text-sm">
+                                    <span className="text-slate-500 text-sm">
                                         {station.registered_voters?.toLocaleString()} registered voters
                                     </span>
-                                    <span className="text-gray-400 text-sm">{station.election_name}</span>
+                                    <span className="text-slate-500 text-sm">{station.election_name}</span>
                                 </div>
                             </div>
 
                             {/* Submission status */}
                             {hasSubmitted ? (
-                                <div className="px-4 py-2 bg-teal-500/20 border border-teal-500/40 rounded-xl text-teal-300 text-sm font-semibold">
+                                <div className="px-4 py-2 bg-iec-pink-500/20 border border-teal-500/40 rounded-xl text-iec-pink-600 text-sm font-semibold">
                                     ✓ Results Submitted
                                 </div>
                             ) : (
@@ -84,14 +84,14 @@ export default function OfficerDashboard({ auth, station, statistics = {}, hasSu
                 {/* Stats */}
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
                     {[
-                        { label: 'Total Submissions', value: statistics.totalSubmissions || 0, color: 'text-white' },
+                        { label: 'Total Submissions', value: statistics.totalSubmissions || 0, color: 'text-iec-navy' },
                         { label: 'In Pipeline',       value: statistics.pending          || 0, color: 'text-amber-300' },
-                        { label: 'Certified',         value: statistics.certified        || 0, color: 'text-teal-300' },
+                        { label: 'Certified',         value: statistics.certified        || 0, color: 'text-iec-pink-600' },
                         { label: 'Rejected',          value: statistics.rejected         || 0, color: 'text-red-300' },
                     ].map((card) => (
-                        <div key={card.label} className="bg-slate-800/40 rounded-xl p-5 border border-slate-700/50">
+                        <div key={card.label} className="bg-white rounded-xl p-5 border border-slate-200">
                             <div className={`text-3xl font-bold mb-1 ${card.color}`}>{card.value}</div>
-                            <div className="text-gray-400 text-sm">{card.label}</div>
+                            <div className="text-slate-500 text-sm">{card.label}</div>
                         </div>
                     ))}
                 </div>
@@ -103,23 +103,23 @@ export default function OfficerDashboard({ auth, station, statistics = {}, hasSu
                         href="/officer/results/submit"
                         className={`group p-6 rounded-xl border transition-all ${
                             canSubmit
-                                ? 'bg-blue-600/20 hover:bg-blue-600/30 border-blue-500/40'
+                                ? 'bg-iec-pink-600/20 hover:bg-iec-pink-700/30 border-iec-pink-200'
                                 : statistics.rejected > 0
                                 ? 'bg-red-600/15 hover:bg-red-600/25 border-red-500/30'
-                                : 'bg-slate-700/30 border-slate-600/30 opacity-60 pointer-events-none'
+                                : 'bg-slate-100 border-slate-200 opacity-60 pointer-events-none'
                         }`}
                     >
                         <div className="flex items-start gap-3">
                             <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-xl ${
-                                canSubmit ? 'bg-blue-500/20' : statistics.rejected > 0 ? 'bg-red-500/20' : 'bg-slate-600/20'
+                                canSubmit ? 'bg-iec-pink-500/20' : statistics.rejected > 0 ? 'bg-red-500/20' : 'bg-slate-100/20'
                             }`}>
                                 {statistics.rejected > 0 ? '↩' : '📋'}
                             </div>
                             <div>
-                                <div className="font-bold text-white text-lg">
+                                <div className="font-bold text-iec-navy text-lg">
                                     {statistics.rejected > 0 ? 'Resubmit Results' : 'Submit Results'}
                                 </div>
-                                <div className="text-gray-400 text-sm mt-0.5">
+                                <div className="text-slate-500 text-sm mt-0.5">
                                     {canSubmit
                                         ? 'Enter vote counts, upload result sheet photo'
                                         : statistics.rejected > 0
@@ -133,13 +133,13 @@ export default function OfficerDashboard({ auth, station, statistics = {}, hasSu
                     {/* View Submissions */}
                     <Link
                         href="/officer/submissions"
-                        className="group p-6 bg-slate-700/30 hover:bg-slate-700/50 border border-slate-600/40 rounded-xl transition-all"
+                        className="group p-6 bg-slate-100 hover:bg-slate-100 border border-slate-200 rounded-xl transition-all"
                     >
                         <div className="flex items-start gap-3">
-                            <div className="w-10 h-10 bg-teal-500/20 rounded-xl flex items-center justify-center text-xl">📊</div>
+                            <div className="w-10 h-10 bg-iec-pink-500/20 rounded-xl flex items-center justify-center text-xl">📊</div>
                             <div>
-                                <div className="font-bold text-white text-lg">My Submissions</div>
-                                <div className="text-gray-400 text-sm mt-0.5">
+                                <div className="font-bold text-iec-navy text-lg">My Submissions</div>
+                                <div className="text-slate-500 text-sm mt-0.5">
                                     View all submitted results and their current certification status
                                 </div>
                             </div>
@@ -148,22 +148,22 @@ export default function OfficerDashboard({ auth, station, statistics = {}, hasSu
                 </div>
 
                 {/* Process guide */}
-                <div className="bg-slate-800/40 rounded-xl p-6 border border-slate-700/50">
-                    <h2 className="text-white font-bold text-lg mb-4">Certification Pipeline</h2>
+                <div className="bg-white rounded-xl p-6 border border-slate-200">
+                    <h2 className="text-iec-navy font-bold text-lg mb-4">Certification Pipeline</h2>
                     <div className="flex flex-wrap gap-2 items-center">
                         {STATUS_PIPELINE.map((step, idx) => (
                             <div key={step.key} className="flex items-center gap-2">
-                                <div className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-900/60 rounded-lg border border-slate-700/30">
-                                    <span className="text-xs text-gray-500 font-mono">{step.step}</span>
-                                    <span className="text-xs text-gray-300">{step.label}</span>
+                                <div className="flex items-center gap-1.5 px-3 py-1.5 bg-white rounded-lg border border-slate-200">
+                                    <span className="text-xs text-slate-500 font-mono">{step.step}</span>
+                                    <span className="text-xs text-slate-600">{step.label}</span>
                                 </div>
                                 {idx < STATUS_PIPELINE.length - 1 && (
-                                    <span className="text-gray-600">→</span>
+                                    <span className="text-slate-600">→</span>
                                 )}
                             </div>
                         ))}
                     </div>
-                    <p className="text-gray-500 text-xs mt-3">
+                    <p className="text-slate-500 text-xs mt-3">
                         Your submission moves through this pipeline after being reviewed by party representatives, ward approvers, and IEC leadership.
                     </p>
                 </div>

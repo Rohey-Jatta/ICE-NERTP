@@ -3,10 +3,10 @@ import AppLayout from '@/Layouts/AppLayout';
 import { Link, router } from '@inertiajs/react';
 
 const STATUS_LABELS = {
-    submitted:                { label: 'Submitted',               color: 'bg-gray-500/20 text-gray-300' },
+    submitted:                { label: 'Submitted',               color: 'bg-slate-100 text-slate-600' },
     pending_ward:             { label: 'Returned to Ward',        color: 'bg-red-500/20 text-red-300' },
-    ward_certified:           { label: 'Ward Certified',          color: 'bg-teal-500/20 text-teal-300' },
-    pending_constituency:     { label: 'At Constituency',         color: 'bg-blue-500/20 text-blue-300' },
+    ward_certified:           { label: 'Ward Certified',          color: 'bg-iec-pink-500/20 text-iec-pink-600' },
+    pending_constituency:     { label: 'At Constituency',         color: 'bg-iec-pink-500/20 text-iec-pink-600' },
     constituency_certified:   { label: 'Constituency Certified',  color: 'bg-cyan-500/20 text-cyan-300' },
     pending_admin_area:       { label: 'Pending Admin-Area',      color: 'bg-orange-500/20 text-orange-300' },
     admin_area_certified:     { label: 'Admin-Area Certified',    color: 'bg-violet-500/20 text-violet-300' },
@@ -18,7 +18,7 @@ const PARTY_STATUS_CONFIG = {
     accepted:                  { label: 'Accepted',            color: 'bg-green-500/20 text-green-300 border-green-500/30',   icon: '✓' },
     accepted_with_reservation: { label: 'Accepted (Reserved)', color: 'bg-yellow-500/20 text-yellow-300 border-yellow-500/30', icon: '⚠' },
     rejected:                  { label: 'Rejected',            color: 'bg-red-500/20 text-red-300 border-red-500/30',         icon: '✗' },
-    pending:                   { label: 'Pending',             color: 'bg-gray-500/20 text-gray-300 border-gray-500/30',      icon: '…' },
+    pending:                   { label: 'Pending',             color: 'bg-slate-100 text-slate-600 border-slate-200',      icon: '…' },
 };
 
 const ACTION_CONFIG = {
@@ -26,7 +26,7 @@ const ACTION_CONFIG = {
         title:        'Certify at Admin-Area Level',
         description:  'This result will be certified at the administrative area level and automatically promoted to the IEC Chairman queue for final national certification.',
         confirmBtn:   'Certify & Send to Chairman',
-        confirmColor: 'bg-teal-600 hover:bg-teal-700',
+        confirmColor: 'bg-iec-pink-600 hover:bg-iec-pink-700',
         commentReq:   false,
         commentLabel: 'Additional Comments (optional)',
         placeholder:  'Add any observations or notes about this result…',
@@ -67,9 +67,9 @@ export default function AdminAreaApprovalQueue({ auth, adminArea, results = [], 
 
     const tabColors = {
         amber: { active: 'bg-amber-500 text-white', dot: 'bg-amber-400' },
-        teal:  { active: 'bg-teal-500 text-white',  dot: 'bg-teal-400' },
+        teal:  { active: 'bg-iec-pink-500 text-white',  dot: 'bg-teal-400' },
         red:   { active: 'bg-red-500 text-white',   dot: 'bg-red-400' },
-        slate: { active: 'bg-slate-500 text-white', dot: 'bg-slate-400' },
+        slate: { active: 'bg-slate-500 text-iec-navy', dot: 'bg-slate-400' },
     };
 
     const handleFilterChange = (key) => {
@@ -117,17 +117,17 @@ export default function AdminAreaApprovalQueue({ auth, adminArea, results = [], 
         <AppLayout user={auth?.user}>
             <div className="container mx-auto px-4 py-8">
                 <div className="mb-6">
-                    <Link href="/admin-area/dashboard" className="text-gray-400 hover:text-white text-sm mb-2 inline-flex items-center gap-1">
+                    <Link href="/admin-area/dashboard" className="text-slate-500 hover:text-iec-navy text-sm mb-2 inline-flex items-center gap-1">
                         ← Admin-Area Dashboard
                     </Link>
-                    <h1 className="text-3xl font-bold text-white">Admin-Area Approval Queue</h1>
-                    {adminArea?.name && <p className="text-teal-300 mt-1">{adminArea.name}</p>}
-                    <p className="text-gray-400 text-sm mt-1">Review constituency-certified results and certify at administrative area level</p>
+                    <h1 className="text-3xl font-bold text-iec-navy">Admin-Area Approval Queue</h1>
+                    {adminArea?.name && <p className="text-iec-pink-600 mt-1">{adminArea.name}</p>}
+                    <p className="text-slate-500 text-sm mt-1">Review constituency-certified results and certify at administrative area level</p>
                 </div>
 
                 {flash && !selectedResult && (
                     <div className={`mb-4 p-4 rounded-xl border ${
-                        flash.type === 'error' ? 'bg-red-500/20 border-red-500/50 text-red-300' : 'bg-teal-500/20 border-teal-500/50 text-teal-300'
+                        flash.type === 'error' ? 'bg-red-500/20 border-red-500/50 text-red-300' : 'bg-iec-pink-500/20 border-teal-500/50 text-iec-pink-600'
                     }`}>
                         {flash.text}
                     </div>
@@ -141,12 +141,12 @@ export default function AdminAreaApprovalQueue({ auth, adminArea, results = [], 
                         return (
                             <button key={tab.key} onClick={() => handleFilterChange(tab.key)}
                                 className={`flex items-center gap-2 px-4 py-2 rounded-lg font-semibold text-sm transition-all ${
-                                    active ? cfg.active : 'bg-slate-800/40 text-gray-400 hover:bg-slate-700 border border-slate-700/50'
+                                    active ? cfg.active : 'bg-white text-slate-500 hover:bg-white border border-slate-200'
                                 }`}
                             >
                                 {!active && <span className={`w-2 h-2 rounded-full ${cfg.dot}`} />}
                                 {tab.label}
-                                <span className={`text-xs px-2 py-0.5 rounded-full ${active ? 'bg-white/20' : 'bg-slate-700'}`}>
+                                <span className={`text-xs px-2 py-0.5 rounded-full ${active ? 'bg-slate-100' : 'bg-white'}`}>
                                     {tab.count}
                                 </span>
                             </button>
@@ -155,8 +155,8 @@ export default function AdminAreaApprovalQueue({ auth, adminArea, results = [], 
                 </div>
 
                 {results.length === 0 ? (
-                    <div className="bg-slate-800/40 rounded-xl p-12 border border-slate-700/50 text-center">
-                        <p className="text-gray-300 text-lg">
+                    <div className="bg-white rounded-xl p-12 border border-slate-200 text-center">
+                        <p className="text-slate-600 text-lg">
                             {filter === 'pending' ? 'No results pending admin-area certification'
                             : filter === 'approved' ? 'No admin-area certified results yet'
                             : filter === 'rejected' ? 'No rejected results' : 'No results found'}
@@ -165,19 +165,19 @@ export default function AdminAreaApprovalQueue({ auth, adminArea, results = [], 
                 ) : (
                     <div className="space-y-4">
                         {results.map(result => {
-                            const statusCfg = STATUS_LABELS[result.certification_status] || { label: result.certification_status, color: 'bg-gray-500/20 text-gray-300' };
+                            const statusCfg = STATUS_LABELS[result.certification_status] || { label: result.certification_status, color: 'bg-slate-100 text-slate-600' };
                             const isPending = result.certification_status === 'pending_admin_area';
 
                             return (
-                                <div key={result.id} className={`bg-slate-800/40 rounded-xl border transition-all ${
-                                    isPending ? 'border-orange-500/30' : 'border-slate-700/50'
+                                <div key={result.id} className={`bg-white rounded-xl border transition-all ${
+                                    isPending ? 'border-orange-500/30' : 'border-slate-200'
                                 }`}>
                                     {/* Card Header */}
                                     <div className="p-5 flex flex-wrap gap-4 justify-between items-start">
                                         <div className="flex-1 min-w-0">
                                             <div className="flex items-center gap-3 mb-1 flex-wrap">
-                                                <h3 className="text-lg font-bold text-white">{result.polling_station}</h3>
-                                                <span className="text-xs font-mono text-gray-500">{result.polling_station_code}</span>
+                                                <h3 className="text-lg font-bold text-iec-navy">{result.polling_station}</h3>
+                                                <span className="text-xs font-mono text-slate-500">{result.polling_station_code}</span>
                                                 <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${statusCfg.color}`}>{statusCfg.label}</span>
                                                 {result.rejection_count > 0 && (
                                                     <span className="px-2 py-0.5 rounded-full text-xs bg-orange-500/20 text-orange-300">
@@ -185,16 +185,16 @@ export default function AdminAreaApprovalQueue({ auth, adminArea, results = [], 
                                                     </span>
                                                 )}
                                             </div>
-                                            <div className="flex flex-wrap gap-3 text-sm text-gray-400 mt-1">
-                                                <span>📍 <strong className="text-gray-300">{result.constituency}</strong></span>
-                                                <span>⬡ <strong className="text-gray-300">{result.ward}</strong></span>
+                                            <div className="flex flex-wrap gap-3 text-sm text-slate-500 mt-1">
+                                                <span>📍 <strong className="text-slate-600">{result.constituency}</strong></span>
+                                                <span>⬡ <strong className="text-slate-600">{result.ward}</strong></span>
                                                 <span>Submitted {result.submitted_at}</span>
                                             </div>
                                         </div>
                                         <div className="text-right text-sm flex-shrink-0">
-                                            <div className="text-gray-400">Party Status</div>
+                                            <div className="text-slate-500">Party Status</div>
                                             <div className={`font-semibold ${
-                                                result.party_total === 0 ? 'text-gray-500' :
+                                                result.party_total === 0 ? 'text-slate-500' :
                                                 result.party_accepted === result.party_total ? 'text-green-300' : 'text-amber-300'
                                             }`}>
                                                 {result.party_total === 0 ? 'N/A' : `${result.party_accepted}/${result.party_total} Accepted`}
@@ -210,9 +210,9 @@ export default function AdminAreaApprovalQueue({ auth, adminArea, results = [], 
                                             { label: 'Valid',      value: result.valid_votes?.toLocaleString() },
                                             { label: 'Turnout',    value: `${result.turnout}%` },
                                         ].map(s => (
-                                            <div key={s.label} className="bg-slate-900/50 p-3 rounded-lg">
-                                                <div className="text-xs text-gray-400 mb-0.5">{s.label}</div>
-                                                <div className="font-bold text-white">{s.value}</div>
+                                            <div key={s.label} className="bg-white p-3 rounded-lg">
+                                                <div className="text-xs text-slate-500 mb-0.5">{s.label}</div>
+                                                <div className="font-bold text-iec-navy">{s.value}</div>
                                             </div>
                                         ))}
                                     </div>
@@ -220,17 +220,17 @@ export default function AdminAreaApprovalQueue({ auth, adminArea, results = [], 
                                     {/* Candidate Votes */}
                                     {result.candidate_votes?.length > 0 && (
                                         <div className="px-5 pb-4">
-                                            <div className="text-xs text-gray-500 mb-2 uppercase tracking-wide">Candidate Results</div>
+                                            <div className="text-xs text-slate-500 mb-2 uppercase tracking-wide">Candidate Results</div>
                                             <div className="space-y-2">
                                                 {result.candidate_votes.map((cv, idx) => (
                                                     <div key={idx} className="flex items-center gap-3">
                                                         <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: cv.party_color }} />
-                                                        <span className="text-gray-300 text-sm w-36 truncate">{cv.candidate}</span>
-                                                        <span className="text-xs text-gray-500 w-10">{cv.party}</span>
-                                                        <div className="flex-1 bg-slate-700 rounded-full h-1.5">
+                                                        <span className="text-slate-600 text-sm w-36 truncate">{cv.candidate}</span>
+                                                        <span className="text-xs text-slate-500 w-10">{cv.party}</span>
+                                                        <div className="flex-1 bg-white rounded-full h-1.5">
                                                             <div className="h-1.5 rounded-full" style={{ width: `${cv.percentage || 0}%`, backgroundColor: cv.party_color }} />
                                                         </div>
-                                                        <span className="text-white text-sm font-semibold w-16 text-right">{cv.votes?.toLocaleString()}</span>
+                                                        <span className="text-iec-navy text-sm font-semibold w-16 text-right">{cv.votes?.toLocaleString()}</span>
                                                     </div>
                                                 ))}
                                             </div>
@@ -240,7 +240,7 @@ export default function AdminAreaApprovalQueue({ auth, adminArea, results = [], 
                                     {/* Party Acceptance Status WITH inline comments */}
                                     {result.party_acceptances?.length > 0 && (
                                         <div className="px-5 pb-4">
-                                            <div className="text-xs text-gray-500 mb-2 uppercase tracking-wide">Party Representative Status</div>
+                                            <div className="text-xs text-slate-500 mb-2 uppercase tracking-wide">Party Representative Status</div>
                                             <div className="space-y-2">
                                                 {result.party_acceptances.map((pa, idx) => {
                                                     const cfg = PARTY_STATUS_CONFIG[pa.status] || PARTY_STATUS_CONFIG.pending;
@@ -250,7 +250,7 @@ export default function AdminAreaApprovalQueue({ auth, adminArea, results = [], 
                                                                 {cfg.icon} {pa.abbr} — {cfg.label}
                                                             </span>
                                                             {pa.comments && (
-                                                                <p className="text-xs text-gray-400 italic mt-1 ml-3 pl-2 border-l-2 border-slate-600">
+                                                                <p className="text-xs text-slate-500 italic mt-1 ml-3 pl-2 border-l-2 border-slate-200">
                                                                     "{pa.comments}"
                                                                 </p>
                                                             )}
@@ -265,8 +265,8 @@ export default function AdminAreaApprovalQueue({ auth, adminArea, results = [], 
                                     {(result.ward_comments || result.constituency_comments || result.area_comments) && (
                                         <div className="mx-5 mb-4 space-y-2">
                                             {result.ward_comments && (
-                                                <div className="p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg">
-                                                    <div className="text-xs text-blue-400 font-semibold mb-1">📋 Ward Approver Note</div>
+                                                <div className="p-3 bg-iec-pink-500/10 border border-blue-500/30 rounded-lg">
+                                                    <div className="text-xs text-iec-pink-600 font-semibold mb-1">📋 Ward Approver Note</div>
                                                     <div className="text-blue-200 text-sm">{result.ward_comments}</div>
                                                 </div>
                                             )}
@@ -277,8 +277,8 @@ export default function AdminAreaApprovalQueue({ auth, adminArea, results = [], 
                                                 </div>
                                             )}
                                             {result.area_comments && (
-                                                <div className="p-3 bg-teal-500/10 border border-teal-500/30 rounded-lg">
-                                                    <div className="text-xs text-teal-400 font-semibold mb-1">📋 Admin-Area Certification Note</div>
+                                                <div className="p-3 bg-iec-pink-500/10 border border-teal-500/30 rounded-lg">
+                                                    <div className="text-xs text-iec-pink-600 font-semibold mb-1">📋 Admin-Area Certification Note</div>
                                                     <div className="text-teal-200 text-sm">{result.area_comments}</div>
                                                 </div>
                                             )}
@@ -297,7 +297,7 @@ export default function AdminAreaApprovalQueue({ auth, adminArea, results = [], 
                                     {result.photo_url && (
                                         <div className="px-5 pb-4">
                                             <a href={result.photo_url} target="_blank" rel="noopener noreferrer"
-                                               className="inline-flex items-center gap-2 text-sm text-blue-400 hover:text-blue-300">
+                                               className="inline-flex items-center gap-2 text-sm text-iec-pink-600 hover:text-iec-pink-600">
                                                 📄 View Result Sheet Photo
                                             </a>
                                         </div>
@@ -305,8 +305,8 @@ export default function AdminAreaApprovalQueue({ auth, adminArea, results = [], 
 
                                     {/* Action Buttons */}
                                     {isPending && (
-                                        <div className="px-5 pb-5 flex flex-wrap gap-3 border-t border-slate-700/50 pt-4 mt-2">
-                                            <button onClick={() => openAction(result, 'approve')} className="flex-1 min-w-[140px] px-4 py-3 bg-teal-600 hover:bg-teal-500 text-white font-bold rounded-lg transition-colors">
+                                        <div className="px-5 pb-5 flex flex-wrap gap-3 border-t border-slate-200 pt-4 mt-2">
+                                            <button onClick={() => openAction(result, 'approve')} className="flex-1 min-w-[140px] px-4 py-3 bg-iec-pink-600 hover:bg-iec-pink-700 text-white font-bold rounded-lg transition-colors">
                                                 ✓ Certify
                                             </button>
                                             <button onClick={() => openAction(result, 'approve_reservation')} className="flex-1 min-w-[160px] px-4 py-3 bg-amber-600 hover:bg-amber-500 text-white font-bold rounded-lg transition-colors">
@@ -328,20 +328,20 @@ export default function AdminAreaApprovalQueue({ auth, adminArea, results = [], 
             {selectedResult && action && (
                 <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4">
                     <div
-                        className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-lg shadow-2xl flex flex-col"
+                        className="bg-white border border-slate-200 rounded-2xl w-full max-w-lg shadow-2xl flex flex-col"
                         style={{ maxHeight: 'min(92vh, 580px)' }}
                     >
                         {/* Header */}
-                        <div className="px-6 pt-6 pb-4 flex-shrink-0 border-b border-slate-800">
+                        <div className="px-6 pt-6 pb-4 flex-shrink-0 border-b border-slate-200">
                             <div className="flex items-start justify-between gap-4">
                                 <div>
-                                    <h2 className="text-lg font-bold text-white">{ACTION_CONFIG[action].title}</h2>
-                                    <p className="text-gray-400 text-xs mt-0.5">
+                                    <h2 className="text-lg font-bold text-iec-navy">{ACTION_CONFIG[action].title}</h2>
+                                    <p className="text-slate-500 text-xs mt-0.5">
                                         {selectedResult.polling_station} — {selectedResult.constituency}
                                     </p>
                                 </div>
                                 <button onClick={closePanel} disabled={processing}
-                                    className="text-gray-400 hover:text-white text-2xl leading-none w-8 h-8 flex items-center justify-center flex-shrink-0">
+                                    className="text-slate-500 hover:text-iec-navy text-2xl leading-none w-8 h-8 flex items-center justify-center flex-shrink-0">
                                     ×
                                 </button>
                             </div>
@@ -349,7 +349,7 @@ export default function AdminAreaApprovalQueue({ auth, adminArea, results = [], 
 
                         {/* Scrollable Content */}
                         <div className="px-6 py-5 overflow-y-auto flex-1 space-y-4">
-                            <div className="p-3 bg-slate-800/60 rounded-xl text-sm text-gray-300">
+                            <div className="p-3 bg-white rounded-xl text-sm text-slate-600">
                                 {ACTION_CONFIG[action].description}
                             </div>
 
@@ -359,20 +359,20 @@ export default function AdminAreaApprovalQueue({ auth, adminArea, results = [], 
                                     { label: 'Valid Votes', value: selectedResult.valid_votes?.toLocaleString() },
                                     { label: 'Turnout',     value: `${selectedResult.turnout}%` },
                                 ].map(s => (
-                                    <div key={s.label} className="bg-slate-800/50 p-3 rounded-xl text-center">
-                                        <div className="text-xs text-gray-400 mb-0.5">{s.label}</div>
-                                        <div className="text-white font-bold">{s.value}</div>
+                                    <div key={s.label} className="bg-white p-3 rounded-xl text-center">
+                                        <div className="text-xs text-slate-500 mb-0.5">{s.label}</div>
+                                        <div className="text-iec-navy font-bold">{s.value}</div>
                                     </div>
                                 ))}
                             </div>
 
                             {flash && (
-                                <div className={`p-3 rounded-lg text-sm ${flash.type === 'error' ? 'bg-red-500/20 text-red-300' : 'bg-teal-500/20 text-teal-300'}`}>
+                                <div className={`p-3 rounded-lg text-sm ${flash.type === 'error' ? 'bg-red-500/20 text-red-300' : 'bg-iec-pink-500/20 text-iec-pink-600'}`}>
                                     {flash.text}
                                 </div>
                             )}
 
-                            <div className="bg-slate-800/60 border border-slate-600/60 rounded-xl p-4">
+                            <div className="bg-white border border-slate-200 rounded-xl p-4">
                                 <label className="block text-gray-200 font-semibold mb-2 text-sm">
                                     {ACTION_CONFIG[action].commentLabel}
                                     {ACTION_CONFIG[action].commentReq && <span className="text-red-400 ml-1">*</span>}
@@ -382,13 +382,13 @@ export default function AdminAreaApprovalQueue({ auth, adminArea, results = [], 
                                     onChange={(e) => setComment(e.target.value)}
                                     rows={4}
                                     placeholder={ACTION_CONFIG[action].placeholder}
-                                    className="w-full px-4 py-3 bg-slate-900/80 border-2 border-slate-600 focus:border-teal-500 rounded-xl text-white resize-none focus:outline-none transition-colors text-sm"
+                                    className="w-full px-4 py-3 bg-white border-2 border-slate-200 focus:border-iec-pink-500 rounded-xl text-iec-navy resize-none focus:outline-none transition-colors text-sm"
                                 />
                             </div>
                         </div>
 
                         {/* Sticky Footer */}
-                        <div className="px-6 py-4 border-t border-slate-800 flex-shrink-0 flex gap-3">
+                        <div className="px-6 py-4 border-t border-slate-200 flex-shrink-0 flex gap-3">
                             <button
                                 onClick={submitAction}
                                 disabled={processing || (ACTION_CONFIG[action].commentReq && !comment.trim())}
@@ -397,7 +397,7 @@ export default function AdminAreaApprovalQueue({ auth, adminArea, results = [], 
                                 {processing ? 'Processing…' : ACTION_CONFIG[action].confirmBtn}
                             </button>
                             <button onClick={closePanel} disabled={processing}
-                                className="px-5 py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-xl font-semibold transition-colors">
+                                className="px-5 py-3 bg-white hover:bg-slate-100 text-iec-navy rounded-xl font-semibold transition-colors">
                                 Cancel
                             </button>
                         </div>
