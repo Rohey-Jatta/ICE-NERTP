@@ -3,6 +3,7 @@
 namespace Database\Seeders;
 
 use App\Models\AdministrativeHierarchy;
+use App\Models\Election;
 use App\Models\User;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
@@ -13,6 +14,11 @@ class RegionSeeder extends Seeder
     public function run()
     {
         DB::transaction(function () {
+            $electionId = Election::where('slug', 'gambia-2021-presidential')->value('id');
+            if (!$electionId) {
+                throw new \RuntimeException('Election gambia-2021-presidential must exist before running RegionSeeder.');
+            }
+
             $regions = [
                 'Greater Banjul',
                 'Brikama (West Coast)',
@@ -27,7 +33,7 @@ class RegionSeeder extends Seeder
 
             foreach ($regions as $name) {
                 $node = AdministrativeHierarchy::create([
-                    'election_id' => 1,
+                    'election_id' => $electionId,
                     'level' => 'admin_area',
                     'parent_id' => null,
                     'name' => $name,

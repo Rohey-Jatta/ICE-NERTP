@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Models\Election;
 use App\Models\PollingStation;
 use App\Models\AdministrativeHierarchy;
 use App\Models\User;
@@ -16,6 +17,11 @@ class PollingStationSeeder extends Seeder
         // create a polling-station approver role (hyphenated)
         Role::firstOrCreate(['name' => 'polling-station-approver']);
 
+        $electionId = Election::where('slug', 'gambia-2021-presidential')->value('id');
+        if (!$electionId) {
+            throw new \RuntimeException('Election gambia-2021-presidential must exist before running PollingStationSeeder.');
+        }
+
         $wards = AdministrativeHierarchy::where('level', 'ward')->get();
         $totalStations = 1555;
         $perWard = (int) ceil($totalStations / max(1, $wards->count()));
@@ -24,7 +30,7 @@ class PollingStationSeeder extends Seeder
         foreach ($wards as $ward) {
             for ($i = 1; $i <= $perWard && $created < $totalStations; $i++, $created++) {
                 $station = PollingStation::create([
-                    'election_id' => 1,
+                    'election_id' => $electionId,
                     'ward_id' => $ward->id,
                     'code' => 'PS-' . ($created + 1),
                     'name' => $ward->name . ' Polling Station ' . ($i),

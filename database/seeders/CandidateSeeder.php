@@ -3,6 +3,7 @@
 namespace Database\Seeders;
 
 use App\Models\Candidate;
+use App\Models\Election;
 use App\Models\PoliticalParty;
 use Illuminate\Database\Seeder;
 
@@ -10,6 +11,10 @@ class CandidateSeeder extends Seeder
 {
     public function run()
     {
+        $electionId = Election::where('slug', 'gambia-2021-presidential')->value('id');
+        if (!$electionId) {
+            throw new \RuntimeException('Election gambia-2021-presidential must exist before running CandidateSeeder.');
+        }
         $mapping = [
             ['name' => 'Adama Barrow', 'party' => "National People's Party"],
             ['name' => 'Ousainou Darboe', 'party' => 'United Democratic Party'],
@@ -22,7 +27,7 @@ class CandidateSeeder extends Seeder
         foreach ($mapping as $i => $m) {
             $party = PoliticalParty::where('name', $m['party'])->first();
             Candidate::create([
-                'election_id' => 1,
+                'election_id' => $electionId,
                 'political_party_id' => $party?->id,
                 'name' => $m['name'],
                 'ballot_number' => $i + 1,

@@ -3,6 +3,7 @@
 namespace Database\Seeders;
 
 use App\Models\AdministrativeHierarchy;
+use App\Models\Election;
 use App\Models\User;
 use Illuminate\Database\Seeder;
 use Spatie\Permission\Models\Role;
@@ -11,6 +12,11 @@ class WardSeeder extends Seeder
 {
     public function run()
     {
+        $electionId = Election::where('slug', 'gambia-2021-presidential')->value('id');
+        if (!$electionId) {
+            throw new \RuntimeException('Election gambia-2021-presidential must exist before running WardSeeder.');
+        }
+
         $constituencies = AdministrativeHierarchy::where('level', 'constituency')->get();
 
         Role::firstOrCreate(['name' => 'ward-approver']);
@@ -23,7 +29,7 @@ class WardSeeder extends Seeder
             for ($i = 1; $i <= $perConst && $created < $totalWards; $i++, $created++) {
                 $name = $const->name . ' - Ward ' . ($i);
                 $node = AdministrativeHierarchy::create([
-                    'election_id' => 1,
+                    'election_id' => $electionId,
                     'level' => 'ward',
                     'parent_id' => $const->id,
                     'name' => $name,

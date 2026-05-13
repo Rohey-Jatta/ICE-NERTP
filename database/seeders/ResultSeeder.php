@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Models\Election;
 use App\Models\Result;
 use App\Models\ResultCandidateVote;
 use App\Models\Candidate;
@@ -13,19 +14,24 @@ class ResultSeeder extends Seeder
 {
     public function run()
     {
-        $candidates = Candidate::where('election_id', 1)->get();
+        $electionId = Election::where('slug', 'gambia-2021-presidential')->value('id');
+        if (!$electionId) {
+            throw new \RuntimeException('Election gambia-2021-presidential must exist before running ResultSeeder.');
+        }
+
+        $candidates = Candidate::where('election_id', $electionId)->get();
 
         // iterate polling stations and create realistic-looking results
-        PollingStation::chunk(200, function ($stations) use ($candidates) {
+        PollingStation::chunk(200, function ($stations) use ($candidates, $electionId) {
             foreach ($stations as $station) {
-                DB::transaction(function () use ($station, $candidates) {
+                DB::transaction(function () use ($station, $candidates, $electionId) {
                     $totalRegistered = max(200, $station->registered_voters);
                     // turnout between 60-95%
                     $turnout = (int) round($totalRegistered * rand(60, 95) / 100);
 
                     $result = Result::create([
                         'polling_station_id' => $station->id,
-                        'election_id' => 1,
+                        'election_id' => $electionId,
                         'submission_uuid' => \Illuminate\Support\Str::uuid(),
                         'user_id' => $station->assigned_officer_id,
                         'total_registered_voters' => $totalRegistered,
@@ -53,7 +59,7 @@ class ResultSeeder extends Seeder
                         ResultCandidateVote::create([
                             'result_id' => $result->id,
                             'candidate_id' => $candidate->id,
-                            'election_id' => 1,
+                            'election_id' => $electionId,
                             'votes' => max(0, $votes),
                         ]);
                     }

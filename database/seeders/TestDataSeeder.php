@@ -23,7 +23,7 @@ class TestDataSeeder extends Seeder
             [
                 'name'        => 'System Administrator',
                 'email'       => 'admina@iec.gm',
-                'phone'       => '+2203329739',
+                'phone'       => '+2205872319',
                 'password'    => Hash::make('password123'),
                 'employee_id' => 'IEC-ADMIN-002',
                 'status'      => 'active',
@@ -32,7 +32,7 @@ class TestDataSeeder extends Seeder
             [
                 'name'        => 'Test Polling Officer',
                 'email'       => 'officer@iec.gm',
-                'phone'       => '+2203329740',
+                'phone'       => '+2205872319',
                 'password'    => Hash::make('password123'),
                 'employee_id' => 'TEST-POL',
                 'status'      => 'active',
@@ -41,7 +41,7 @@ class TestDataSeeder extends Seeder
             [
                 'name'        => 'Ward Approver',
                 'email'       => 'ward@iec.gm',
-                'phone'       => '+2203329741',
+                'phone'       => '+2205872319',
                 'password'    => Hash::make('password123'),
                 'employee_id' => 'WARD-APP-001',
                 'status'      => 'active',
@@ -50,7 +50,7 @@ class TestDataSeeder extends Seeder
             [
                 'name'        => 'Constituency Approver',
                 'email'       => 'constituency@iec.gm',
-                'phone'       => '+2203329742',
+                'phone'       => '+2205872319',
                 'password'    => Hash::make('password123'),
                 'employee_id' => 'CONST-APP-001',
                 'status'      => 'active',
@@ -59,7 +59,7 @@ class TestDataSeeder extends Seeder
             [
                 'name'        => 'Admin Area Approver',
                 'email'       => 'adminarea@iec.gm',
-                'phone'       => '+2203329743',
+                'phone'       => '+2205872319',
                 'password'    => Hash::make('password123'),
                 'employee_id' => 'ADMIN-APP-001',
                 'status'      => 'active',
@@ -68,7 +68,7 @@ class TestDataSeeder extends Seeder
             [
                 'name'        => 'IEC Chairman',
                 'email'       => 'chairman@iec.gm',
-                'phone'       => '+2203329744',
+                'phone'       => '+2205872319',
                 'password'    => Hash::make('password123'),
                 'employee_id' => 'IEC-CHAIR-001',
                 'status'      => 'active',
@@ -77,7 +77,7 @@ class TestDataSeeder extends Seeder
             [
                 'name'        => 'Party Representative',
                 'email'       => 'party@iec.gm',
-                'phone'       => '+2203329745',
+                'phone'       => '+2205872319',
                 'password'    => Hash::make('password123'),
                 'employee_id' => 'PARTY-REP-001',
                 'status'      => 'active',
@@ -86,7 +86,7 @@ class TestDataSeeder extends Seeder
             [
                 'name'        => 'Election Monitor',
                 'email'       => 'monitor@iec.gm',
-                'phone'       => '+2203329746',
+                'phone'       => '+2205872319',
                 'password'    => Hash::make('password123'),
                 'employee_id' => 'MON-001',
                 'status'      => 'active',
