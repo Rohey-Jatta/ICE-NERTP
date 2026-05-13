@@ -43,14 +43,13 @@ class ElectionSeeder extends Seeder
     $admin->syncRoles([$role->name]);
     $visibleAdmin->syncRoles([$role->name]);
 
-    Election::firstOrCreate(
-        ['slug' => 'gambia-2021-presidential'],
-        [
-            'name' => '2021 Gambian Presidential Election',
-            'status' => 'active',
-            'created_by' => $admin->id,
-        ]
-    );
+    Election::firstOrCreate([
+        'slug' => 'gambia-2021-presidential',
+        'name' => '2021 Gambian Presidential Election',
+        'type' => 'presidential',
+        'status' => 'active',
+        'created_by' => 1,
+    ]);
     }
 }
 
