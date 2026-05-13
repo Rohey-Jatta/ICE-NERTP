@@ -6,7 +6,7 @@ use App\Models\AdministrativeHierarchy;
 use App\Models\Election;
 use App\Models\User;
 use Illuminate\Database\Seeder;
-use Spatie\Permission\Models\Role;
+use Illuminate\Support\Str;
 
 class WardSeeder extends Seeder
 {
@@ -18,8 +18,6 @@ class WardSeeder extends Seeder
         }
 
         $constituencies = AdministrativeHierarchy::where('level', 'constituency')->get();
-
-        Role::firstOrCreate(['name' => 'ward-approver']);
 
         $totalWards = 120;
         $perConst = (int) ceil($totalWards / max(1, $constituencies->count()));
@@ -33,6 +31,8 @@ class WardSeeder extends Seeder
                     'level' => 'ward',
                     'parent_id' => $const->id,
                     'name' => $name,
+                    'slug' => Str::slug($name),           // REQUIRED
+                    'depth' => 2,                         // REQUIRED
                     'code' => strtoupper('W' . ($created + 1)),
                 ]);
 

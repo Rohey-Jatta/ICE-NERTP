@@ -6,50 +6,49 @@ use App\Models\Election;
 use Illuminate\Database\Seeder;
 use App\Models\User;
 use Illuminate\Support\Facades\Hash;
+use Spatie\Permission\Models\Role;
 
 class ElectionSeeder extends Seeder
 {
     public function run()
     {
+        // Ensure role exists (RoleAndPermissionSeeder already created it, but safe to keep)
+        $role = Role::firstOrCreate(['name' => 'iec-administrator']);
 
-    // Ensure role exists FIRST
-    $role = \Spatie\Permission\Models\Role::firstOrCreate([
-        'name' => 'iec-administrator'
-    ]);
+        $admin = User::firstOrCreate(
+            ['email' => 'seeder-admin@iec.gm'],
+            [
+                'name' => 'Seeder Admin',
+                'password' => Hash::make('password123'),
+                'status' => 'active',
+            ]
+        );
 
-    // Seeder admin (used internally)
-    $admin = User::firstOrCreate(
-        ['email' => 'seeder-admin@iec.gm'],
-        [
-            'name' => 'Seeder Admin',
-            'password' => Hash::make('password123'),
-            'status' => 'active',
-        ]
-    );
+        $visibleAdmin = User::updateOrCreate(
+            ['email' => 'admina@iec.gm'],
+            [
+                'name'        => 'System Administrator',
+                'password'    => Hash::make('password123'),
+                'phone'       => '+2205872319',
+                'employee_id' => 'IEC-ADMIN-002',
+                'status'      => 'active',
+            ]
+        );
 
-    // Visible IEC Admin (for login)
-    $visibleAdmin = User::updateOrCreate(
-        ['email' => 'admina@iec.gm'], // ONLY unique field here
-        [
-            'name'        => 'System Administrator',
-            'password'    => Hash::make('password123'),
-            'phone'       => '+2205872319',
-            'employee_id' => 'IEC-ADMIN-002',
-            'status'      => 'active',
-        ]
-    );
+        $admin->syncRoles([$role->name]);
+        $visibleAdmin->syncRoles([$role->name]);
 
-    // Assign roles
-    $admin->syncRoles([$role->name]);
-    $visibleAdmin->syncRoles([$role->name]);
-
-    Election::firstOrCreate([
-        'slug' => 'gambia-2021-presidential',
-        'name' => '2021 Gambian Presidential Election',
-        'type' => 'presidential',
-        'status' => 'active',
-        'created_by' => 1,
-    ]);
+        Election::firstOrCreate(
+            ['slug' => 'gambia-2021-presidential'],
+            [
+                'name' => '2021 Gambian Presidential Election',
+                'type' => 'presidential',
+                'status' => 'active',
+                'created_by' => $admin->id,
+                'start_date' => '2021-12-04',      // REQUIRED
+                'end_date'   => '2021-12-04',      // REQUIRED
+            ]
+        );
     }
 }
 

@@ -7,16 +7,12 @@ use App\Models\PollingStation;
 use App\Models\AdministrativeHierarchy;
 use App\Models\User;
 use Illuminate\Database\Seeder;
-use Spatie\Permission\Models\Role;
+use Illuminate\Support\Facades\DB;
 
 class PollingStationSeeder extends Seeder
 {
     public function run()
     {
-        Role::firstOrCreate(['name' => 'polling-officer']);
-        // create a polling-station approver role (hyphenated)
-        Role::firstOrCreate(['name' => 'polling-station-approver']);
-
         $electionId = Election::where('slug', 'gambia-2021-presidential')->value('id');
         if (!$electionId) {
             throw new \RuntimeException('Election gambia-2021-presidential must exist before running PollingStationSeeder.');
@@ -41,7 +37,16 @@ class PollingStationSeeder extends Seeder
                     'is_active' => true,
                 ]);
 
-                // create polling officer
+                // Set PostGIS location if using PostgreSQL
+                if (DB::getDriverName() === 'pgsql') {
+                    DB::statement("UPDATE polling_stations SET location = ST_SetSRID(ST_MakePoint(?, ?), 4326) WHERE id = ?", [
+                        $station->longitude,
+                        $station->latitude,
+                        $station->id
+                    ]);
+                }
+
+                // Create polling officer
                 $officer = User::factory()->create([
                     'name' => $station->name . ' Officer',
                     'email' => 'officer.' . ($created + 1) . '@iec.local'
@@ -50,12 +55,7 @@ class PollingStationSeeder extends Seeder
                 $station->assigned_officer_id = $officer->id;
                 $station->saveQuietly();
 
-                // create polling station approver
-                $approver = User::factory()->create([
-                    'name' => $station->name . ' Approver',
-                    'email' => 'ps.approver.' . ($created + 1) . '@iec.local'
-                ]);
-                $approver->assignRole('polling-station-approver');
+                // No "polling-station-approver" – that role is not used in this table
             }
         }
     }

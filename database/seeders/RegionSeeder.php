@@ -7,7 +7,7 @@ use App\Models\Election;
 use App\Models\User;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
-use Spatie\Permission\Models\Role;
+use Illuminate\Support\Str;
 
 class RegionSeeder extends Seeder
 {
@@ -29,18 +29,17 @@ class RegionSeeder extends Seeder
                 'Basse (Upper River)'
             ];
 
-            Role::firstOrCreate(['name' => 'iec-administrator']);
-
             foreach ($regions as $name) {
                 $node = AdministrativeHierarchy::create([
                     'election_id' => $electionId,
                     'level' => 'admin_area',
                     'parent_id' => null,
                     'name' => $name,
-                    'code' => strtoupper(substr(preg_replace('/[^A-Z]/', '', $name), 0, 6)) ?: strtoupper(substr($name,0,3)),
+                    'slug' => Str::slug($name),               // REQUIRED
+                    'depth' => 0,                             // REQUIRED
+                    'code' => strtoupper(substr(preg_replace('/[^A-Z]/', '', $name), 0, 6)) ?: strtoupper(substr($name, 0, 3)),
                 ]);
 
-                // create one regional approver
                 $user = User::factory()->create([
                     'name' => $name . ' Approver',
                     'email' => strtolower(str_replace([' ', '(', ')', '\\', '/'], '-', $name)) . '.admin@iec.local'

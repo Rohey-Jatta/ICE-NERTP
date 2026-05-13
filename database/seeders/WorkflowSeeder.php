@@ -8,24 +8,18 @@ use App\Models\AdministrativeHierarchy;
 use App\Models\User;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
-use Spatie\Permission\Models\Role;
 
 class WorkflowSeeder extends Seeder
 {
     public function run()
     {
-        Role::firstOrCreate(['name' => 'constituency-approver']);
-        Role::firstOrCreate(['name' => 'ward-approver']);
-
-        // For a subset of results, simulate approvals and rejections
         $results = Result::inRandomOrder()->limit(500)->get();
 
         foreach ($results as $result) {
             DB::transaction(function () use ($result) {
-                // ward certification
                 $ward = AdministrativeHierarchy::find($result->pollingStation->ward_id);
                 $wardApproverId = $ward->assigned_approver_id;
-                if (! $wardApproverId) {
+                if (!$wardApproverId) {
                     $wardApprover = User::factory()->create([
                         'name' => $ward->name . ' Approver',
                         'email' => 'ward.approver.' . $ward->id . '@iec.local',
@@ -45,6 +39,7 @@ class WorkflowSeeder extends Seeder
                     'comments' => (rand(1,10) <= 8) ? 'Looks good' : 'Mismatch - please resubmit',
                     'assigned_at' => now()->subHours(rand(2, 48)),
                     'decided_at' => now()->subHours(rand(1, 2)),
+                    'created_at' => now(),               // REQUIRED
                 ]);
 
                 if ($wardCert->status === 'rejected') {
@@ -54,11 +49,10 @@ class WorkflowSeeder extends Seeder
                     $result->last_rejected_at = now();
                     $result->saveQuietly();
                 } else {
-                    // escalate to constituency
                     $const = $ward->parent;
                     if ($const) {
                         $constApprover = $const->assigned_approver_id;
-                        if (! $constApprover) {
+                        if (!$constApprover) {
                             $constApproverUser = User::factory()->create([
                                 'name' => $const->name . ' Approver',
                                 'email' => 'constituency.approver.' . $const->id . '@iec.local',
@@ -78,6 +72,7 @@ class WorkflowSeeder extends Seeder
                             'comments' => 'Reviewed at constituency',
                             'assigned_at' => now()->subHours(rand(1, 24)),
                             'decided_at' => now()->subHours(rand(1, 6)),
+                            'created_at' => now(),               // REQUIRED
                         ]);
                     }
                 }

@@ -6,7 +6,7 @@ use App\Models\AdministrativeHierarchy;
 use App\Models\Election;
 use App\Models\User;
 use Illuminate\Database\Seeder;
-use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Spatie\Permission\Models\Role;
 
 class ConstituencySeeder extends Seeder
@@ -20,9 +20,7 @@ class ConstituencySeeder extends Seeder
 
         $regions = AdministrativeHierarchy::where('level', 'admin_area')->get();
 
-        Role::firstOrCreate(['name' => 'constituency-approver']);
-
-        // create 53 constituencies distributed across regions deterministically
+        // 53 constituencies
         $total = 53;
         $perRegion = (int) ceil($total / max(1, $regions->count()));
         $created = 0;
@@ -35,6 +33,8 @@ class ConstituencySeeder extends Seeder
                     'level' => 'constituency',
                     'parent_id' => $region->id,
                     'name' => $name,
+                    'slug' => Str::slug($name),           // REQUIRED
+                    'depth' => 1,                         // REQUIRED
                     'code' => strtoupper('C' . ($created + 1)),
                 ]);
 
