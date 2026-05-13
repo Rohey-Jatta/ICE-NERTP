@@ -59,7 +59,7 @@ RUN php artisan view:clear || true
 # Expose Render port
 EXPOSE 10000
 
-# Start application
+# Start application — use --seed only on first deploy (table empty check is in seeders)
 CMD php artisan migrate --force && \
     php artisan db:seed --force && \
     php artisan config:cache && \
