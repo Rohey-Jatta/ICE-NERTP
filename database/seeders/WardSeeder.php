@@ -20,29 +20,42 @@ class WardSeeder extends Seeder
         $constituencies = AdministrativeHierarchy::where('level', 'constituency')->get();
 
         $totalWards = 120;
-        $perConst = (int) ceil($totalWards / max(1, $constituencies->count()));
-        $created = 0;
+        $perConst   = (int) ceil($totalWards / max(1, $constituencies->count()));
+        $created    = 0;
 
         foreach ($constituencies as $const) {
             for ($i = 1; $i <= $perConst && $created < $totalWards; $i++, $created++) {
                 $name = $const->name . ' - Ward ' . ($i);
-                $node = AdministrativeHierarchy::create([
-                    'election_id' => $electionId,
-                    'level' => 'ward',
-                    'parent_id' => $const->id,
-                    'name' => $name,
-                    'slug' => Str::slug($name),           // REQUIRED
-                    'depth' => 2,                         // REQUIRED
-                    'code' => strtoupper('W' . ($created + 1)),
-                ]);
+                $code = strtoupper('W' . ($created + 1));
 
-                $user = User::factory()->create([
-                    'name' => $name . ' Approver',
-                    'email' => 'ward.' . ($created + 1) . '@iec.local'
-                ]);
-                $user->assignRole('ward-approver');
-                $node->assigned_approver_id = $user->id;
-                $node->saveQuietly();
+                $node = AdministrativeHierarchy::firstOrCreate(
+                    [
+                        'election_id' => $electionId,
+                        'level'       => 'ward',
+                        'code'        => $code,
+                    ],
+                    [
+                        'parent_id' => $const->id,
+                        'name'      => $name,
+                        'slug'      => Str::slug($name),
+                        'depth'     => 2,
+                    ]
+                );
+
+                if (!$node->assigned_approver_id) {
+                    $user = User::firstOrCreate(
+                        ['email' => 'ward.' . ($created + 1) . '@iec.local'],
+                        [
+                            'name'     => $name . ' Approver',
+                            'password' => bcrypt('password123'),
+                        ]
+                    );
+                    if (!$user->hasRole('ward-approver')) {
+                        $user->assignRole('ward-approver');
+                    }
+                    $node->assigned_approver_id = $user->id;
+                    $node->saveQuietly();
+                }
             }
         }
     }

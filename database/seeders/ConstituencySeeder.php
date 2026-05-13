@@ -21,30 +21,43 @@ class ConstituencySeeder extends Seeder
         $regions = AdministrativeHierarchy::where('level', 'admin_area')->get();
 
         // 53 constituencies
-        $total = 53;
+        $total    = 53;
         $perRegion = (int) ceil($total / max(1, $regions->count()));
-        $created = 0;
+        $created  = 0;
 
         foreach ($regions as $region) {
             for ($i = 1; $i <= $perRegion && $created < $total; $i++, $created++) {
                 $name = $region->name . ' - Constituency ' . ($i);
-                $node = AdministrativeHierarchy::create([
-                    'election_id' => $electionId,
-                    'level' => 'constituency',
-                    'parent_id' => $region->id,
-                    'name' => $name,
-                    'slug' => Str::slug($name),           // REQUIRED
-                    'depth' => 1,                         // REQUIRED
-                    'code' => strtoupper('C' . ($created + 1)),
-                ]);
+                $code = strtoupper('C' . ($created + 1));
 
-                $user = User::factory()->create([
-                    'name' => $name . ' Approver',
-                    'email' => 'constituency.' . ($created + 1) . '@iec.local'
-                ]);
-                $user->assignRole('constituency-approver');
-                $node->assigned_approver_id = $user->id;
-                $node->saveQuietly();
+                $node = AdministrativeHierarchy::firstOrCreate(
+                    [
+                        'election_id' => $electionId,
+                        'level'       => 'constituency',
+                        'code'        => $code,
+                    ],
+                    [
+                        'parent_id' => $region->id,
+                        'name'      => $name,
+                        'slug'      => Str::slug($name),
+                        'depth'     => 1,
+                    ]
+                );
+
+                if (!$node->assigned_approver_id) {
+                    $user = User::firstOrCreate(
+                        ['email' => 'constituency.' . ($created + 1) . '@iec.local'],
+                        [
+                            'name'     => $name . ' Approver',
+                            'password' => bcrypt('password123'),
+                        ]
+                    );
+                    if (!$user->hasRole('constituency-approver')) {
+                        $user->assignRole('constituency-approver');
+                    }
+                    $node->assigned_approver_id = $user->id;
+                    $node->saveQuietly();
+                }
             }
         }
     }
