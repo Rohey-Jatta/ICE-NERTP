@@ -18,6 +18,12 @@ class PollingStationSeeder extends Seeder
             throw new \RuntimeException('Election gambia-2021-presidential must exist before running PollingStationSeeder.');
         }
 
+        // Skip if stations already exist for this election
+        if (PollingStation::where('election_id', $electionId)->exists()) {
+            $this->command->info('PollingStationSeeder: stations already exist, skipping.');
+            return;
+        }
+
         $wards = AdministrativeHierarchy::where('level', 'ward')->get();
         $totalStations = 1555;
         $perWard = (int) ceil($totalStations / max(1, $wards->count()));
@@ -25,38 +31,51 @@ class PollingStationSeeder extends Seeder
 
         foreach ($wards as $ward) {
             for ($i = 1; $i <= $perWard && $created < $totalStations; $i++, $created++) {
-                $station = PollingStation::create([
-                    'election_id' => $electionId,
-                    'ward_id' => $ward->id,
-                    'code' => 'PS-' . ($created + 1),
-                    'name' => $ward->name . ' Polling Station ' . ($i),
-                    'address' => 'Address for station ' . ($created + 1),
-                    'registered_voters' => rand(200, 1200),
-                    'latitude' => 13.45 + (rand(-500, 500) / 10000),
-                    'longitude' => -16.66 + (rand(-500, 500) / 10000),
-                    'is_active' => true,
-                ]);
+                $code = 'PS-' . ($created + 1);
+
+                $station = PollingStation::firstOrCreate(
+                    ['code' => $code],
+                    [
+                        'election_id'       => $electionId,
+                        'ward_id'           => $ward->id,
+                        'name'              => $ward->name . ' Polling Station ' . $i,
+                        'address'           => 'Address for station ' . ($created + 1),
+                        'registered_voters' => rand(200, 1200),
+                        'latitude'          => 13.45 + (rand(-500, 500) / 10000),
+                        'longitude'         => -16.66 + (rand(-500, 500) / 10000),
+                        'is_active'         => true,
+                    ]
+                );
 
                 // Set PostGIS location if using PostgreSQL
                 if (DB::getDriverName() === 'pgsql') {
-                    DB::statement("UPDATE polling_stations SET location = ST_SetSRID(ST_MakePoint(?, ?), 4326) WHERE id = ?", [
-                        $station->longitude,
-                        $station->latitude,
-                        $station->id
-                    ]);
+                    DB::statement(
+                        "UPDATE polling_stations SET location = ST_SetSRID(ST_MakePoint(?, ?), 4326) WHERE id = ?",
+                        [$station->longitude, $station->latitude, $station->id]
+                    );
                 }
 
-                // Create polling officer
-                $officer = User::factory()->create([
-                    'name' => $station->name . ' Officer',
-                    'email' => 'officer.' . ($created + 1) . '@iec.local'
-                ]);
-                $officer->assignRole('polling-officer');
-                $station->assigned_officer_id = $officer->id;
-                $station->saveQuietly();
+                // Create / assign polling officer
+                $officer = User::firstOrCreate(
+                    ['email' => 'officer.' . ($created + 1) . '@iec.local'],
+                    [
+                        'name'     => $station->name . ' Officer',
+                        'password' => bcrypt('password123'),
+                        'status'   => 'active',
+                    ]
+                );
 
-                // No "polling-station-approver" – that role is not used in this table
+                if (!$officer->hasRole('polling-officer')) {
+                    $officer->assignRole('polling-officer');
+                }
+
+                if (!$station->assigned_officer_id) {
+                    $station->assigned_officer_id = $officer->id;
+                    $station->saveQuietly();
+                }
             }
         }
+
+        $this->command->info("PollingStationSeeder: created {$created} stations.");
     }
 }

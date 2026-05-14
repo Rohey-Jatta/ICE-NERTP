@@ -30,23 +30,38 @@ class RegionSeeder extends Seeder
             ];
 
             foreach ($regions as $name) {
-                $node = AdministrativeHierarchy::create([
-                    'election_id' => $electionId,
-                    'level' => 'admin_area',
-                    'parent_id' => null,
-                    'name' => $name,
-                    'slug' => Str::slug($name),               // REQUIRED
-                    'depth' => 0,                             // REQUIRED
-                    'code' => strtoupper(substr(preg_replace('/[^A-Z]/', '', $name), 0, 6)) ?: strtoupper(substr($name, 0, 3)),
-                ]);
+                $code = strtoupper(substr(preg_replace('/[^A-Z]/', '', strtoupper($name)), 0, 6)) ?: strtoupper(substr($name, 0, 3));
 
-                $user = User::factory()->create([
-                    'name' => $name . ' Approver',
-                    'email' => strtolower(str_replace([' ', '(', ')', '\\', '/'], '-', $name)) . '.admin@iec.local'
-                ]);
-                $user->assignRole('iec-administrator');
-                $node->assigned_approver_id = $user->id;
-                $node->saveQuietly();
+                $node = AdministrativeHierarchy::firstOrCreate(
+                    [
+                        'election_id' => $electionId,
+                        'level'       => 'admin_area',
+                        'code'        => $code,
+                    ],
+                    [
+                        'parent_id' => null,
+                        'name'      => $name,
+                        'slug'      => Str::slug($name),
+                        'depth'     => 0,
+                    ]
+                );
+
+                // Only create/assign approver if not already set
+                if (!$node->assigned_approver_id) {
+                    $email = strtolower(str_replace([' ', '(', ')', '\\', '/'], '-', $name)) . '.admin@iec.local';
+
+                    $user = User::firstOrCreate(
+                        ['email' => $email],
+                        ['name' => $name . ' Approver']
+                    );
+
+                    if (!$user->hasRole('iec-administrator')) {
+                        $user->assignRole('iec-administrator');
+                    }
+
+                    $node->assigned_approver_id = $user->id;
+                    $node->saveQuietly();
+                }
             }
         });
     }

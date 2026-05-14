@@ -9,6 +9,7 @@
         "php": "^8.3",
         "africastalking/africastalking": "*",
         "brick/geo": "^0.13.1",
+        "fakerphp/faker": "^1.23",
         "inertiajs/inertia-laravel": "^2.0",
         "intervention/image": "^3.11",
         "laravel/framework": "^12.0",
@@ -20,12 +21,12 @@
         "spatie/laravel-activitylog": "^4.11",
         "spatie/laravel-backup": "^9.4",
         "spatie/laravel-permission": "^7.1",
-        "tightenco/ziggy": "^2.6"
+        "tightenco/ziggy": "^2.6",
+        "twilio/sdk": "^8.11"
     },
     "require-dev": {
         "barryvdh/laravel-debugbar": "^4.0",
         "barryvdh/laravel-ide-helper": "^3.6",
-        "fakerphp/faker": "^1.23",
         "laravel/pail": "^1.2.2",
         "laravel/pint": "^1.27",
         "laravel/sail": "^1.41",

@@ -25,30 +25,40 @@ class TwoFactorAuthService
         $cacheKey = "2fa_code_{$user->id}";
         Cache::put($cacheKey, $code, now()->addMinutes(10));
 
-        if (app()->environment('local')) {
-            Log::debug("[2FA] Code generated for {$user->email}: {$code}");
-        } else {
-            Log::info("[2FA] Code generated for user_id={$user->id}");
-        }
+        // Always log the code so developers can test without real SMS
+        Log::info("[2FA] Code for user_id={$user->id} email={$user->email}: {$code}");
 
         return $code;
     }
 
     /**
-     * Send the code via SMS. Never throws — always returns bool.
+     * Send the code via the configured SMS driver.
+     * Never throws — always returns bool.
      */
     public function sendCode(User $user, string $code): bool
     {
+        if (!$user->phone) {
+            Log::warning("[2FA] User {$user->email} has no phone number. Code is in the log above.");
+            return false;
+        }
+
         try {
-            return $this->smsService->send2FACode($user->phone, $code);
+            $sent = $this->smsService->send2FACode($user->phone, $code);
+
+            if (!$sent) {
+                Log::warning("[2FA] SMS send returned false for user {$user->email}. Check SMS driver logs.");
+            }
+
+            return $sent;
+
         } catch (\Throwable $e) {
-            Log::error("[2FA] sendCode failed for {$user->email}: " . $e->getMessage());
+            Log::error("[2FA] sendCode exception for {$user->email}: " . $e->getMessage());
             return false;
         }
     }
 
     /**
-     * Alias used by some controllers — generates and sends in one call.
+     * Alias used by LoginController — generates and sends in one call.
      */
     public function sendSmsOtp(User $user): bool
     {
@@ -65,14 +75,17 @@ class TwoFactorAuthService
         $storedCode = Cache::get($cacheKey);
 
         if (!$storedCode) {
+            Log::warning("[2FA] No code in cache for user {$user->id}. It may have expired.");
             return false;
         }
 
         if (hash_equals($storedCode, $code)) {
             Cache::forget($cacheKey);
+            Log::info("[2FA] Code verified successfully for user {$user->id}");
             return true;
         }
 
+        Log::warning("[2FA] Code mismatch for user {$user->id}");
         return false;
     }
 }
