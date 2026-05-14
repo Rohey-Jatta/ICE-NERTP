@@ -7,6 +7,7 @@ use App\Models\Election;
 use App\Models\User;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 
 class RegionSeeder extends Seeder
@@ -52,8 +53,17 @@ class RegionSeeder extends Seeder
 
                     $user = User::firstOrCreate(
                         ['email' => $email],
-                        ['name' => $name . ' Approver']
+                        [
+                            'name' => $name . ' Approver',
+                            'password' => Hash::make(Str::random(40)),
+                            'status' => 'active',
+                        ]
                     );
+
+                    if (empty($user->password)) {
+                        $user->password = Hash::make(Str::random(40));
+                        $user->saveQuietly();
+                    }
 
                     if (!$user->hasRole('iec-administrator')) {
                         $user->assignRole('iec-administrator');
