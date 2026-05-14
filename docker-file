@@ -41,26 +41,23 @@ COPY . .
 # Install PHP dependencies
 RUN composer install --no-dev --optimize-autoloader
 
-# Install frontend dependencies
-RUN npm install
-
-# Build Vite frontend
-RUN npm run build
+# Install frontend dependencies and build
+RUN npm install && npm run build
 
 # Laravel storage permissions
 RUN chmod -R 775 storage bootstrap/cache
 
-# Cache Laravel configs/routes/views
-RUN php artisan config:clear || true
-RUN php artisan cache:clear || true
-RUN php artisan route:clear || true
-RUN php artisan view:clear || true
+# ── DO NOT cache config at build time ──
+# Config cache is generated at container START so Render env vars are picked up
+# RUN php artisan config:cache  ← REMOVED - was baking in wrong env vars
 
-# Expose Render port
 EXPOSE 10000
 
-# Start application — use --seed only on first deploy (table empty check is in seeders)
-CMD php artisan migrate --force && \
+# Start: clear stale caches, re-cache with live Render env vars, then serve
+CMD php artisan config:clear && \
+    php artisan route:clear && \
+    php artisan view:clear && \
+    php artisan migrate --force && \
     php artisan db:seed --force && \
     php artisan config:cache && \
     php artisan route:cache && \
