@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import { Link, router, usePage } from '@inertiajs/react';
 import useInertiaPrefetch from '@/Hooks/useInertiaPrefetch';
-import { canAny } from '@/Utils/permissions';
+import { canAny, getPermissionNames } from '@/Utils/permissions';
 
 // ── Social icon paths ──────────────────────────────────────────────────────
 const SocialIcon = ({ name }) => {
@@ -170,8 +170,22 @@ const AuthenticatedShell = ({ children, user, url, onLogout, isLoggingOut }) => 
     }, [collapsed]);
 
     const role = getPrimaryRole(user, url);
+    const resolvedPermissionNames = getPermissionNames(user);
+    const hasResolvedPermissions = resolvedPermissionNames.length > 0;
     const navItems = (NAV_ITEMS[role] || [{ href: '/dashboard', label: 'Dashboard', icon: 'dashboard' }])
-        .filter((item) => canAny(user, item.permissions));
+        .filter((item) => {
+            if (!item.permissions?.length) {
+                return true;
+            }
+
+            // Fallback for sessions where permission list isn't present in payload.
+            // Routes remain protected server-side; this avoids hiding role nav unexpectedly.
+            if (!hasResolvedPermissions) {
+                return true;
+            }
+
+            return canAny(user, item.permissions);
+        });
 
     // Derive user initials for the avatar
     const initials = user?.name
