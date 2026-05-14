@@ -22,7 +22,8 @@
         "spatie/laravel-activitylog": "^4.11",
         "spatie/laravel-backup": "^9.4",
         "spatie/laravel-permission": "^7.1",
-        "tightenco/ziggy": "^2.6"
+        "tightenco/ziggy": "^2.6",
+        "twilio/sdk": "^8.11"
     },
     "require-dev": {
         "barryvdh/laravel-debugbar": "^4.0",
