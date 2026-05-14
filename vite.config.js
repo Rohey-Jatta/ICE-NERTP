@@ -51,6 +51,15 @@ export default defineConfig({
         host: '::',         // bind to IPv4 + IPv6 so [::1] resolves
         port: 5173,
         strictPort: true,
+        cors: {
+            origin: [
+                'http://ice-nertp.test',
+                'https://ice-nertp.test',
+                'http://localhost',
+                'http://127.0.0.1',
+            ],
+            credentials: true,
+        },
         hmr: {
             overlay: false,
             host: 'localhost',
