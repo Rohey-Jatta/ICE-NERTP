@@ -17,7 +17,6 @@
         "laravel/sanctum": "^4.3",
         "laravel/tinker": "^2.10.1",
         "league/flysystem-aws-s3-v3": "^3.31",
-        "maatwebsite/excel": "^3.1",
         "predis/predis": "^3.4",
         "spatie/laravel-activitylog": "^4.11",
         "spatie/laravel-backup": "^9.4",
