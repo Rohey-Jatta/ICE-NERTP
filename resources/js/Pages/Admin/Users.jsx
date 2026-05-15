@@ -91,10 +91,8 @@ export default function Users({ auth, users = {}, filters = {} }) {
             align: 'right',
             render: (user) => (
                 <div className="flex justify-end gap-2">
-                    {canAssignRoles ? (
                         <Button href={`/admin/users/${user.id}/edit`} variant="secondary">Edit</Button>
-                    ) : null}
-                    {canDeleteUsers ? (
+
                         <Button
                             variant="danger"
                             disabled={deletingId === user.id || user.id === currentUser?.id}
@@ -102,7 +100,6 @@ export default function Users({ auth, users = {}, filters = {} }) {
                         >
                             {deletingId === user.id ? 'Deleting...' : 'Delete'}
                         </Button>
-                    ) : null}
                 </div>
             ),
         },
