@@ -25,8 +25,6 @@ const statusTone = (status) => {
 export default function Users({ auth, users = {}, filters = {} }) {
     const [deletingId, setDeletingId] = useState(null);
     const currentUser = auth?.user;
-    const canAssignRoles = can(currentUser, 'assign-roles');
-    const canDeleteUsers = can(currentUser, 'deactivate-user');
     const userData = users.data ?? [];
 
     const { data, setData, get, processing } = useForm({
@@ -35,13 +33,9 @@ export default function Users({ auth, users = {}, filters = {} }) {
         status: filters.status || '',
     });
 
-    const applyFilters = (event) => {
-        event.preventDefault();
-        get('/admin/users', { preserveState: true, replace: true });
-    };
-
-    const clearFilters = () => {
-        router.get('/admin/users', {}, { preserveState: false, replace: true });
+    // ── Navigation handlers ──────────────────────────────────────────────
+    const handleEdit = (id) => {
+        router.visit(`/admin/users/${id}/edit`);
     };
 
     const handleDelete = (user) => {
@@ -52,6 +46,15 @@ export default function Users({ auth, users = {}, filters = {} }) {
             onError: () => alert('Failed to delete user. Please try again.'),
             onFinish: () => setDeletingId(null),
         });
+    };
+
+    const applyFilters = (event) => {
+        event.preventDefault();
+        get('/admin/users', { preserveState: true, replace: true });
+    };
+
+    const clearFilters = () => {
+        router.get('/admin/users', {}, { preserveState: false, replace: true });
     };
 
     const columns = [
@@ -91,12 +94,19 @@ export default function Users({ auth, users = {}, filters = {} }) {
             align: 'right',
             render: (user) => (
                 <div className="flex justify-end gap-2">
-                        <Button onClick={() => handleEdit(user.id)} variant="secondary">Edit</Button>
-
-                        <Button onClick={() => handleDelete(user)} disabled={deletingId === user.id} variant="danger">
+                    <Button
+                        onClick={() => handleEdit(user.id)}
+                        variant="secondary"
+                    >
+                        Edit
+                    </Button>
+                    <Button
+                        onClick={() => handleDelete(user)}
+                        disabled={deletingId === user.id}
+                        variant="danger"
+                    >
                         {deletingId === user.id ? 'Deleting...' : 'Delete'}
-                        </Button>
-
+                    </Button>
                 </div>
             ),
         },
@@ -116,6 +126,8 @@ export default function Users({ auth, users = {}, filters = {} }) {
                         <Field label="Search">
                             <input
                                 type="search"
+                                id="user-search"
+                                name="search"
                                 value={data.search}
                                 onChange={(event) => setData('search', event.target.value)}
                                 placeholder="Name, email, or phone"
@@ -123,13 +135,27 @@ export default function Users({ auth, users = {}, filters = {} }) {
                             />
                         </Field>
                         <Field label="Role">
-                            <select value={data.role} onChange={(event) => setData('role', event.target.value)} className={inputClass}>
+                            <select
+                                id="user-role-filter"
+                                name="role"
+                                value={data.role}
+                                onChange={(event) => setData('role', event.target.value)}
+                                className={inputClass}
+                            >
                                 <option value="">All roles</option>
-                                {ROLE_OPTIONS.map((role) => <option key={role} value={role}>{roleLabel(role)}</option>)}
+                                {ROLE_OPTIONS.map((role) => (
+                                    <option key={role} value={role}>{roleLabel(role)}</option>
+                                ))}
                             </select>
                         </Field>
                         <Field label="Status">
-                            <select value={data.status} onChange={(event) => setData('status', event.target.value)} className={inputClass}>
+                            <select
+                                id="user-status-filter"
+                                name="status"
+                                value={data.status}
+                                onChange={(event) => setData('status', event.target.value)}
+                                className={inputClass}
+                            >
                                 <option value="">All statuses</option>
                                 <option value="active">Active</option>
                                 <option value="inactive">Inactive</option>
@@ -137,13 +163,19 @@ export default function Users({ auth, users = {}, filters = {} }) {
                             </select>
                         </Field>
                         <div className="flex items-end gap-2">
-                            <Button type="submit" disabled={processing} className="flex-1">{processing ? 'Applying...' : 'Apply'}</Button>
+                            <Button type="submit" disabled={processing} className="flex-1">
+                                {processing ? 'Applying...' : 'Apply'}
+                            </Button>
                             <Button variant="secondary" onClick={clearFilters}>Clear</Button>
                         </div>
                     </Toolbar>
                 </form>
 
-                <DataTable columns={columns} rows={userData} empty="No users match the current filters." />
+                <DataTable
+                    columns={columns}
+                    rows={userData}
+                    empty="No users match the current filters."
+                />
                 <Pagination links={users.links} />
             </div>
         </AppLayout>

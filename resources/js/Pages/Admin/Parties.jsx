@@ -3,6 +3,63 @@ import { router } from '@inertiajs/react';
 import { useState } from 'react';
 import { Badge, Button, DataTable, PageHeader, Panel } from '@/Components/AdminUI';
 
+/* ── Reusable image components with fallback ───────────────────────────── */
+function PartySymbol({ party, size = 'md' }) {
+    const [error, setError] = useState(false);
+    const primaryColor = party.colors_array?.[0] || '#6b7280';
+    const sizeClass = size === 'lg'
+        ? 'h-14 w-14 rounded-lg text-lg'
+        : 'h-10 w-10 rounded-md text-sm';
+
+    if (party.symbol_url && !error) {
+        return (
+            <img
+                src={party.symbol_url}
+                alt={`${party.name} symbol`}
+                className={`${sizeClass} border border-gray-200 bg-white object-contain p-1 flex-shrink-0`}
+                onError={() => setError(true)}
+            />
+        );
+    }
+
+    return (
+        <div
+            className={`${sizeClass} flex items-center justify-center border border-gray-200 font-bold text-slate-600 flex-shrink-0`}
+            style={{ backgroundColor: primaryColor + '22' }}
+        >
+            {party.abbreviation?.slice(0, 2) || '??'}
+        </div>
+    );
+}
+
+function LeaderAvatar({ party, size = 'sm' }) {
+    const [error, setError] = useState(false);
+    const primaryColor = party.colors_array?.[0] || '#6b7280';
+    const sizeClass = size === 'lg' ? 'w-12 h-12' : 'w-8 h-8';
+
+    if (party.leader_photo_url && !error) {
+        return (
+            <img
+                src={party.leader_photo_url}
+                alt={party.leader_name}
+                className={`${sizeClass} rounded-full object-cover border-2 flex-shrink-0`}
+                style={{ borderColor: primaryColor }}
+                onError={() => setError(true)}
+            />
+        );
+    }
+
+    return (
+        <div
+            className={`${sizeClass} rounded-full flex items-center justify-center text-white font-bold text-xs flex-shrink-0`}
+            style={{ backgroundColor: primaryColor }}
+        >
+            {party.leader_name?.charAt(0)?.toUpperCase() || '?'}
+        </div>
+    );
+}
+
+/* ── Color dots ────────────────────────────────────────────────────────── */
 function ColorDots({ colorsArray }) {
     if (!colorsArray || colorsArray.length === 0) return null;
     return (
@@ -47,17 +104,7 @@ export default function Parties({ auth, parties = [], flash, activeElection }) {
             header: 'Party',
             render: (party) => (
                 <div className="flex items-center gap-3">
-                    {party.symbol_url ? (
-                        <img
-                            src={party.symbol_url}
-                            alt={`${party.name} symbol`}
-                            className="h-10 w-10 rounded-md border border-gray-200 bg-white object-contain p-1"
-                        />
-                    ) : (
-                        <div className="flex h-10 w-10 items-center justify-center rounded-md border border-gray-200 bg-gray-50 text-sm font-bold text-slate-600">
-                            {party.abbreviation?.slice(0, 2)}
-                        </div>
-                    )}
+                    <PartySymbol party={party} size="md" />
                     <div>
                         <div className="ws-row-strong">{party.name}</div>
                         <div className="ws-row-muted">{party.abbreviation}</div>
@@ -83,24 +130,10 @@ export default function Parties({ auth, parties = [], flash, activeElection }) {
                 if (!party.leader_name && !party.leader_photo_url) {
                     return <span className="text-slate-400">Not set</span>;
                 }
-                const primaryColor = party.colors_array?.[0] || '#6b7280';
                 return (
                     <div className="flex items-center gap-2">
-                        {party.leader_photo_url ? (
-                            <img
-                                src={party.leader_photo_url}
-                                alt={party.leader_name}
-                                className="w-8 h-8 rounded-full object-cover border border-slate-200 flex-shrink-0"
-                            />
-                        ) : (
-                            <div
-                                className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
-                                style={{ backgroundColor: primaryColor }}
-                            >
-                                {party.leader_name?.charAt(0) || '?'}
-                            </div>
-                        )}
-                        <span className="text-sm">{party.leader_name}</span>
+                        <LeaderAvatar party={party} size="sm" />
+                        <span className="text-sm">{party.leader_name || '—'}</span>
                     </div>
                 );
             },
@@ -134,14 +167,22 @@ export default function Parties({ auth, parties = [], flash, activeElection }) {
                                 <button
                                     type="button"
                                     onClick={() => setView('table')}
-                                    className={`rounded px-3 py-1.5 text-sm font-semibold ${view === 'table' ? 'bg-iec-pink text-white' : 'text-slate-600 hover:bg-gray-50'}`}
+                                    className={`rounded px-3 py-1.5 text-sm font-semibold transition-colors ${
+                                        view === 'table'
+                                            ? 'bg-iec-pink-600 text-white'
+                                            : 'text-slate-600 hover:bg-gray-50'
+                                    }`}
                                 >
                                     Table
                                 </button>
                                 <button
                                     type="button"
                                     onClick={() => setView('cards')}
-                                    className={`rounded px-3 py-1.5 text-sm font-semibold ${view === 'cards' ? 'bg-iec-pink text-white' : 'text-slate-600 hover:bg-gray-50'}`}
+                                    className={`rounded px-3 py-1.5 text-sm font-semibold transition-colors ${
+                                        view === 'cards'
+                                            ? 'bg-iec-pink-600 text-white'
+                                            : 'text-slate-600 hover:bg-gray-50'
+                                    }`}
                                 >
                                     Cards
                                 </button>
@@ -152,12 +193,12 @@ export default function Parties({ auth, parties = [], flash, activeElection }) {
                 />
 
                 {flash?.success && (
-                    <div className="mb-6 p-4 bg-green-500/20 border border-green-500/50 rounded-lg text-green-300">
+                    <div className="mb-6 p-4 bg-green-500/20 border border-green-500/50 rounded-lg text-green-700">
                         {flash.success}
                     </div>
                 )}
                 {flash?.error && (
-                    <div className="mb-6 p-4 bg-red-500/20 border border-red-500/50 rounded-lg text-red-300">
+                    <div className="mb-6 p-4 bg-red-500/20 border border-red-500/50 rounded-lg text-red-700">
                         {flash.error}
                     </div>
                 )}
@@ -174,39 +215,29 @@ export default function Parties({ auth, parties = [], flash, activeElection }) {
                         )}
                     </Panel>
                 ) : view === 'table' ? (
-                    <DataTable columns={columns} rows={parties} empty="No parties registered for the active election." />
+                    <DataTable
+                        columns={columns}
+                        rows={parties}
+                        empty="No parties registered for the active election."
+                    />
                 ) : (
+                    /* ── Card View ─────────────────────────────────────── */
                     <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
                         {parties.map((party) => {
                             const primaryColor = party.colors_array?.[0] || '#6b7280';
 
                             return (
-                                <Panel
-                                    key={party.id}
-                                    className="p-5"
-                                >
+                                <Panel key={party.id} className="p-5">
                                     <div className="flex min-h-full flex-col">
-                                        <div className="mb-5 flex items-start gap-4">
-                                            <div className="flex-shrink-0">
-                                                {party.symbol_url ? (
-                                                    <img
-                                                        src={party.symbol_url}
-                                                        alt={`${party.name} symbol`}
-                                                        className="h-14 w-14 rounded-lg border border-gray-200 bg-white object-contain p-1"
-                                                    />
-                                                ) : (
-                                                    <div
-                                                        className="flex h-14 w-14 items-center justify-center rounded-lg border border-gray-200 text-lg font-bold text-slate-600"
-                                                        style={{ backgroundColor: primaryColor + '22' }}
-                                                    >
-                                                        {party.abbreviation?.slice(0, 2)}
-                                                    </div>
-                                                )}
-                                            </div>
 
+                                        {/* Party header: logo + name */}
+                                        <div className="mb-5 flex items-start gap-4">
+                                            <PartySymbol party={party} size="lg" />
                                             <div className="flex-1 min-w-0">
                                                 <div className="flex flex-wrap items-center gap-2">
-                                                    <h3 className="text-lg font-bold leading-tight text-slate-900">{party.name}</h3>
+                                                    <h3 className="text-lg font-bold leading-tight text-slate-900">
+                                                        {party.name}
+                                                    </h3>
                                                     <Badge tone="slate">{party.abbreviation}</Badge>
                                                 </div>
                                                 {party.motto && (
@@ -215,97 +246,92 @@ export default function Parties({ auth, parties = [], flash, activeElection }) {
                                             </div>
                                         </div>
 
+                                        {/* Colors */}
                                         <div className="mb-5">
-                                            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Party Colors</p>
+                                            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                                                Party Colors
+                                            </p>
                                             <ColorDots colorsArray={party.colors_array} />
                                         </div>
 
+                                        {/* Leader */}
                                         {(party.leader_name || party.leader_photo_url) && (
                                             <div className="mb-5 flex items-center gap-3 rounded-lg border border-gray-200 bg-gray-50 p-3">
-                                                {party.leader_photo_url ? (
-                                                    <img
-                                                        src={party.leader_photo_url}
-                                                        alt={party.leader_name}
-                                                        className="w-12 h-12 rounded-full object-cover border-2 flex-shrink-0"
-                                                        style={{ borderColor: primaryColor }}
-                                                    />
-                                                ) : (
-                                                    <div
-                                                        className="w-12 h-12 rounded-full flex items-center justify-center text-iec-navy font-bold text-sm flex-shrink-0"
-                                                        style={{ backgroundColor: primaryColor + '44' }}
-                                                    >
-                                                        {party.leader_name?.charAt(0) || '?'}
-                                                    </div>
-                                                )}
+                                                <LeaderAvatar party={party} size="lg" />
                                                 <div className="min-w-0">
-                                                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Party Leader</p>
-                                                    <p className="truncate text-sm font-semibold text-slate-900">{party.leader_name || '-'}</p>
+                                                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                                                        Party Leader
+                                                    </p>
+                                                    <p className="truncate text-sm font-semibold text-slate-900">
+                                                        {party.leader_name || '—'}
+                                                    </p>
                                                 </div>
                                             </div>
                                         )}
 
+                                        {/* Candidates */}
                                         <div className="mb-5">
                                             <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
                                                 Candidates ({party.candidates?.length ?? 0})
                                                 {activeElection && (
-                                                    <span className="ml-1 normal-case text-slate-500">for {activeElection.name}</span>
+                                                    <span className="ml-1 normal-case text-slate-500">
+                                                        for {activeElection.name}
+                                                    </span>
                                                 )}
                                             </p>
                                             {party.candidates && party.candidates.length > 0 ? (
                                                 <div className="flex flex-wrap gap-2">
                                                     {party.candidates.map((candidate) => (
-                                                        <div key={candidate.id} className="flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-2 py-1.5">
-                                                            {candidate.photo_url ? (
-                                                                <img
-                                                                    src={candidate.photo_url}
-                                                                    alt={candidate.name}
-                                                                    className="w-7 h-7 rounded-full object-cover flex-shrink-0 border border-slate-200"
-                                                                />
-                                                            ) : (
-                                                                <div
-                                                                    className="w-7 h-7 rounded-full flex items-center justify-center text-iec-navy text-xs font-bold flex-shrink-0"
-                                                                    style={{ backgroundColor: primaryColor + '66' }}
-                                                                >
-                                                                    {candidate.name?.charAt(0) || '?'}
-                                                                </div>
-                                                            )}
-                                                            <div>
-                                                                <span className="block max-w-[160px] truncate text-xs font-medium text-slate-700">
-                                                                    {candidate.name}
-                                                                </span>
-                                                                {candidate.ballot_number && (
-                                                                    <span className="text-xs text-slate-600">#{candidate.ballot_number}</span>
-                                                                )}
-                                                            </div>
-                                                        </div>
+                                                        <CandidateChip
+                                                            key={candidate.id}
+                                                            candidate={candidate}
+                                                            primaryColor={primaryColor}
+                                                        />
                                                     ))}
                                                 </div>
                                             ) : (
-                                                <p className="text-xs italic text-slate-600">
+                                                <p className="text-xs italic text-slate-400">
                                                     No candidates yet. Add them from Edit Party.
                                                 </p>
                                             )}
                                         </div>
 
+                                        {/* Meta */}
                                         <div className="mb-5 space-y-1 text-sm">
                                             {party.headquarters && (
-                                                <p className="text-slate-400">
-                                                    <span className="text-slate-500">HQ:</span> {party.headquarters}
+                                                <p className="text-slate-500">
+                                                    <span className="font-medium">HQ:</span> {party.headquarters}
                                                 </p>
                                             )}
                                             {party.website && (
-                                                <p className="text-slate-400">
-                                                    <span className="text-slate-500">Web:</span>{' '}
-                                                    <a href={party.website} target="_blank" rel="noopener noreferrer" className="text-iec-pink-300 hover:text-iec-pink-200">
+                                                <p className="text-slate-500">
+                                                    <span className="font-medium">Web:</span>{' '}
+
+                                                    <a   href={party.website}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        className="text-iec-pink-600 hover:underline"
+                                                    >
                                                         {party.website.replace(/^https?:\/\//, '')}
                                                     </a>
                                                 </p>
                                             )}
                                         </div>
 
+                                        {/* Actions */}
                                         <div className="mt-auto flex gap-2">
-                                            <Button onClick={() => handleEdit(party.id)} variant="secondary" className="flex-1">Edit Party & Candidates</Button>
-                                            <Button onClick={() => handleDelete(party)} disabled={deletingId === party.id} variant="danger">
+                                            <Button
+                                                onClick={() => handleEdit(party.id)}
+                                                variant="secondary"
+                                                className="flex-1"
+                                            >
+                                                Edit Party &amp; Candidates
+                                            </Button>
+                                            <Button
+                                                onClick={() => handleDelete(party)}
+                                                disabled={deletingId === party.id}
+                                                variant="danger"
+                                            >
                                                 {deletingId === party.id ? 'Deleting...' : 'Delete'}
                                             </Button>
                                         </div>
@@ -317,5 +343,38 @@ export default function Parties({ auth, parties = [], flash, activeElection }) {
                 )}
             </div>
         </AppLayout>
+    );
+}
+
+/* ── Candidate chip (extracted to avoid hooks-in-loops issues) ─────────── */
+function CandidateChip({ candidate, primaryColor }) {
+    const [error, setError] = useState(false);
+
+    return (
+        <div className="flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-2 py-1.5">
+            {candidate.photo_url && !error ? (
+                <img
+                    src={candidate.photo_url}
+                    alt={candidate.name}
+                    className="w-7 h-7 rounded-full object-cover flex-shrink-0 border border-slate-200"
+                    onError={() => setError(true)}
+                />
+            ) : (
+                <div
+                    className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
+                    style={{ backgroundColor: primaryColor + '99' }}
+                >
+                    {candidate.name?.charAt(0)?.toUpperCase() || '?'}
+                </div>
+            )}
+            <div>
+                <span className="block max-w-[160px] truncate text-xs font-medium text-slate-700">
+                    {candidate.name}
+                </span>
+                {candidate.ballot_number && (
+                    <span className="text-xs text-slate-500">#{candidate.ballot_number}</span>
+                )}
+            </div>
+        </div>
     );
 }
