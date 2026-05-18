@@ -91,15 +91,12 @@ export default function Users({ auth, users = {}, filters = {} }) {
             align: 'right',
             render: (user) => (
                 <div className="flex justify-end gap-2">
-                        <Button href={`/admin/users/${user.id}/edit`} variant="secondary">Edit</Button>
+                        <Button onClick={() => handleEdit(user.id)} variant="secondary">Edit</Button>
 
-                        <Button
-                            variant="danger"
-                            disabled={deletingId === user.id || user.id === currentUser?.id}
-                            onClick={() => handleDelete(user)}
-                        >
-                            {deletingId === user.id ? 'Deleting...' : 'Delete'}
+                        <Button onClick={() => handleDelete(user)} disabled={deletingId === user.id} variant="danger">
+                        {deletingId === user.id ? 'Deleting...' : 'Delete'}
                         </Button>
+
                 </div>
             ),
         },

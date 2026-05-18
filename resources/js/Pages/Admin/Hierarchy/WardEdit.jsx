@@ -17,7 +17,7 @@ export default function WardEdit({ auth, ward, constituencies = [] }) {
         <AppLayout user={auth?.user}>
             <div className="container mx-auto px-4 py-8 max-w-2xl">
                 <div className="mb-6">
-                    <Link href="/admin/hierarchy/wards" className="text-slate-500 hover:text-iec-navy text-sm mb-2 inline-block">
+                    <Link href="/admin/hierarchy/wards" className="text-slate-500 hover:text-iec-pink-500 text-sm mb-2 inline-block">
                         ← Back to Wards
                     </Link>
                     <h1 className="text-3xl font-bold text-iec-navy">Edit Ward</h1>

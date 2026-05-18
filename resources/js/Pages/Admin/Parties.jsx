@@ -79,7 +79,31 @@ export default function Parties({ auth, parties = [], flash, activeElection }) {
         {
             key: 'leader',
             header: 'Leader',
-            render: (party) => party.leader_name || 'Not set',
+            render: (party) => {
+                if (!party.leader_name && !party.leader_photo_url) {
+                    return <span className="text-slate-400">Not set</span>;
+                }
+                const primaryColor = party.colors_array?.[0] || '#6b7280';
+                return (
+                    <div className="flex items-center gap-2">
+                        {party.leader_photo_url ? (
+                            <img
+                                src={party.leader_photo_url}
+                                alt={party.leader_name}
+                                className="w-8 h-8 rounded-full object-cover border border-slate-200 flex-shrink-0"
+                            />
+                        ) : (
+                            <div
+                                className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
+                                style={{ backgroundColor: primaryColor }}
+                            >
+                                {party.leader_name?.charAt(0) || '?'}
+                            </div>
+                        )}
+                        <span className="text-sm">{party.leader_name}</span>
+                    </div>
+                );
+            },
         },
         {
             key: 'actions',
