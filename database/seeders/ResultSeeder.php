@@ -14,6 +14,7 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Seeds the official 2021 Gambian Presidential Election results.
@@ -21,15 +22,22 @@ use Illuminate\Support\Str;
  * Source: IEC Gambia official results document (Presidential Results 4th December 2021).
  *
  * Strategy:
- *  - Official results exist at constituency level.
- *  - This seeder distributes constituency totals down to individual polling stations
- *    using each station's registered_voters as a proportional weight.
- *  - The "last station" in each constituency absorbs rounding remainders, ensuring
- *    that the sum of all station votes EXACTLY equals the official constituency total.
+ *  - Official results exist at constituency level (electorate + cast + per-party votes).
+ *  - BOTH the electorate AND cast/party votes are distributed equally across polling stations
+ *    in each constituency (each station gets 1/N of the constituency total).
+ *  - The "last station" in each constituency absorbs all rounding remainders, ensuring:
+ *      sum(station.registered_voters) === official electorate
+ *      sum(station.total_votes_cast)  === official cast
+ *      sum(station.votes[party])      === official party total
+ *  - polling_stations.registered_voters is updated to the distributed electorate, so that
+ *    every controller and dashboard query using SUM(ps.registered_voters) returns 962,157.
+ *  - cast is clamped to electorate at each station, guaranteeing turnout ≤ 100% everywhere.
  *
  * Reconciliation guarantee:
- *  Polling Stations → Ward → Constituency → Admin Area → National
- *  All levels sum to 100% of the official IEC results.
+ *  National totals after seeding:
+ *    registered_voters = 962,157
+ *    total_votes_cast  = 859,567
+ *    turnout           ≈ 89.3%
  */
 class ResultSeeder extends Seeder
 {
@@ -101,7 +109,7 @@ class ResultSeeder extends Seeder
         'WULLI EAST'         => ['electorate' => 12269, 'cast' => 10817, 'NPP' => 7783,  'UDP' => 881,   'APP' => 115,  'NUP' => 173, 'GDC' => 819,  'PDOIS' => 1046],
     ];
 
-    /** Party abbreviation order for candidate_votes indexing */
+    /** Party abbreviation order — must match PartySeeder abbreviations */
     private const PARTY_KEYS = ['NPP', 'UDP', 'APP', 'NUP', 'GDC', 'PDOIS'];
 
     // ──────────────────────────────────────────────────────────────────────
@@ -140,12 +148,11 @@ class ResultSeeder extends Seeder
         }
 
         // ── Process each constituency ──────────────────────────────────────
-        $processedConst  = 0;
-        $skippedConst    = 0;
-        $totalStations   = 0;
+        $processedConst = 0;
+        $skippedConst   = 0;
+        $totalStations  = 0;
 
         foreach (self::OFFICIAL_RESULTS as $constName => $official) {
-            // Find the constituency node in the hierarchy
             $constituency = AdministrativeHierarchy::where('election_id', $electionId)
                 ->where('level', 'constituency')
                 ->where('name', $constName)
@@ -157,7 +164,6 @@ class ResultSeeder extends Seeder
                 continue;
             }
 
-            // Get all wards under this constituency
             $wardIds = AdministrativeHierarchy::where('parent_id', $constituency->id)
                 ->where('level', 'ward')
                 ->pluck('id');
@@ -168,7 +174,6 @@ class ResultSeeder extends Seeder
                 continue;
             }
 
-            // Get all polling stations under those wards, ordered by id for determinism
             $stations = PollingStation::whereIn('ward_id', $wardIds)
                 ->where('election_id', $electionId)
                 ->orderBy('id')
@@ -180,10 +185,10 @@ class ResultSeeder extends Seeder
                 continue;
             }
 
-            // Distribute official votes proportionally across stations
+            // Distribute official totals (both electorate AND cast) equally
+            // across all stations in this constituency.
             $distribution = $this->distributeVotesToStations($stations, $official);
 
-            // Persist results in a single transaction per constituency
             DB::transaction(function () use (
                 $stations, $distribution, $officer, $electionId, $candidatesByParty
             ) {
@@ -192,6 +197,12 @@ class ResultSeeder extends Seeder
                     if (!$dist) {
                         continue;
                     }
+
+                    // ── Correct the station's registered_voters to the
+                    //    distributed electorate so that dashboard aggregations
+                    //    using SUM(ps.registered_voters) are accurate. ──────
+                    $station->registered_voters = $dist['electorate'];
+                    $station->saveQuietly();
 
                     $stationOfficer = $station->assigned_officer_id
                         ? $station->assignedOfficer
@@ -202,9 +213,11 @@ class ResultSeeder extends Seeder
                         'election_id'             => $electionId,
                         'submission_uuid'         => Str::uuid(),
                         'user_id'                 => $stationOfficer?->id ?? $officer->id,
-                        'total_registered_voters' => $station->registered_voters,
+                        // Use the distributed electorate — not the old random value.
+                        'total_registered_voters' => $dist['electorate'],
                         'total_votes_cast'        => $dist['cast'],
-                        'valid_votes'             => $dist['cast'], // No rejected ballots in official data
+                        // No separate "rejected" category in official data.
+                        'valid_votes'             => $dist['cast'],
                         'rejected_votes'          => 0,
                         'disputed_votes'          => 0,
                         'result_sheet_photo_path' => null,
@@ -221,7 +234,6 @@ class ResultSeeder extends Seeder
                         'version'                 => 1,
                     ]);
 
-                    // Create candidate vote records
                     foreach ($dist['votes'] as $partyAbbr => $votes) {
                         $candidate = $candidatesByParty[$partyAbbr] ?? null;
                         if (!$candidate) {
@@ -241,9 +253,11 @@ class ResultSeeder extends Seeder
             $processedConst++;
             $totalStations += $stations->count();
             $this->command->info(
-                sprintf('  ✓ %-26s  %4d stations  |  cast: %6d  |  NPP: %5d  UDP: %5d',
+                sprintf(
+                    '  ✓ %-26s  %4d stations  |  electorate: %6d  cast: %6d  NPP: %5d  UDP: %5d',
                     $constName,
                     $stations->count(),
+                    $official['electorate'],
                     $official['cast'],
                     $official['NPP'],
                     $official['UDP']
@@ -252,83 +266,118 @@ class ResultSeeder extends Seeder
         }
 
         $this->command->newLine();
-        $this->command->info("ResultSeeder complete:");
+        $this->command->info('ResultSeeder complete:');
         $this->command->info("  Constituencies: {$processedConst} processed, {$skippedConst} skipped");
         $this->command->info("  Total polling station results created: {$totalStations}");
-        $this->command->info("  All totals reconcile to official IEC Gambia 2021 results. ✓");
+        $this->command->info('  National totals reconcile to official IEC Gambia 2021 data. ✓');
+        $this->command->info('  Expected: registered=962,157 | cast=859,567 | turnout≈89.3%');
     }
 
     // ──────────────────────────────────────────────────────────────────────
     // CORE DISTRIBUTION ALGORITHM
     //
-    // Distributes constituency-level vote totals across polling stations
-    // using registered_voters as a proportional weight.
+    // Distributes constituency-level totals (electorate AND cast AND per-party
+    // votes) equally across all polling stations (each gets 1/N share).
+    //
+    // WHY EQUAL WEIGHTS — not random registered_voters as weights:
+    //   PollingStationSeeder assigns random registered_voters (200–850) to
+    //   each station.  These values are far smaller than real constituency
+    //   electorates (up to 62,399).  Using them as weights produces:
+    //
+    //     stationCast = (stationReg / sum(randomRegs)) * constCast
+    //                 ≫ stationReg     (turnout > 100%)
+    //
+    //   Equal distribution avoids this entirely and lets us set
+    //   polling_stations.registered_voters = dist['electorate'] so that
+    //   national aggregations are accurate.
     //
     // EXACTNESS GUARANTEE:
-    //   The "last station" absorbs all rounding remainders so that
-    //   sum(station.votes[party]) === official[party] for every party,
-    //   and sum(station.cast) === official.cast.
+    //   The "last station" absorbs all rounding remainders so that:
+    //     sum(station.registered_voters) === official electorate
+    //     sum(station.total_votes_cast)  === official cast
+    //     sum(station.votes[party])      === official party total
+    //
+    // TURNOUT GUARANTEE:
+    //   cast is clamped to electorate at every station → turnout ≤ 100%.
     // ──────────────────────────────────────────────────────────────────────
     private function distributeVotesToStations(Collection $stations, array $official): array
     {
-        $totalWeight = $stations->sum('registered_voters');
-
-        // Guard: if no registered voters recorded (unlikely), distribute evenly
-        if ($totalWeight == 0) {
-            $totalWeight = $stations->count();
-            $stations = $stations->map(function ($s) { $s->registered_voters = 1; return $s; });
+        $count = $stations->count();
+        if ($count === 0) {
+            return [];
         }
 
-        $constCast  = (int) $official['cast'];
-        $constVotes = array_intersect_key($official, array_flip(self::PARTY_KEYS));
+        $constElectorate = (int) $official['electorate'];
+        $constCast       = (int) $official['cast'];
+        $constVotes      = array_intersect_key($official, array_flip(self::PARTY_KEYS));
 
-        $results        = [];
-        $allocatedCast  = 0;
-        $allocatedVotes = array_fill_keys(self::PARTY_KEYS, 0);
+        $results              = [];
+        $allocatedElectorate  = 0;
+        $allocatedCast        = 0;
+        $allocatedVotes       = array_fill_keys(self::PARTY_KEYS, 0);
 
         $stationList = $stations->values();
-        $count       = $stationList->count();
 
         foreach ($stationList as $idx => $station) {
             $isLast = ($idx === $count - 1);
 
             if ($isLast) {
-                // Last station: assign exact remainders to guarantee reconciliation
-                $stationCast  = $constCast - $allocatedCast;
-                $stationVotes = [];
+                // Last station absorbs all rounding remainders.
+                $stationElectorate = $constElectorate - $allocatedElectorate;
+                $stationCast       = $constCast       - $allocatedCast;
+                $stationVotes      = [];
                 foreach (self::PARTY_KEYS as $party) {
                     $stationVotes[$party] = ($constVotes[$party] ?? 0) - $allocatedVotes[$party];
                 }
             } else {
-                // Proportional allocation with rounding
-                $share       = $station->registered_voters / $totalWeight;
-                $stationCast = (int) round($constCast * $share);
-                $stationVotes = [];
+                // Each station gets an equal 1/N share (rounded to integer).
+                $share             = 1.0 / $count;
+                $stationElectorate = (int) round($constElectorate * $share);
+                $stationCast       = (int) round($constCast       * $share);
+                $stationVotes      = [];
                 foreach (self::PARTY_KEYS as $party) {
                     $stationVotes[$party] = (int) round(($constVotes[$party] ?? 0) * $share);
                 }
-                $allocatedCast += $stationCast;
+                $allocatedElectorate += $stationElectorate;
+                $allocatedCast       += $stationCast;
                 foreach (self::PARTY_KEYS as $party) {
                     $allocatedVotes[$party] += $stationVotes[$party];
                 }
             }
 
-            // Clamp negatives (can happen at last station if rounding overshoots)
+            // ── Safety clamps ────────────────────────────────────────────
+            // Electorate must be at least 1 to avoid division-by-zero.
+            $stationElectorate = max(1, $stationElectorate);
+
+            // Cast must be non-negative.
             $stationCast = max(0, $stationCast);
-            $votesSum    = 0;
+
+            // Clamp negative party votes (can happen at last station if
+            // earlier rounds rounded up too aggressively).
             foreach (self::PARTY_KEYS as $party) {
                 $stationVotes[$party] = max(0, $stationVotes[$party]);
-                $votesSum += $stationVotes[$party];
             }
 
-            // Ensure cast >= vote sum (safety: no negative "rejected" votes)
+            // CRITICAL: cast must never exceed electorate.
+            // This is the root cause of the >100% turnout bug — fixed here.
+            if ($stationCast > $stationElectorate) {
+                $stationCast = $stationElectorate;
+            }
+
+            // cast must be >= sum of party votes (no negative "rejected").
+            $votesSum = (int) array_sum($stationVotes);
             if ($stationCast < $votesSum) {
                 $stationCast = $votesSum;
+                // If that pushed cast above electorate again, raise electorate.
+                if ($stationCast > $stationElectorate) {
+                    $stationElectorate = $stationCast;
+                }
             }
 
             $results[$station->id] = [
-                'cast'  => $stationCast,
-                'votes' => $stationVotes,
+                'electorate' => $stationElectorate,
+                'cast'       => $stationCast,
+                'votes'      => $stationVotes,
             ];
         }
 
@@ -337,7 +386,6 @@ class ResultSeeder extends Seeder
 
     // ──────────────────────────────────────────────────────────────────────
     // Load candidates keyed by their party abbreviation.
-    // Handles APP (Essa Faal) correctly.
     // ──────────────────────────────────────────────────────────────────────
     private function loadCandidatesByParty(int $electionId): array
     {
@@ -353,12 +401,11 @@ class ResultSeeder extends Seeder
             }
         }
 
-        // Log which parties were found vs expected
         $missing = array_diff(self::PARTY_KEYS, array_keys($indexed));
         if (!empty($missing)) {
-            foreach ($missing as $m) {
-                logger()->warning("[ResultSeeder] No candidate found for party: {$m}");
-            }
+        foreach ($missing as $m) {
+            Log::warning("[ResultSeeder] No candidate found for party: {$m}");
+        }
         }
 
         return $indexed;
