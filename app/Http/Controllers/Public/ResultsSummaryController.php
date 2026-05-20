@@ -14,8 +14,7 @@ class ResultsSummaryController extends Controller
     public function index(Request $request)
     {
         // ── 1. Resolve which elections are publicly displayable ───────────────
-        $availableElections = Election::where('allow_provisional_public_display', true)
-            ->whereIn('status', ['active', 'certifying', 'results_pending', 'certified'])
+        $availableElections = Election::whereIn('status', ['active', 'certifying', 'results_pending', 'certified'])
             ->orderByDesc('start_date')
             ->get(['id', 'name', 'type', 'status', 'start_date'])
             ->map(fn($e) => [
@@ -35,13 +34,11 @@ class ResultsSummaryController extends Controller
         }
 
         if (!$electionModel) {
-            // Default: certified first, then the latest administrator-enabled election.
-            $electionModel = Election::where('allow_provisional_public_display', true)
-                ->where('status', 'certified')
+            // Default: certified first, then latest active
+            $electionModel = Election::where('status', 'certified')
                 ->latest('start_date')
                 ->first()
-                ?? Election::where('allow_provisional_public_display', true)
-                    ->whereIn('status', ['active', 'certifying', 'results_pending'])
+                ?? Election::whereIn('status', ['active', 'certifying', 'results_pending'])
                     ->latest('start_date')
                     ->first();
         }
@@ -57,8 +54,9 @@ class ResultsSummaryController extends Controller
         }
 
         // ── 3. Compute/fetch cached summary data ──────────────────────────────
-        $cacheKey = "results_summary_v2_{$electionModel->id}";
-        $data     = Cache::remember($cacheKey, 30, fn() => $this->computeSummary($electionModel));
+        // Cache key includes a hash so it busts when election status changes
+        $cacheKey = "results_summary_v3_{$electionModel->id}_{$electionModel->status}";
+        $data     = Cache::remember($cacheKey, 60, fn() => $this->computeSummary($electionModel));
 
         return Inertia::render('Public/Results', array_merge($data, [
             'elections'          => $availableElections,
@@ -68,39 +66,10 @@ class ResultsSummaryController extends Controller
 
     private function computeSummary(Election $election): array
     {
-        $publicStatuses = [
-            'submitted',
-            'pending_party_acceptance',
-            'pending_ward',
-            'ward_certified',
-            'pending_constituency',
-            'constituency_certified',
-            'pending_admin_area',
-            'admin_area_certified',
-            'pending_national',
-            'nationally_certified',
-        ];
-
-        if ($election->status === 'certified') {
-            $publicStatuses = ['nationally_certified'];
-        }
-
-        $stats = DB::table('polling_stations as ps')
-            ->selectRaw('
-                COUNT(DISTINCT ps.id) as total_stations,
-                COALESCE(SUM(ps.registered_voters), 0) as total_registered,
-                COUNT(DISTINCT r.id) as stations_reported,
-                COALESCE(SUM(r.total_votes_cast), 0) as total_cast,
-                COALESCE(SUM(r.valid_votes), 0) as valid_votes,
-                COALESCE(SUM(r.rejected_votes), 0) as rejected_votes
-            ')
-            ->leftJoin('results as r', function ($join) use ($election, $publicStatuses) {
-                $join->on('ps.id', '=', 'r.polling_station_id')
-                     ->where('r.election_id', $election->id)
-                     ->whereIn('r.certification_status', $publicStatuses);
-            })
-            ->where('ps.election_id', $election->id)
-            ->first();
+        // ── PUBLIC RULE: Only nationally_certified results are ever shown ─────
+        // This is the single source of truth for what is "published".
+        // No provisional data, no partially-approved data, ever.
+        $publicStatuses = ['nationally_certified'];
 
         $electionPayload = [
             'id'         => $election->id,
@@ -110,22 +79,43 @@ class ResultsSummaryController extends Controller
             'start_date' => $election->start_date?->toDateString(),
         ];
 
+        // ── Aggregate stats: total stations + certified results ───────────────
+        $stats = DB::table('polling_stations as ps')
+            ->selectRaw('
+                COUNT(DISTINCT ps.id)                                      AS total_stations,
+                COALESCE(SUM(ps.registered_voters), 0)                    AS total_registered,
+                COUNT(DISTINCT r.id)                                       AS stations_reported,
+                COALESCE(SUM(r.total_votes_cast), 0)                      AS total_cast,
+                COALESCE(SUM(r.valid_votes), 0)                           AS valid_votes,
+                COALESCE(SUM(r.rejected_votes), 0)                        AS rejected_votes
+            ')
+            ->leftJoin('results as r', function ($join) use ($election, $publicStatuses) {
+                $join->on('ps.id', '=', 'r.polling_station_id')
+                     ->where('r.election_id', $election->id)
+                     ->whereIn('r.certification_status', $publicStatuses);
+            })
+            ->where('ps.election_id', $election->id)
+            ->first();
+
         if (!$stats) {
             return [
                 'election'   => $electionPayload,
                 'stats'      => null,
                 'candidates' => [],
-                'message'    => 'Results will be published after certification is complete.',
+                'message'    => 'Results will appear as the IEC Chairman certifies and publishes them.',
             ];
         }
 
+        // ── Candidate results: only from nationally_certified results ─────────
         $candidates = DB::table('candidates as c')
             ->selectRaw("
-                c.id, c.name,
-                COALESCE(pp.name, 'Independent')  as party_name,
-                COALESCE(pp.abbreviation, 'IND')  as party_abbr,
-                COALESCE(pp.color, '#6b7280')      as party_color,
-                COALESCE(SUM(CASE WHEN r.id IS NOT NULL THEN rcv.votes ELSE 0 END), 0) as total_votes
+                c.id,
+                c.name,
+                c.photo_path,
+                COALESCE(pp.name, 'Independent')  AS party_name,
+                COALESCE(pp.abbreviation, 'IND')  AS party_abbr,
+                COALESCE(pp.color, '#6b7280')     AS party_color,
+                COALESCE(SUM(CASE WHEN r.id IS NOT NULL THEN rcv.votes ELSE 0 END), 0) AS total_votes
             ")
             ->leftJoin('political_parties as pp', 'c.political_party_id', '=', 'pp.id')
             ->leftJoin('result_candidate_votes as rcv', 'c.id', '=', 'rcv.candidate_id')
@@ -135,10 +125,21 @@ class ResultsSummaryController extends Controller
                      ->whereIn('r.certification_status', $publicStatuses);
             })
             ->where('c.election_id', $election->id)
-            ->groupBy('c.id', 'c.name', 'pp.name', 'pp.abbreviation', 'pp.color')
+            ->where('c.is_active', true)
+            ->groupBy('c.id', 'c.name', 'c.photo_path', 'pp.name', 'pp.abbreviation', 'pp.color')
             ->orderByDesc('total_votes')
-            ->get();
+            ->get()
+            ->map(fn($c) => [
+                'id'          => $c->id,
+                'name'        => $c->name,
+                'photo_url'   => $c->photo_path ? asset('storage/' . $c->photo_path) : null,
+                'party_name'  => $c->party_name,
+                'party_abbr'  => $c->party_abbr,
+                'party_color' => $c->party_color,
+                'total_votes' => (int) $c->total_votes,
+            ]);
 
+        // If zero certified stations, don't show empty candidate rows
         if ((int) $stats->stations_reported === 0) {
             $candidates = collect();
         }
@@ -148,7 +149,7 @@ class ResultsSummaryController extends Controller
             'stats'      => $stats,
             'candidates' => $candidates,
             'message'    => (int) $stats->stations_reported === 0
-                ? 'Results will be published after certification is complete.'
+                ? 'No results have been officially published yet. Check back after the IEC Chairman certifies the first results.'
                 : null,
         ];
     }

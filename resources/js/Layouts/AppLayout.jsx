@@ -29,7 +29,7 @@ const SOCIALS = [
 
 const FOOTER_LINKS = [
     { href: '/',                  label: 'Home'             },
-    { href: '/results',           label: 'Public Results'   },
+    // { href: '/results',           label: 'Public Results'   },
     { href: '/results/map',       label: 'Results Map'      },
     { href: '/results/stations',  label: 'Polling Stations' },
     { href: '/auth/login',        label: 'Staff Login'      },
@@ -446,7 +446,7 @@ export default function AppLayout({ children }) {
                         {/* Desktop Navigation */}
                         <nav className="hidden md:flex items-center gap-7">
                             <Link href="/" prefetch className="nav-link">Home</Link>
-                            <Link href="/results"          className="nav-link">Results</Link>
+                            {/* <Link href="/results"          className="nav-link">Results</Link> */}
                             <Link href="/results/map"      className="nav-link">Map</Link>
                             <Link href="/results/stations" className="nav-link">Stations</Link>
 
@@ -496,7 +496,7 @@ export default function AppLayout({ children }) {
                         <nav className="md:hidden border-t border-gray-100 pt-3 pb-4 space-y-0.5">
                             {[
                                 { href: '/',                  label: 'Home',             prefetch: true  },
-                                { href: '/results',           label: 'Public Results',   prefetch: false },
+                                // { href: '/results',           label: 'Public Results',   prefetch: false },
                                 { href: '/results/map',       label: 'Results Map',      prefetch: false },
                                 { href: '/results/stations',  label: 'Polling Stations', prefetch: false },
                             ].map(link => (

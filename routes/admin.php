@@ -1259,7 +1259,7 @@ Route::middleware(['auth', 'role:iec-administrator'])
     Route::get('/hierarchy/wards/create', function () {
         $constituencies = AdministrativeHierarchy::where('level', 'constituency')
             ->with('parent')->orderBy('name')->get()
-            ->map(fn($c) => ['id' => $c->id, 'name' => $c->name, 'parent_name' => $c->parent->name ?? null]);
+            ->map(fn($c) => ['id' => $c->id, 'name' => $c->name, 'parent_name' => $c->parent?->name ?? null]);
         return Inertia::render('Admin/Hierarchy/WardCreate', [
             'auth'           => ['user' => Auth::user()],
             'constituencies' => $constituencies,
