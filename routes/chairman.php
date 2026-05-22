@@ -21,16 +21,6 @@ Route::middleware(['auth', 'role:iec-chairman'])
     // ── Dashboard ─────────────────────────────────────────────────────────────
     Route::get('/dashboard', function () {
 
-        // ── OPTIMISED: was 12 separate COUNT queries; now 2 ──────────────────
-        //
-        // OLD code fired individual Result::where('certification_status', X)->count()
-        // for every pipeline stage (10 calls) plus 2 extra calls for
-        // PollingStation::count() and PollingStation::sum('registered_voters').
-        // That is 12 round-trips to PostgreSQL on every chairman dashboard load.
-        //
-        // NEW: one GROUP BY query returns all status counts at once;
-        //      one selectRaw covers both station total and voter sum.
-
         $cacheKey = 'chairman_dashboard_stats';
         $statistics = Cache::remember($cacheKey, 30, function () use (&$statusCounts, &$pendingNational, &$nationallyCertified, &$stationAgg, &$totalStations, &$totalVoters, &$nationalProgress, &$pipelineCounts) {
             $statusCounts = Result::selectRaw('certification_status, COUNT(*) as cnt')
@@ -210,7 +200,14 @@ Route::middleware(['auth', 'role:iec-chairman'])
             extra: ['outcome' => 'success', 'comments' => $request->comments]
         );
 
-        return back()->with('success', 'Result has been nationally certified.');
+        // Bust public results cache so the certified result appears immediately
+        Cache::forget("results_summary_v3_{$result->election_id}_active");
+        Cache::forget("results_summary_v3_{$result->election_id}_certifying");
+        Cache::forget("results_summary_v3_{$result->election_id}_results_pending");
+        Cache::forget("results_map_{$result->election_id}");
+        Cache::forget('chairman_dashboard_stats');
+
+        return back()->with('success', 'Result has been nationally certified and is now publicly visible.');
     })->name('certify')->middleware('permission:national-certification');
 
     // ── Reject / Return to Admin Area ─────────────────────────────────────────
@@ -296,7 +293,6 @@ Route::middleware(['auth', 'role:iec-chairman'])
             'rejection_count'      => $r->rejection_count,
         ]);
 
-        // Re-use the status counts we can compute cheaply
         $allCounts = Result::selectRaw('certification_status, COUNT(*) as cnt')
             ->groupBy('certification_status')
             ->pluck('cnt', 'certification_status');
@@ -396,42 +392,74 @@ Route::middleware(['auth', 'role:iec-chairman'])
         ]);
     })->name('analytics')->middleware('permission:access-full-analytics');
 
-    // ── Publish results ───────────────────────────────────────────────────────
+    // ── Publish page ──────────────────────────────────────────────────────────
     Route::get('/publish', function () {
-        $election = Election::where('status', 'active')->orWhere('status', 'certifying')->latest()->first();
+        $election = Election::where('status', 'active')
+            ->orWhere('status', 'certifying')
+            ->orWhere('status', 'results_pending')
+            ->latest()
+            ->first();
 
         $totalStations     = $election ? PollingStation::where('election_id', $election->id)->count() : 0;
         $certifiedStations = $election
             ? Result::where('election_id', $election->id)
-                ->where('certification_status', Result::STATUS_NATIONALLY_CERTIFIED)->count()
+                ->where('certification_status', Result::STATUS_NATIONALLY_CERTIFIED)
+                ->count()
             : 0;
 
-        $allCertified    = $totalStations > 0 && $certifiedStations === $totalStations;
+        // Count pending in national queue (election-agnostic)
         $pendingNational = Result::where('certification_status', Result::STATUS_PENDING_NATIONAL)->count();
 
+        $percentComplete = $totalStations > 0
+            ? round(($certifiedStations / $totalStations) * 100)
+            : 0;
+
         return Inertia::render('Chairman/Publish', [
-            'auth'           => ['user' => Auth::user()],
-            'readinessCheck' => [
-                'allCertified'     => $allCertified,
-                'partyAcceptances' => true,
-                'auditComplete'    => true,
-            ],
-            'summary' => [
+            'auth'              => ['user' => Auth::user()],
+            'hasActiveElection' => $election !== null,
+            'electionName'      => $election?->name,
+            'summary'           => [
                 'total'           => $totalStations,
                 'certified'       => $certifiedStations,
-                'percentComplete' => $totalStations > 0 ? round(($certifiedStations / $totalStations) * 100) : 0,
+                'percentComplete' => $percentComplete,
                 'pendingNational' => $pendingNational,
+                'allCertified'    => $totalStations > 0 && $certifiedStations === $totalStations,
                 'lastUpdated'     => now()->format('Y-m-d H:i'),
+            ],
+            'readinessCheck'   => [
+                'canPublish'        => $certifiedStations > 0,
+                'anyCertified'      => $certifiedStations > 0,
+                'partyAcceptances'  => true,
+                'auditComplete'     => true,
             ],
         ]);
     })->name('publish')->middleware('permission:publish-results');
 
+    // ── Finalize election (publish-results POST) ───────────────────────────────
+    // This just marks the election as officially closed.
+    // Results are already publicly visible as they are nationally certified —
+    // this action does NOT gate what is shown to the public.
     Route::post('/publish-results', function () {
-        $election = Election::where('status', 'active')->orWhere('status', 'certifying')->latest()->first();
+        $election = Election::where('status', 'active')
+            ->orWhere('status', 'certifying')
+            ->orWhere('status', 'results_pending')
+            ->latest()
+            ->first();
+
         if (!$election) {
             return back()->withErrors(['error' => 'No active election found.']);
         }
+
         $election->update(['status' => 'certified']);
+
+        // Bust all public caches so status change reflects immediately
+        Cache::forget("results_summary_v3_{$election->id}_active");
+        Cache::forget("results_summary_v3_{$election->id}_certifying");
+        Cache::forget("results_summary_v3_{$election->id}_results_pending");
+        Cache::forget("results_summary_v3_{$election->id}_certified");
+        Cache::forget("results_map_{$election->id}");
+        Cache::forget('public_results_data');
+
         AuditLog::record(
             action: 'election.results_published',
             event: 'updated',
@@ -439,6 +467,7 @@ Route::middleware(['auth', 'role:iec-chairman'])
             auditable: $election,
             extra: ['outcome' => 'success']
         );
-        return redirect('/results')->with('success', 'Results published successfully to the public!');
+
+        return redirect('/results')->with('success', 'Election has been officially closed. All certified results remain publicly visible.');
     })->name('publish-results')->middleware('permission:publish-results');
 });

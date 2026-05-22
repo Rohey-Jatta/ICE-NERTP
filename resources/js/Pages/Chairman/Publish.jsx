@@ -6,10 +6,10 @@ export default function Publish({ auth, readinessCheck = {}, summary = {} }) {
     const [publishConfirm, setPublishConfirm] = useState('');
     const { post, processing } = useForm();
 
-    const allReady = readinessCheck.allCertified && readinessCheck.partyAcceptances && readinessCheck.auditComplete;
+    const canPublish = readinessCheck.canPublish;
 
     const handlePublish = () => {
-        if (publishConfirm === 'PUBLISH FINAL RESULTS') {
+        if (publishConfirm === 'PUBLISH CERTIFIED RESULTS') {
             post('/chairman/publish-results');
         } else {
             alert('Please type the confirmation phrase exactly as shown.');
@@ -21,19 +21,21 @@ export default function Publish({ auth, readinessCheck = {}, summary = {} }) {
             <div className="container mx-auto px-4 py-8 max-w-3xl">
 
                 <div className="mb-6">
-                    <Link href="/chairman/dashboard"
-                          className="text-slate-500 hover:text-iec-navy text-sm inline-flex items-center gap-1 mb-3">
-                        Chairman Dashboard
-                    </Link>
-                    <h1 className="text-3xl font-bold text-iec-navy">Publish Election Results</h1>
-                    <p className="text-slate-500 mt-1 text-sm">
-                        Nationally certified station results are made public as they are certified. This action closes the election and archives the published set as the final result.
-                    </p>
+                    {/* <Link
+                        href="/chairman/dashboard"
+                        className="text-slate-500 hover:text-iec-navy text-sm inline-flex items-center gap-1 mb-3"
+                    >
+                        ← Chairman Dashboard
+                    </Link> */}
+                    <h1 className="text-3xl font-bold text-iec-navy">Publish Certified Results</h1>
+                    {/* <p className="text-slate-700 mt-1 text-sm">
+                        Publish station results that have been certified by the UEC chairman. Party representative acceptance is optional and does not need to complete before publication.
+                    </p> */}
                 </div>
 
                 {/* Warning */}
                 <div className="mb-6 p-5 bg-red-500/10 border border-red-500/40 rounded-xl">
-                    <h2 className="text-red-300 font-bold mb-1">⚠ Critical Action</h2>
+                    <h2 className="text-red-500 font-bold mb-1">⚠ Critical Action</h2>
                     <p className="text-red-400 text-sm">
                         Publishing will mark this election complete. Individual station results are already visible to the public
                         as soon as they are nationally certified, so this action is only needed to finalize the election record.
@@ -42,43 +44,33 @@ export default function Publish({ auth, readinessCheck = {}, summary = {} }) {
 
                 {/* Readiness checks */}
                 <div className="bg-white rounded-xl p-6 border border-slate-200 mb-6">
-                    <h2 className="text-iec-navy font-bold text-lg mb-4">Publication Readiness Checklist</h2>
+                    <h2 className="text-iec-navy font-bold text-lg mb-4">Publication Readiness</h2>
                     <div className="space-y-3">
-                        {[
-                            {
-                                ok:    readinessCheck.allCertified,
-                                label: 'All Stations Nationally Certified',
-                                sub:   `${summary.certified || 0} / ${summary.total || 0} stations certified`,
-                            },
-                            {
-                                ok:    readinessCheck.partyAcceptances,
-                                label: 'Party Acceptance Records Complete',
-                                sub:   'All party decisions logged in audit trail',
-                            },
-                            {
-                                ok:    readinessCheck.auditComplete,
-                                label: 'Certification Chain Verified',
-                                sub:   'All approval levels completed',
-                            },
-                        ].map((check, i) => (
-                            <div key={i} className={`flex items-center gap-4 p-4 rounded-xl border ${
-                                check.ok
-                                    ? 'bg-iec-pink-500/10 border-teal-500/30'
-                                    : 'bg-red-500/10 border-red-500/30'
+                        <div className={`flex items-center gap-4 p-4 rounded-xl border ${
+                            canPublish
+                                ? 'bg-iec-pink-500/10 border-teal-500/30'
+                                : 'bg-red-500/10 border-red-500/30'
+                        }`}>
+                            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-iec-navy font-bold text-sm flex-shrink-0 ${
+                                canPublish ? 'bg-iec-pink-600' : 'bg-red-600'
                             }`}>
-                                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-iec-navy font-bold text-sm flex-shrink-0 ${
-                                    check.ok ? 'bg-iec-pink-600' : 'bg-red-600'
-                                }`}>
-                                    {check.ok ? '✓' : '✗'}
+                                {canPublish ? '✓' : '✗'}
+                            </div>
+                            <div>
+                                <div className={`font-semibold ${canPublish ? 'text-iec-pink-600' : 'text-red-300'}`}>
+                                    At least one certified station is ready to publish
                                 </div>
-                                <div>
-                                    <div className={`font-semibold ${check.ok ? 'text-iec-pink-600' : 'text-red-300'}`}>
-                                        {check.label}
-                                    </div>
-                                    <div className="text-slate-500 text-xs">{check.sub}</div>
+                                <div className="text-slate-500 text-xs">
+                                    {summary.certified || 0} station{summary.certified === 1 ? '' : 's'} have been certified.
                                 </div>
                             </div>
-                        ))}
+                        </div>
+                        {/* <div className="rounded-xl border border-slate-200 bg-slate-50 p-4"> */}
+                            {/* <div className="font-semibold text-slate-800">Party acceptance is optional for publication</div> */}
+                            {/* <p className="text-slate-500 text-xs mt-1">
+                                This publish step can be taken whenever the chairman has certified station results, even if party representatives have not yet recorded their responses.
+                            </p> */}
+                        {/* </div> */}
                     </div>
                 </div>
 
@@ -87,10 +79,10 @@ export default function Publish({ auth, readinessCheck = {}, summary = {} }) {
                     <h2 className="text-iec-navy font-bold text-lg mb-4">Certification Summary</h2>
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
                         {[
-                            { label: 'Total Stations',   value: summary.total || 0,           color: 'text-iec-navy' },
-                            { label: 'Certified',        value: summary.certified || 0,        color: 'text-iec-pink-600' },
+                            { label: 'Total Stations',   value: summary.total || 0,               color: 'text-iec-navy' },
+                            { label: 'Certified',        value: summary.certified || 0,            color: 'text-iec-pink-600' },
                             { label: '% Complete',       value: `${summary.percentComplete || 0}%`, color: 'text-iec-pink-600' },
-                            { label: 'Still Pending',    value: summary.pendingNational || 0,  color: summary.pendingNational > 0 ? 'text-amber-300' : 'text-slate-500' },
+                            { label: 'Still Pending',    value: summary.pendingNational || 0,      color: summary.pendingNational > 0 ? 'text-amber-300' : 'text-slate-500' },
                         ].map((s) => (
                             <div key={s.label} className="bg-white rounded-lg p-3 text-center">
                                 <div className={`text-xl font-bold ${s.color}`}>{s.value}</div>
@@ -107,6 +99,16 @@ export default function Publish({ auth, readinessCheck = {}, summary = {} }) {
                     <p className="text-slate-500 text-xs mt-2 text-right">Last updated: {summary.lastUpdated}</p>
                 </div>
 
+                {/* View Live Results Link */}
+                <div className="bg-white rounded-xl p-4 border border-slate-200 mb-6">
+                    <Link
+                        href="/results"
+                        className="flex items-center justify-center text-sm font-semibold text-iec-pink-600 hover:text-iec-pink-700 transition-colors"
+                    >
+                        View Live Public Results Page
+                    </Link>
+                </div>
+
                 {/* Confirmation */}
                 <div className="bg-white rounded-xl p-6 border border-slate-200">
                     <h2 className="text-iec-navy font-bold text-lg mb-3">Confirmation Required</h2>
@@ -114,7 +116,7 @@ export default function Publish({ auth, readinessCheck = {}, summary = {} }) {
                         Type the following phrase exactly to enable the publish button:
                     </p>
                     <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-lg mb-4 text-center">
-                        <span className="text-red-300 font-mono font-bold">PUBLISH FINAL RESULTS</span>
+                        <span className="text-red-400 font-mono font-bold">PUBLISH CERTIFIED RESULTS</span>
                     </div>
                     <input
                         type="text"
@@ -125,14 +127,14 @@ export default function Publish({ auth, readinessCheck = {}, summary = {} }) {
                     />
                     <button
                         onClick={handlePublish}
-                        disabled={publishConfirm !== 'PUBLISH FINAL RESULTS' || processing || !allReady}
-                        className="w-full py-4 bg-gradient-to-r from-green-600 to-teal-600 hover:from-green-500 hover:to-teal-500 disabled:from-slate-300 disabled:to-slate-300 disabled:cursor-not-allowed text-white font-bold rounded-xl text-lg transition-all"
+                        disabled={publishConfirm !== 'PUBLISH CERTIFIED RESULTS' || processing || !canPublish}
+                        className="w-full py-4 bg-gradient-to-r from-green-600 to-teal-400 hover:from-green-500 hover:to-teal-300 disabled:from-slate-300 disabled:to-slate-300 disabled:cursor-not-allowed text-white font-bold rounded-xl text-lg transition-all"
                     >
-                        {processing ? 'Publishing…' : '📢 Publish Final Results to Public'}
+                        {processing ? 'Publishing…' : '📢 Publish Certified Results to Public'}
                     </button>
-                    {!allReady && (
+                    {!canPublish && (
                         <p className="text-red-400 text-xs text-center mt-2">
-                            All readiness checks must pass before publishing.
+                            You need at least one certified station before this election can be published.
                         </p>
                     )}
                 </div>
