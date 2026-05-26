@@ -1,66 +1,117 @@
 import AppLayout from '@/Layouts/AppLayout';
 import { Link } from '@inertiajs/react';
 
-export default function ConstituencyDashboard({ auth, constituency, pendingResults, statistics }) {
+export default function ConstituencyDashboard({ auth, constituency, statistics }) {
+    const progress = statistics?.progress || 0;
+
     return (
         <AppLayout user={auth.user}>
             <div className="container mx-auto px-4 py-8">
-                <h1 className="text-3xl font-bold text-white mb-6">Constituency Approver Dashboard</h1>
 
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-                    <div className="bg-slate-800/40 rounded-xl p-6 border border-slate-700/50">
-                        <div className="text-4xl mb-2"></div>
-                        <div className="text-2xl font-bold text-white">{constituency?.name || 'N/A'}</div>
-                        <div className="text-gray-400 text-sm">Your Constituency</div>
+                {/* Header */}
+                <div className="mb-8">
+                    <h1 className="text-3xl font-bold text-iec-navy">Constituency Approver Dashboard</h1>
+                    {constituency?.name && (
+                        <p className="text-iec-pink-600 mt-1 text-lg">{constituency.name}</p>
+                    )}
+                    <p className="text-slate-500 text-sm mt-1">
+                        Review and certify ward-certified results at constituency level
+                    </p>
+                </div>
+
+                {/* Alert if pending */}
+                {statistics?.pending > 0 && (
+                    <div className="mb-6 p-4 bg-amber-500/10 border border-amber-500/40 rounded-xl flex items-center gap-3">
+                        <div className="w-3 h-3 bg-amber-400 rounded-full animate-pulse flex-shrink-0" />
+                        <p className="text-amber-300">
+                            <strong>{statistics.pending} result{statistics.pending !== 1 ? 's' : ''}</strong> awaiting your constituency certification
+                        </p>
+                        <Link
+                            href="/constituency/approval-queue"
+                            className="ml-auto px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-bold rounded-lg"
+                        >
+                            Review Now →
+                        </Link>
                     </div>
+                )}
 
-                    <div className="bg-amber-900/40 rounded-xl p-6 border border-amber-700/50">
-                        <div className="text-4xl mb-2"></div>
-                        <div className="text-2xl font-bold text-amber-300">{pendingResults || 0}</div>
-                        <div className="text-gray-400 text-sm">Pending Approval</div>
+                {/* Stats */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+                    <div className="bg-white rounded-xl p-5 border border-slate-200">
+                        <div className="text-3xl font-bold text-amber-300">{statistics?.pending || 0}</div>
+                        <div className="text-slate-500 text-sm mt-1">Pending Certification</div>
                     </div>
-
-                    <div className="bg-teal-900/40 rounded-xl p-6 border border-teal-700/50">
-                        <div className="text-4xl mb-2">✓</div>
-                        <div className="text-2xl font-bold text-teal-300">{statistics?.approved || 0}</div>
-                        <div className="text-gray-400 text-sm">Approved</div>
+                    <div className="bg-white rounded-xl p-5 border border-slate-200">
+                        <div className="text-3xl font-bold text-iec-pink-600">{statistics?.certified || 0}</div>
+                        <div className="text-slate-500 text-sm mt-1">Constituency Certified</div>
                     </div>
-
-                    <div className="bg-slate-700/40 rounded-xl p-6 border border-slate-600/50">
-                        <div className="text-4xl mb-2"></div>
-                        <div className="text-2xl font-bold text-white">{statistics?.totalWards || 0}</div>
-                        <div className="text-gray-400 text-sm">Wards</div>
+                    <div className="bg-white rounded-xl p-5 border border-slate-200">
+                        <div className="text-3xl font-bold text-red-300">{statistics?.rejected || 0}</div>
+                        <div className="text-slate-500 text-sm mt-1">Returned to Ward</div>
+                    </div>
+                    <div className="bg-white rounded-xl p-5 border border-slate-200">
+                        <div className="text-3xl font-bold text-iec-navy">{statistics?.totalWards || 0}</div>
+                        <div className="text-slate-500 text-sm mt-1">Wards</div>
                     </div>
                 </div>
 
-                <div className="bg-slate-800/40 rounded-xl p-8 border border-slate-700/50">
-                    <h2 className="text-2xl font-bold text-white mb-6">Quick Actions</h2>
+                {/* Progress bar */}
+                {statistics?.certified > 0 && (
+                    <div className="bg-white rounded-xl p-6 border border-slate-200 mb-8">
+                        <div className="flex justify-between items-center mb-3">
+                            <span className="text-slate-600 font-semibold">Certification Progress</span>
+                            <span className="text-iec-navy font-bold">{progress}%</span>
+                        </div>
+                        <div className="w-full bg-white rounded-full h-4">
+                            <div
+                                className="bg-gradient-to-r from-teal-500 to-teal-400 h-4 rounded-full transition-all duration-700"
+                                style={{ width: `${progress}%` }}
+                            />
+                        </div>
+                    </div>
+                )}
+
+                {/* Quick Actions */}
+                <div className="bg-white rounded-xl p-6 border border-slate-200">
+                    <h2 className="text-xl font-bold text-iec-navy mb-5">Quick Actions</h2>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <Link
-                            href="/constituency/approval-queue"
-                            className="p-6 bg-teal-700 hover:bg-teal-600 rounded-lg transition-colors"
+                            href="/constituency/approval-queue?filter=pending"
+                            className="group p-5 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 rounded-xl transition-all block"
                         >
-                            <div className="text-3xl mb-2"></div>
-                            <div className="text-xl font-bold text-white">Approval Queue</div>
-                            <div className="text-teal-200 text-sm">Ward-certified results</div>
+                            <div className="flex items-center gap-3 mb-2">
+                                <div className="w-8 h-8 bg-amber-500/20 rounded-lg flex items-center justify-center text-amber-400">⏳</div>
+                                <div className="text-lg font-bold text-iec-navy">Approval Queue</div>
+                            </div>
+                            <div className="text-amber-300 text-sm">
+                                {statistics?.pending > 0
+                                    ? `${statistics.pending} ward-certified result${statistics.pending !== 1 ? 's' : ''} pending`
+                                    : 'No results pending'}
+                            </div>
                         </Link>
 
                         <Link
                             href="/constituency/ward-breakdowns"
-                            className="p-6 bg-slate-700 hover:bg-slate-600 rounded-lg transition-colors"
+                            className="group p-5 bg-iec-pink-500/10 hover:bg-iec-pink-500/20 border border-blue-500/30 rounded-xl transition-all block"
                         >
-                            <div className="text-3xl mb-2"></div>
-                            <div className="text-xl font-bold text-white">Ward Breakdowns</div>
-                            <div className="text-gray-300 text-sm">Detailed ward view</div>
+                            <div className="flex items-center gap-3 mb-2">
+                                <div className="w-8 h-8 bg-iec-pink-500/20 rounded-lg flex items-center justify-center text-iec-pink-600">📊</div>
+                                <div className="text-lg font-bold text-iec-navy">Ward Breakdowns</div>
+                            </div>
+                            <div className="text-iec-pink-600 text-sm">
+                                {statistics?.totalWards || 0} wards in your constituency
+                            </div>
                         </Link>
 
                         <Link
                             href="/constituency/reports"
-                            className="p-6 bg-slate-700 hover:bg-slate-600 rounded-lg transition-colors"
+                            className="group p-5 bg-iec-pink-50 hover:bg-iec-pink-50 border border-iec-pink-100 rounded-xl transition-all block"
                         >
-                            <div className="text-3xl mb-2"></div>
-                            <div className="text-xl font-bold text-white">Reports</div>
-                            <div className="text-gray-300 text-sm">Generate reports</div>
+                            <div className="flex items-center gap-3 mb-2">
+                                <div className="w-8 h-8 bg-iec-pink-50 rounded-lg flex items-center justify-center text-iec-pink-600">📄</div>
+                                <div className="text-lg font-bold text-iec-navy">Reports</div>
+                            </div>
+                            <div className="text-iec-pink-600 text-sm">Generate constituency reports</div>
                         </Link>
                     </div>
                 </div>

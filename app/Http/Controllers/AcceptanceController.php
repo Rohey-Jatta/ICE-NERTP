@@ -7,35 +7,54 @@ use App\Models\PartyAcceptance;
 use App\Models\Result;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 /**
  * AcceptanceController - Party representatives accept/reject results.
  *
- * From architecture: app/Http/Controllers/AcceptanceController.php
- *
- * Party reps can:
- * - View results from their assigned polling stations
- * - Accept, accept with reservation, or reject
- * - Add comments (required for reservation/rejection)
+ * In the parallel workflow, party reps review results simultaneously with
+ * ward approvers. Their responses are informational and do NOT block
+ * the ward certification pipeline.
  */
 class AcceptanceController extends Controller
 {
     /**
+     * Statuses where party reps can submit their acceptance.
+     * Covers the full parallel window through national certification.
+     */
+    const ACCEPTABLE_STATUSES = [
+        Result::STATUS_PENDING_WARD,
+        Result::STATUS_WARD_CERTIFIED,
+        Result::STATUS_PENDING_CONSTITUENCY,
+        Result::STATUS_CONSTITUENCY_CERTIFIED,
+        Result::STATUS_PENDING_ADMIN_AREA,
+        Result::STATUS_ADMIN_AREA_CERTIFIED,
+        Result::STATUS_PENDING_NATIONAL,
+        Result::STATUS_NATIONALLY_CERTIFIED,
+        // Legacy: keep for any results still in old state
+        Result::STATUS_PENDING_PARTY_ACCEPTANCE,
+    ];
+
+    /**
      * Submit acceptance decision.
-     * Route: POST /api/acceptance
-     * Middleware: auth:sanctum, role:party-representative
      */
     public function submit(Request $request): JsonResponse
     {
         $validated = $request->validate([
             'result_id' => ['required', 'exists:results,id'],
-            'status' => ['required', 'in:accepted,accepted_with_reservation,rejected'],
-            'comments' => ['required_if:status,accepted_with_reservation,rejected', 'nullable', 'string', 'max:1000'],
+            'status'    => ['required', 'in:accepted,accepted_with_reservation,rejected'],
+            'comments'  => ['required_if:status,accepted_with_reservation,rejected', 'nullable', 'string', 'max:1000'],
         ]);
 
         $result = Result::findOrFail($validated['result_id']);
 
-        // Get party rep record
+        // Parallel workflow: party reps can respond during any active stage
+        if (!in_array($result->certification_status, self::ACCEPTABLE_STATUSES)) {
+            return response()->json([
+                'message' => 'This result is not available for party review at this stage.',
+            ], 403);
+        }
+
         $partyRep = $request->user()->partyRepresentatives()
             ->where('election_id', $result->election_id)
             ->first();
@@ -46,7 +65,6 @@ class AcceptanceController extends Controller
             ], 403);
         }
 
-        // Verify party rep is assigned to this station
         $isAssigned = $partyRep->pollingStations()
             ->where('polling_station_id', $result->polling_station_id)
             ->exists();
@@ -57,58 +75,63 @@ class AcceptanceController extends Controller
             ], 403);
         }
 
-        // Check if already submitted
-        $existing = PartyAcceptance::where('result_id', $result->id)
-            ->where('political_party_id', $partyRep->political_party_id)
-            ->first();
+        try {
+            $acceptance = DB::transaction(function () use ($result, $partyRep, $validated) {
+                $existing = PartyAcceptance::where('result_id', $result->id)
+                    ->where('political_party_id', $partyRep->political_party_id)
+                    ->lockForUpdate()
+                    ->first();
 
-        if ($existing && $existing->is_final) {
-            return response()->json([
-                'message' => 'Your party has already submitted a final decision for this result.',
-            ], 422);
+                if ($existing && $existing->is_final) {
+                    throw new \RuntimeException('FINAL_DECISION_EXISTS');
+                }
+
+                return PartyAcceptance::updateOrCreate(
+                    [
+                        'result_id'          => $result->id,
+                        'political_party_id' => $partyRep->political_party_id,
+                    ],
+                    [
+                        'party_representative_id' => $partyRep->id,
+                        'election_id'             => $result->election_id,
+                        'status'                  => $validated['status'],
+                        'comments'                => $validated['comments'],
+                        'decided_at'              => now(),
+                        'is_final'                => true,
+                    ]
+                );
+            });
+        } catch (\RuntimeException $e) {
+            if ($e->getMessage() === 'FINAL_DECISION_EXISTS') {
+                return response()->json([
+                    'message' => 'Your party has already submitted a final decision for this result.',
+                ], 422);
+            }
+            throw $e;
         }
 
-        // Create or update acceptance
-        $acceptance = PartyAcceptance::updateOrCreate(
-            [
-                'result_id' => $result->id,
-                'political_party_id' => $partyRep->political_party_id,
-            ],
-            [
-                'party_representative_id' => $partyRep->id,
-                'election_id' => $result->election_id,
-                'status' => $validated['status'],
-                'comments' => $validated['comments'],
-                'decided_at' => now(),
-                'is_final' => true,
-            ]
-        );
-
-        // Audit log
         AuditLog::record(
-            action: 'party_acceptance.submitted',
-            event: 'created',
-            module: 'PartyAcceptance',
+            action:    'party_acceptance.submitted',
+            event:     'created',
+            module:    'PartyAcceptance',
             auditable: $acceptance,
-            extra: [
+            extra:     [
                 'election_id' => $result->election_id,
-                'result_id' => $result->id,
-                'status' => $validated['status'],
-                'outcome' => 'success',
+                'result_id'   => $result->id,
+                'status'      => $validated['status'],
+                'outcome'     => 'success',
             ]
         );
-
-        // Check if all parties have responded
-        $this->checkIfAllPartiesResponded($result);
 
         return response()->json([
-            'message' => 'Acceptance recorded successfully.',
+            'message'    => 'Party response recorded successfully.',
             'acceptance' => $acceptance,
         ], 201);
     }
 
     /**
      * Get pending acceptances for party rep.
+     * Shows results in parallel workflow stages where the party hasn't responded yet.
      */
     public function pending(Request $request): JsonResponse
     {
@@ -118,27 +141,11 @@ class AcceptanceController extends Controller
             return response()->json(['results' => []]);
         }
 
-        // Get results from assigned stations that are pending acceptance
         $results = Result::with(['pollingStation', 'candidateVotes.candidate', 'partyAcceptances'])
             ->whereIn('polling_station_id', $partyRep->pollingStations()->pluck('polling_station_id'))
-            ->where('certification_status', Result::STATUS_PENDING_PARTY_ACCEPTANCE)
+            ->whereIn('certification_status', self::ACCEPTABLE_STATUSES)
             ->get();
 
-        return response()->json([
-            'results' => $results,
-        ]);
-    }
-
-    private function checkIfAllPartiesResponded(Result $result): void
-    {
-        $totalParties = $result->election->politicalParties()->count();
-        $acceptedParties = $result->partyAcceptances()->where('is_final', true)->count();
-
-        if ($acceptedParties >= $totalParties) {
-            // All parties responded - transition to pending ward
-            $result->update([
-                'certification_status' => Result::STATUS_PENDING_WARD,
-            ]);
-        }
+        return response()->json(['results' => $results]);
     }
 }

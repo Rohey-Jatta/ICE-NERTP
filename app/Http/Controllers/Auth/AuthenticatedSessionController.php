@@ -4,14 +4,18 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Services\TwoFactorAuthService;
+use App\Models\AuditLog;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 
 class AuthenticatedSessionController extends Controller
 {
-    protected $twoFactorService;
+    protected TwoFactorAuthService $twoFactorService;
 
     public function __construct(TwoFactorAuthService $twoFactorService)
     {
@@ -20,67 +24,94 @@ class AuthenticatedSessionController extends Controller
 
     public function create()
     {
-        if (Auth::check()) {
-            return $this->redirectByRole(Auth::user());
-        }
         return Inertia::render('Auth/Login');
     }
 
-    protected function redirectByRole($user)
-    {
-        $role = $user->roles->first();
-        if (!$role) return redirect('/dashboard');
-
-        return match($role->name) {
-            'polling-officer' => redirect()->route('officer.dashboard'),
-            'ward-approver' => redirect()->route('ward.dashboard'),
-            'constituency-approver' => redirect()->route('constituency.dashboard'),
-            'admin-area-approver' => redirect()->route('admin-area.dashboard'),
-            'iec-chairman' => redirect()->route('chairman.dashboard'),
-            'iec-administrator' => redirect()->route('admin.dashboard'),
-            'party-representative' => redirect()->route('party.dashboard'),
-            'election-monitor' => redirect()->route('monitor.dashboard'),
-            default => redirect('/dashboard'),
-        };
-    }
-
+    /**
+     * Handle login. Session is written BEFORE any SMS attempt.
+     * SMS failure is caught — it NEVER blocks the redirect to 2FA page.
+     */
     public function store(Request $request)
     {
-        $credentials = $request->validate([
-            'email' => 'required|email',
-            'password' => 'required',
+        $request->validate([
+            'email'    => 'required|email',
+            'password' => 'required|string',
         ]);
 
-        if (Auth::validate($credentials)) {
-            $user = \App\Models\User::where('email', $credentials['email'])->first();
+        $user = User::where('email', $request->email)->first();
 
-            // Skip 2FA in local development
-            if (app()->environment('local')) {
-                Auth::login($user);
-                $request->session()->regenerate();
-                return $this->redirectByRole($user);
-            }
-
-            // Generate and send 2FA code
-            $code = $this->twoFactorService->generateCode($user);
-            $this->twoFactorService->sendCode($user, $code);
-
-            Log::info('2FA Code for ' . $user->email . ': ' . $code);
-
-            // Store user ID in session
-            $request->session()->put('2fa_user_id', $user->id);
-
-            // FORCE redirect to 2FA
-            return to_route('two-factor.show');
+        if (!$user || !Hash::check($request->password, $user->password)) {
+            AuditLog::record(
+                action: 'auth.login.failed',
+                event: 'failure',
+                module: 'Authentication',
+                extra: [
+                    'outcome' => 'failure',
+                    'failure_reason' => 'Invalid credentials',
+                    'new_values' => ['email' => $request->email],
+                ]
+            );
+            throw ValidationException::withMessages([
+                'email' => ['These credentials do not match our records.'],
+            ]);
         }
 
-        return back()->withErrors([
-            'email' => 'Invalid credentials.',
-        ])->withInput($request->only('email'));
+        if ($user->status !== 'active') {
+            AuditLog::record(
+                action: 'auth.login.blocked',
+                event: 'blocked',
+                module: 'Authentication',
+                auditable: $user,
+                extra: [
+                    'outcome' => 'blocked',
+                    'failure_reason' => "Account status: {$user->status}",
+                ]
+            );
+            throw ValidationException::withMessages([
+                'email' => ['Your account has been deactivated. Contact IEC Administrator.'],
+            ]);
+        }
+
+        // ── Step 1: Generate the code and store EVERYTHING in session FIRST ──
+        // This ensures the user can verify even if SMS never arrives.
+        $code      = $this->twoFactorService->generateCode($user);
+        $expiresAt = now()->addMinutes(10);
+
+        $request->session()->put('2fa_user_id',   $user->id);
+        $request->session()->put('2fa_sms_sent',   true);
+        $request->session()->put('2fa_expires_at', $expiresAt->timestamp);
+
+        // ── Step 2: Force session to be written to storage NOW ───────────────
+        // Without this, if the SMS call crashes the process, the session data
+        // is lost and the user ends up back on the home page.
+        $request->session()->save();
+
+        // ── Step 3: Attempt SMS in a fire-and-forget style ───────────────────
+        // The code is already in cache from generateCode(). SMS is best-effort.
+        try {
+            // Temporarily increase time limit just for this operation
+            if (function_exists('set_time_limit')) {
+                set_time_limit(15);
+            }
+            $this->twoFactorService->sendCode($user, $code);
+        } catch (\Throwable $e) {
+            // Log failure but NEVER block — user can resend on the 2FA page
+            Log::error('[Auth] 2FA SMS failed during login: ' . $e->getMessage());
+            Log::info("[Auth] Fallback 2FA code for {$user->email}: {$code}");
+        }
+
+        // ── Step 4: Always redirect to 2FA page ─────────────────────────────
+        return to_route('two-factor.show');
     }
 
     public function destroy(Request $request)
     {
+        AuditLog::record(
+            action: 'auth.logout',
+            event: 'action',
+            module: 'Authentication',
+            extra: ['outcome' => 'success']
+        );
         Auth::logout();
         $request->session()->invalidate();
         $request->session()->regenerateToken();

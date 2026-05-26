@@ -28,16 +28,14 @@ class User extends Authenticatable
         'two_factor_secret',
     ];
 
-    protected function casts(): array
-    {
-        return [
-            'email_verified_at' => 'datetime',
-            'password' => 'hashed',
-            'two_factor_enabled' => 'boolean',
-        ];
-    }
+    protected $casts = [
+        'email_verified_at' => 'datetime',
+        'password' => 'hashed',
+        'two_factor_enabled' => 'boolean',
+    ];
 
     // Relationships
+
     public function devices()
     {
         return $this->hasMany(Device::class);
@@ -46,5 +44,61 @@ class User extends Authenticatable
     public function auditLogs()
     {
         return $this->hasMany(AuditLog::class);
+    }
+
+    public function partyRepresentative()
+    {
+        return $this->hasOne(\App\Models\PartyRepresentative::class);
+    }
+
+    public function electionMonitor()
+    {
+        return $this->hasOne(ElectionMonitor::class);
+    }
+
+    /**
+     * The polling station this user is assigned to as an officer.
+     */
+    public function assignedStation()
+    {
+        return $this->hasOne(PollingStation::class, 'assigned_officer_id');
+    }
+
+    public function toArray(): array
+    {
+        $array = parent::toArray();
+
+        if (auth()->check() && auth()->id() === $this->id) {
+            $role = $this->getRoleNames()->first();
+
+            $array['roles'] = $role ? [['name' => $role]] : [];
+            $array['permission_names'] = $this->getPermissionNamesAttribute();
+            $array['dashboard_url'] = $this->getDashboardUrlAttribute();
+        }
+
+        return $array;
+    }
+
+    public function getPermissionNamesAttribute(): array
+    {
+        return $this->getAllPermissions()
+            ->pluck('name')
+            ->values()
+            ->all();
+    }
+
+    public function getDashboardUrlAttribute(): string
+    {
+        return match ($this->getRoleNames()->first()) {
+            'polling-officer'       => '/officer/dashboard',
+            'ward-approver'         => '/ward/dashboard',
+            'constituency-approver' => '/constituency/dashboard',
+            'admin-area-approver'   => '/admin-area/dashboard',
+            'iec-chairman'          => '/chairman/dashboard',
+            'iec-administrator'     => '/admin/dashboard',
+            'party-representative'  => '/party/dashboard',
+            'election-monitor'      => '/monitor/dashboard',
+            default                 => '/',
+        };
     }
 }

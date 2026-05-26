@@ -1,60 +1,182 @@
 import AppLayout from '@/Layouts/AppLayout';
-import { Link } from '@inertiajs/react';
+import { router, useForm } from '@inertiajs/react';
+import { Button, Badge, DataTable, Field, PageHeader, Pagination, Toolbar, inputClass, roleLabel } from '@/Components/AdminUI';
+import { useState } from 'react';
+import { can } from '@/Utils/permissions';
 
-export default function Users({ auth, users = [] }) {
+const ROLE_OPTIONS = [
+    'iec-administrator',
+    'iec-chairman',
+    'admin-area-approver',
+    'constituency-approver',
+    'ward-approver',
+    'polling-officer',
+    'party-representative',
+    'election-monitor',
+];
+
+const statusTone = (status) => {
+    if (status === 'active') return 'teal';
+    if (status === 'suspended') return 'rose';
+    if (status === 'inactive') return 'amber';
+    return 'slate';
+};
+
+export default function Users({ auth, users = {}, filters = {} }) {
+    const [deletingId, setDeletingId] = useState(null);
+    const currentUser = auth?.user;
+    const userData = users.data ?? [];
+
+    const { data, setData, get, processing } = useForm({
+        search: filters.search || '',
+        role: filters.role || '',
+        status: filters.status || '',
+    });
+
+    // ── Navigation handlers ──────────────────────────────────────────────
+    const handleEdit = (id) => {
+        router.visit(`/admin/users/${id}/edit`);
+    };
+
+    const handleDelete = (user) => {
+        if (!window.confirm(`Delete user "${user.name}"? This cannot be undone.`)) return;
+        setDeletingId(user.id);
+        router.delete(`/admin/users/${user.id}`, {
+            preserveScroll: true,
+            onError: () => alert('Failed to delete user. Please try again.'),
+            onFinish: () => setDeletingId(null),
+        });
+    };
+
+    const applyFilters = (event) => {
+        event.preventDefault();
+        get('/admin/users', { preserveState: true, replace: true });
+    };
+
+    const clearFilters = () => {
+        router.get('/admin/users', {}, { preserveState: false, replace: true });
+    };
+
+    const columns = [
+        {
+            key: 'name',
+            header: 'User',
+            render: (user) => (
+                <div>
+                    <div className="ws-row-strong">{user.name}</div>
+                    <div className="ws-row-muted mt-0.5">ID {user.id}</div>
+                </div>
+            ),
+        },
+        {
+            key: 'role',
+            header: 'Role',
+            render: (user) => <Badge tone="blue">{roleLabel(user.roles?.[0]?.name)}</Badge>,
+        },
+        {
+            key: 'email',
+            header: 'Email',
+            render: (user) => user.email,
+        },
+        {
+            key: 'phone',
+            header: 'Phone',
+            render: (user) => <span className="ws-row-mono">{user.phone || '—'}</span>,
+        },
+        {
+            key: 'status',
+            header: 'Status',
+            render: (user) => <Badge tone={statusTone(user.status)}>{roleLabel(user.status)}</Badge>,
+        },
+        {
+            key: 'actions',
+            header: 'Actions',
+            align: 'right',
+            render: (user) => (
+                <div className="flex justify-end gap-2">
+                    <Button
+                        onClick={() => handleEdit(user.id)}
+                        variant="secondary"
+                    >
+                        Edit
+                    </Button>
+                    <Button
+                        onClick={() => handleDelete(user)}
+                        disabled={deletingId === user.id}
+                        variant="danger"
+                    >
+                        {deletingId === user.id ? 'Deleting...' : 'Delete'}
+                    </Button>
+                </div>
+            ),
+        },
+    ];
+
     return (
         <AppLayout user={auth?.user}>
-            <div className="container mx-auto px-4 py-8">
-                <div className="flex justify-between items-center mb-6">
-                    <h1 className="text-3xl font-bold text-white">User Management</h1>
-                    <button className="px-6 py-3 bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-lg">
-                        + Add New User
-                    </button>
-                </div>
+            <div className="ws-container">
+                <PageHeader
+                    title="User Management"
+                    description={`${users.total ?? userData.length} users across all roles`}
+                    actions={<Button href="/admin/users/create">Add New User</Button>}
+                />
 
-                <div className="bg-slate-800/40 rounded-xl p-6 border border-slate-700/50">
-                    {users.length > 0 ? (
-                        <div className="overflow-x-auto">
-                            <table className="w-full">
-                                <thead>
-                                    <tr className="border-b border-slate-700">
-                                        <th className="text-left text-gray-400 py-3">Name</th>
-                                        <th className="text-left text-gray-400 py-3">Email</th>
-                                        <th className="text-left text-gray-400 py-3">Role</th>
-                                        <th className="text-center text-gray-400 py-3">Status</th>
-                                        <th className="text-center text-gray-400 py-3">Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {users.map((user) => (
-                                        <tr key={user.id} className="border-b border-slate-700/50">
-                                            <td className="py-4 text-white">{user.name}</td>
-                                            <td className="py-4 text-white">{user.email}</td>
-                                            <td className="py-4 text-white">{user.role}</td>
-                                            <td className="py-4 text-center">
-                                                <span className="px-3 py-1 bg-teal-500/20 text-teal-300 rounded-full text-sm">
-                                                    Active
-                                                </span>
-                                            </td>
-                                            <td className="py-4 text-center">
-                                                <button className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm">
-                                                    Edit
-                                                </button>
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
+                <form onSubmit={applyFilters}>
+                    <Toolbar>
+                        <Field label="Search">
+                            <input
+                                type="search"
+                                id="user-search"
+                                name="search"
+                                value={data.search}
+                                onChange={(event) => setData('search', event.target.value)}
+                                placeholder="Name, email, or phone"
+                                className={inputClass}
+                            />
+                        </Field>
+                        <Field label="Role">
+                            <select
+                                id="user-role-filter"
+                                name="role"
+                                value={data.role}
+                                onChange={(event) => setData('role', event.target.value)}
+                                className={inputClass}
+                            >
+                                <option value="">All roles</option>
+                                {ROLE_OPTIONS.map((role) => (
+                                    <option key={role} value={role}>{roleLabel(role)}</option>
+                                ))}
+                            </select>
+                        </Field>
+                        <Field label="Status">
+                            <select
+                                id="user-status-filter"
+                                name="status"
+                                value={data.status}
+                                onChange={(event) => setData('status', event.target.value)}
+                                className={inputClass}
+                            >
+                                <option value="">All statuses</option>
+                                <option value="active">Active</option>
+                                <option value="inactive">Inactive</option>
+                                <option value="suspended">Suspended</option>
+                            </select>
+                        </Field>
+                        <div className="flex items-end gap-2">
+                            <Button type="submit" disabled={processing} className="flex-1">
+                                {processing ? 'Applying...' : 'Apply'}
+                            </Button>
+                            <Button variant="secondary" onClick={clearFilters}>Clear</Button>
                         </div>
-                    ) : (
-                        <div className="text-center py-12">
-                            <p className="text-gray-400 mb-4">No users found</p>
-                            <button className="px-6 py-3 bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-lg">
-                                Add First User
-                            </button>
-                        </div>
-                    )}
-                </div>
+                    </Toolbar>
+                </form>
+
+                <DataTable
+                    columns={columns}
+                    rows={userData}
+                    empty="No users match the current filters."
+                />
+                <Pagination links={users.links} />
             </div>
         </AppLayout>
     );

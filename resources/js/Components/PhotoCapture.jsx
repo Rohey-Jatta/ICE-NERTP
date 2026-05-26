@@ -138,17 +138,17 @@ export default function PhotoCapture({ onPhotoCapture, required = true }) {
             {!preview ? (
                 <div className="border-2 border-dashed border-gray-300 rounded-lg p-6">
                     <div className="text-center">
-                        <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg className="mx-auto h-12 w-12 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
                         </svg>
-                        <p className="mt-2 text-sm text-gray-600">
+                        <p className="mt-2 text-sm text-slate-600">
                             Take a photo of the signed result sheet
                         </p>
                         <button
                             type="button"
                             onClick={handleCapture}
-                            className="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-blue-900 text-white rounded-md hover:bg-blue-800 transition-colors"
+                            className="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-iec-pink-600 text-white rounded-md hover:bg-iec-pink-700 transition-colors"
                         >
                             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
@@ -176,7 +176,7 @@ export default function PhotoCapture({ onPhotoCapture, required = true }) {
                         <button
                             type="button"
                             onClick={handleCapture}
-                            className="p-2 bg-blue-900 text-white rounded-md hover:bg-blue-800"
+                            className="p-2 bg-iec-pink-600 text-white rounded-md hover:bg-iec-pink-700"
                             title="Retake photo"
                         >
                             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -197,8 +197,8 @@ export default function PhotoCapture({ onPhotoCapture, required = true }) {
                 </div>
             )}
             
-            <p className="text-xs text-gray-500">
-                í³¸ Photo will be compressed automatically â€¢ Image quality: High â€¢ Max size: 10MB
+            <p className="text-xs text-slate-500">
+                ï¿½ï¿½ï¿½ Photo will be compressed automatically â€¢ Image quality: High â€¢ Max size: 10MB
             </p>
         </div>
     );

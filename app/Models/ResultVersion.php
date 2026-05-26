@@ -1,5 +1,4 @@
 <?php
-// filepath: c:\Users\DELL\Desktop\Cayor\ice-nertp\app\Models\ResultVersion.php
 
 namespace App\Models;
 
@@ -11,21 +10,35 @@ class ResultVersion extends Model
 {
     use HasFactory;
 
+    /**
+     * result_versions has only created_at (no updated_at — append-only snapshots).
+     */
+    const UPDATED_AT = null;
+
     protected $fillable = [
         'result_id',
-        'version',
-        'data',            // whatever fields you need
-        'created_by',
-        'created_at',
+        'version_number',
+        'result_snapshot',
+        'votes_snapshot',
+        'changed_by',
+        'change_reason',
+        'change_notes',
+        'certification_status_at_version',
     ];
 
-    /**
-     * back‑reference to the parent Result
-     */
+    protected $casts = [
+        'result_snapshot' => 'array',
+        'votes_snapshot'  => 'array',
+        'created_at'      => 'datetime',
+    ];
+
     public function result(): BelongsTo
     {
         return $this->belongsTo(Result::class);
     }
 
-    // …add any other helpers/relations you need for your versioning…
+    public function changedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'changed_by');
+    }
 }

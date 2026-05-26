@@ -1,16 +1,24 @@
 import { useState, useEffect } from 'react';
-import { useForm } from '@inertiajs/react';
+import { useForm, router } from '@inertiajs/react';
 
-export default function TwoFactor() {
+export default function TwoFactor({ expiresAt, status }) {
     const { data, setData, post, processing, errors } = useForm({
         code: '',
     });
 
-    const [countdown, setCountdown] = useState(300); // 5 minutes
+    const initialCountdown = expiresAt ? Math.max(0, expiresAt - Math.floor(Date.now() / 1000)) : 600;
+    const [countdown, setCountdown] = useState(initialCountdown);
+    const [isResending, setIsResending] = useState(false);
+    const [resendMessage, setResendMessage] = useState(status || '');
 
     useEffect(() => {
         const timer = setInterval(() => {
-            setCountdown((prev) => (prev > 0 ? prev - 1 : 0));
+            setCountdown((prev) => {
+                if (prev <= 0) {
+                    return 0;
+                }
+                return prev - 1;
+            });
         }, 1000);
         return () => clearInterval(timer);
     }, []);
@@ -19,6 +27,23 @@ export default function TwoFactor() {
         e.preventDefault();
         post('/auth/two-factor');
     };
+
+    const handleResend = (e) => {
+        e.preventDefault();
+
+        if (isResending) return;
+
+        setIsResending(true);
+        router.post('/auth/two-factor/resend', {}, {
+            onSuccess: () => {
+                setCountdown(600);
+            },
+            onFinish: () => {
+                setIsResending(false);
+            },
+        });
+    };
+
 
     const minutes = Math.floor(countdown / 60);
     const seconds = countdown % 60;
@@ -69,10 +94,14 @@ export default function TwoFactor() {
                                 {minutes}:{seconds.toString().padStart(2, '0')}
                             </div>
                         </div>
+
+                        {resendMessage}
+
+                       
                     </div>
 
                     {errors.code && (
-                        <div className="mb-4 p-3 bg-red-100 border border-red-300 text-red-800 rounded-lg text-sm">
+                        <div className="mb-4 p-3 bg-red-100 border border-red-300 text-red-400 rounded-lg text-sm">
                             {errors.code}
                         </div>
                     )}
@@ -104,10 +133,23 @@ export default function TwoFactor() {
                         </button>
                     </form>
 
-                    <div className="mt-6 text-center">
-                        <a href="/auth/login" className="text-sm text-blue-600 hover:text-blue-800">
-                            ← Back to login
-                        </a>
+                    <div className="mt-6 text-center space-y-3">
+                        <button
+                            type="button"
+                            onClick={handleResend}
+                            disabled={isResending}
+                            className="w-full py-2 bg-white text-blue-700 border border-blue-200 rounded-lg font-semibold hover:bg-blue-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                        >
+                            {isResending ? 'Resending...' : 'Resend code'}
+                        </button>
+
+                        <button
+                            type="button"
+                            onClick={() => router.visit('/auth/login', { preserveState: false, preserveScroll: false })}
+                            className="w-full py-2 text-sm text-blue-600 hover:text-blue-800 underline"
+                        >
+                            Back to login
+                        </button>
                     </div>
 
                 </div>

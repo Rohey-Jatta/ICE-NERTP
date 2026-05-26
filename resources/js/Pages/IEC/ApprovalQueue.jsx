@@ -85,7 +85,7 @@ export default function ApprovalQueue({ level, queue, filters }) {
                     <h1 className="text-2xl font-bold text-blue-800">
                         {levelNames[level]} Approval Queue
                     </h1>
-                    <p className="text-sm text-gray-600 mt-1">
+                    <p className="text-sm text-slate-600 mt-1">
                         Review and certify results pending approval at the {levelNames[level].toLowerCase()} level
                     </p>
                 </div>
@@ -107,22 +107,22 @@ export default function ApprovalQueue({ level, queue, filters }) {
                 <div className="bg-white rounded-lg shadow-sm overflow-hidden">
                     {queue.data.length === 0 ? (
                         <div className="p-12 text-center">
-                            <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <svg className="mx-auto h-12 w-12 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                             </svg>
-                            <p className="mt-4 text-gray-600">No results pending approval</p>
-                            <p className="text-sm text-gray-500 mt-1">All results in your queue have been processed</p>
+                            <p className="mt-4 text-slate-600">No results pending approval</p>
+                            <p className="text-sm text-slate-500 mt-1">All results in your queue have been processed</p>
                         </div>
                     ) : (
                         <table className="min-w-full divide-y divide-gray-200">
                             <thead className="bg-gray-50">
                                 <tr>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Station</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Submitted</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Votes Cast</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Turnout</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Party Status</th>
-                                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Station</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Submitted</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Votes Cast</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Turnout</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Party Status</th>
+                                    <th className="px-6 py-3 text-right text-xs font-medium text-slate-500 uppercase">Actions</th>
                                 </tr>
                             </thead>
                             <tbody className="bg-white divide-y divide-gray-200">
@@ -140,11 +140,11 @@ export default function ApprovalQueue({ level, queue, filters }) {
                                                 <div className="text-sm font-medium text-gray-900">
                                                     {result.polling_station.name}
                                                 </div>
-                                                <div className="text-sm text-gray-500">
+                                                <div className="text-sm text-slate-500">
                                                     {result.polling_station.code}
                                                 </div>
                                             </td>
-                                            <td className="px-6 py-4 text-sm text-gray-500">
+                                            <td className="px-6 py-4 text-sm text-slate-500">
                                                 {new Date(result.submitted_at).toLocaleString()}
                                             </td>
                                             <td className="px-6 py-4 text-sm text-gray-900">
@@ -187,7 +187,7 @@ export default function ApprovalQueue({ level, queue, filters }) {
                 {/* Pagination */}
                 {queue.last_page > 1 && (
                     <div className="mt-4 flex justify-between items-center">
-                        <p className="text-sm text-gray-600">
+                        <p className="text-sm text-slate-600">
                             Showing {queue.from} to {queue.to} of {queue.total} results
                         </p>
                         <div className="flex gap-2">
@@ -198,7 +198,7 @@ export default function ApprovalQueue({ level, queue, filters }) {
                                     disabled={!link.url}
                                     className={`px-3 py-1 rounded ${
                                         link.active
-                                            ? 'bg-blue-900 text-white'
+                                            ? 'bg-iec-pink-600 text-white'
                                             : 'bg-white text-gray-700 hover:bg-gray-100'
                                     } disabled:opacity-50`}
                                     dangerouslySetInnerHTML={{ __html: link.label }}
@@ -218,10 +218,10 @@ export default function ApprovalQueue({ level, queue, filters }) {
                         </h2>
 
                         <div className="mb-4 p-4 bg-gray-50 rounded-md">
-                            <p className="text-sm text-gray-600">
+                            <p className="text-sm text-slate-600">
                                 <strong>Station:</strong> {selectedResult.polling_station.name}
                             </p>
-                            <p className="text-sm text-gray-600 mt-1">
+                            <p className="text-sm text-slate-600 mt-1">
                                 <strong>Votes Cast:</strong> {selectedResult.total_votes_cast.toLocaleString()}
                             </p>
                         </div>
@@ -244,7 +244,7 @@ export default function ApprovalQueue({ level, queue, filters }) {
                             <button
                                 onClick={submitAction}
                                 disabled={processing || (action === 'reject' && !comments.trim())}
-                                className={`flex-1 py-2 px-4 rounded-md font-medium text-white ${
+                                className={`flex-1 py-2 px-4 rounded-md font-medium text-iec-navy ${
                                     action === 'approve'
                                         ? 'bg-green-600 hover:bg-green-700'
                                         : 'bg-red-600 hover:bg-red-700'

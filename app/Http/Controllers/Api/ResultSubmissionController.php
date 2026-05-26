@@ -54,10 +54,10 @@ class ResultSubmissionController extends Controller
             'candidate_votes' => ['required', 'array', 'min:1'],
             'candidate_votes.*.candidate_id' => ['required', 'exists:candidates,id'],
             'candidate_votes.*.votes' => ['required', 'integer', 'min:0'],
-            'result_sheet_photo' => ['required', 'image', 'max:10240'], // 10MB max
-            'submitted_latitude' => ['required', 'numeric'],
-            'submitted_longitude' => ['required', 'numeric'],
-            'gps_accuracy_meters' => ['nullable', 'numeric'],
+            'result_sheet_photo' => ['required', 'image', 'mimes:jpeg,png,jpg,webp', 'max:10240'], // 10MB max
+            'submitted_latitude' => ['required', 'numeric', 'between:-90,90'],
+            'submitted_longitude' => ['required', 'numeric', 'between:-180,180'],
+            'gps_accuracy_meters' => ['nullable', 'numeric', 'min:0'],
         ]);
 
         // Check for duplicate submission (idempotency)
@@ -129,13 +129,14 @@ class ResultSubmissionController extends Controller
                 'submitted_longitude' => $validated['submitted_longitude'],
                 'gps_accuracy_meters' => $validated['gps_accuracy_meters'],
                 'gps_validated' => true, // Set by GPS middleware
-                'certification_status' => Result::STATUS_SUBMITTED,
                 'submitted_by' => $request->user()->id,
                 'submitted_at' => now(),
                 'submitted_offline' => $request->boolean('was_offline', false),
                 'offline_queued_at' => $request->input('queued_at'),
                 'version' => 1,
             ]);
+
+            $result->forceFill(['certification_status' => Result::STATUS_SUBMITTED])->save();
 
             // Create candidate votes
             foreach ($validated['candidate_votes'] as $cv) {
@@ -205,13 +206,14 @@ class ResultSubmissionController extends Controller
      */
     public function mySubmissions(Request $request): JsonResponse
     {
+        $perPage = (int) $request->integer('per_page', 20);
+        $perPage = max(1, min($perPage, 100));
+
         $results = Result::with(['pollingStation', 'candidateVotes.candidate'])
             ->where('submitted_by', $request->user()->id)
             ->orderByDesc('submitted_at')
-            ->get();
+            ->paginate($perPage);
 
-        return response()->json([
-            'results' => $results,
-        ]);
+        return response()->json($results);
     }
 }

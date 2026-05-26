@@ -1,122 +1,142 @@
 import AppLayout from '@/Layouts/AppLayout';
+import { Link, useForm } from '@inertiajs/react';
 import { useState } from 'react';
-import { useForm } from '@inertiajs/react';
 
 export default function Publish({ auth, readinessCheck = {}, summary = {} }) {
     const [publishConfirm, setPublishConfirm] = useState('');
     const { post, processing } = useForm();
 
+    const canPublish = readinessCheck.canPublish;
+
     const handlePublish = () => {
-        if (publishConfirm === 'PUBLISH FINAL RESULTS') {
+        if (publishConfirm === 'PUBLISH CERTIFIED RESULTS') {
             post('/chairman/publish-results');
         } else {
-            alert('Please type the confirmation phrase exactly');
+            alert('Please type the confirmation phrase exactly as shown.');
         }
     };
 
     return (
         <AppLayout user={auth?.user}>
-            <div className="container mx-auto px-4 py-8 max-w-4xl">
-                <h1 className="text-3xl font-bold text-white mb-6">Publish Final Results</h1>
+            <div className="container mx-auto px-4 py-8 max-w-3xl">
 
-                <div className="bg-red-500/20 border border-red-500/50 rounded-xl p-6 mb-6">
-                    <p className="text-red-300">
-                        ⚠️ <strong>CRITICAL ACTION:</strong> Publishing will make results visible to the public. This action is IRREVERSIBLE.
+                <div className="mb-6">
+                    {/* <Link
+                        href="/chairman/dashboard"
+                        className="text-slate-500 hover:text-iec-navy text-sm inline-flex items-center gap-1 mb-3"
+                    >
+                        ← Chairman Dashboard
+                    </Link> */}
+                    <h1 className="text-3xl font-bold text-iec-navy">Publish Certified Results</h1>
+                    {/* <p className="text-slate-700 mt-1 text-sm">
+                        Publish station results that have been certified by the UEC chairman. Party representative acceptance is optional and does not need to complete before publication.
+                    </p> */}
+                </div>
+
+                {/* Warning */}
+                <div className="mb-6 p-5 bg-red-500/10 border border-red-500/40 rounded-xl">
+                    <h2 className="text-red-500 font-bold mb-1">⚠ Critical Action</h2>
+                    <p className="text-red-400 text-sm">
+                        Publishing will mark this election complete. Individual station results are already visible to the public
+                        as soon as they are nationally certified, so this action is only needed to finalize the election record.
                     </p>
                 </div>
 
-                {/* Publication Readiness Check */}
-                <div className="bg-slate-800/40 rounded-xl p-6 border border-slate-700/50 mb-6">
-                    <h2 className="text-xl font-bold text-white mb-4">Publication Readiness</h2>
-
-                    <div className="space-y-4">
-                        <div className="flex items-center gap-3">
-                            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white font-bold ${
-                                readinessCheck.allCertified ? 'bg-green-500' : 'bg-red-500'
+                {/* Readiness checks */}
+                <div className="bg-white rounded-xl p-6 border border-slate-200 mb-6">
+                    <h2 className="text-iec-navy font-bold text-lg mb-4">Publication Readiness</h2>
+                    <div className="space-y-3">
+                        <div className={`flex items-center gap-4 p-4 rounded-xl border ${
+                            canPublish
+                                ? 'bg-iec-pink-500/10 border-teal-500/30'
+                                : 'bg-red-500/10 border-red-500/30'
+                        }`}>
+                            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-iec-navy font-bold text-sm flex-shrink-0 ${
+                                canPublish ? 'bg-iec-pink-600' : 'bg-red-600'
                             }`}>
-                                {readinessCheck.allCertified ? '✓' : '✗'}
+                                {canPublish ? '✓' : '✗'}
                             </div>
                             <div>
-                                <div className="text-white font-semibold">All Stations Nationally Certified</div>
-                                <div className="text-gray-400 text-sm">
-                                    {summary.certified || 0} / {summary.total || 0} stations
+                                <div className={`font-semibold ${canPublish ? 'text-iec-pink-600' : 'text-red-300'}`}>
+                                    At least one certified station is ready to publish
+                                </div>
+                                <div className="text-slate-500 text-xs">
+                                    {summary.certified || 0} station{summary.certified === 1 ? '' : 's'} have been certified.
                                 </div>
                             </div>
                         </div>
-
-                        <div className="flex items-center gap-3">
-                            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white font-bold ${
-                                readinessCheck.partyAcceptances ? 'bg-green-500' : 'bg-red-500'
-                            }`}>
-                                {readinessCheck.partyAcceptances ? '✓' : '✗'}
-                            </div>
-                            <div>
-                                <div className="text-white font-semibold">All Party Acceptances Recorded</div>
-                                <div className="text-gray-400 text-sm">No outstanding party disputes</div>
-                            </div>
-                        </div>
-
-                        <div className="flex items-center gap-3">
-                            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white font-bold ${
-                                readinessCheck.auditComplete ? 'bg-green-500' : 'bg-red-500'
-                            }`}>
-                                {readinessCheck.auditComplete ? '✓' : '✗'}
-                            </div>
-                            <div>
-                                <div className="text-white font-semibold">All Audit Logs Complete</div>
-                                <div className="text-gray-400 text-sm">Full certification chain verified</div>
-                            </div>
-                        </div>
+                        {/* <div className="rounded-xl border border-slate-200 bg-slate-50 p-4"> */}
+                            {/* <div className="font-semibold text-slate-800">Party acceptance is optional for publication</div> */}
+                            {/* <p className="text-slate-500 text-xs mt-1">
+                                This publish step can be taken whenever the chairman has certified station results, even if party representatives have not yet recorded their responses.
+                            </p> */}
+                        {/* </div> */}
                     </div>
                 </div>
 
-                {/* Certification Summary */}
-                {Object.keys(summary).length > 0 && (
-                    <div className="bg-slate-800/40 rounded-xl p-6 border border-slate-700/50 mb-6">
-                        <h2 className="text-xl font-bold text-white mb-4">Final Certification Summary</h2>
-
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="bg-slate-900/50 p-4 rounded-lg">
-                                <div className="text-gray-400 text-sm">Completion</div>
-                                <div className="text-white font-bold text-3xl">{summary.percentComplete || 0}%</div>
+                {/* Summary */}
+                <div className="bg-white rounded-xl p-6 border border-slate-200 mb-6">
+                    <h2 className="text-iec-navy font-bold text-lg mb-4">Certification Summary</h2>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+                        {[
+                            { label: 'Total Stations',   value: summary.total || 0,               color: 'text-iec-navy' },
+                            { label: 'Certified',        value: summary.certified || 0,            color: 'text-iec-pink-600' },
+                            { label: '% Complete',       value: `${summary.percentComplete || 0}%`, color: 'text-iec-pink-600' },
+                            { label: 'Still Pending',    value: summary.pendingNational || 0,      color: summary.pendingNational > 0 ? 'text-amber-300' : 'text-slate-500' },
+                        ].map((s) => (
+                            <div key={s.label} className="bg-white rounded-lg p-3 text-center">
+                                <div className={`text-xl font-bold ${s.color}`}>{s.value}</div>
+                                <div className="text-slate-500 text-xs">{s.label}</div>
                             </div>
-                            <div className="bg-slate-900/50 p-4 rounded-lg">
-                                <div className="text-gray-400 text-sm">Last Updated</div>
-                                <div className="text-white font-semibold">{summary.lastUpdated || 'N/A'}</div>
-                            </div>
-                        </div>
+                        ))}
                     </div>
-                )}
+                    <div className="w-full bg-white rounded-full h-3">
+                        <div
+                            className="bg-gradient-to-r from-teal-600 to-green-500 h-3 rounded-full transition-all"
+                            style={{ width: `${summary.percentComplete || 0}%` }}
+                        />
+                    </div>
+                    <p className="text-slate-500 text-xs mt-2 text-right">Last updated: {summary.lastUpdated}</p>
+                </div>
 
-                {/* Confirmation Section */}
-                <div className="bg-slate-800/40 rounded-xl p-6 border border-slate-700/50 mb-6">
-                    <h2 className="text-xl font-bold text-white mb-4">Confirmation Required</h2>
+                {/* View Live Results Link */}
+                <div className="bg-white rounded-xl p-4 border border-slate-200 mb-6">
+                    <Link
+                        href="/results"
+                        className="flex items-center justify-center text-sm font-semibold text-iec-pink-600 hover:text-iec-pink-700 transition-colors"
+                    >
+                        View Live Public Results Page
+                    </Link>
+                </div>
 
-                    <p className="text-gray-300 mb-4">
-                        To publish the final results, type the following phrase exactly:
+                {/* Confirmation */}
+                <div className="bg-white rounded-xl p-6 border border-slate-200">
+                    <h2 className="text-iec-navy font-bold text-lg mb-3">Confirmation Required</h2>
+                    <p className="text-slate-500 text-sm mb-4">
+                        Type the following phrase exactly to enable the publish button:
                     </p>
-
-                    <div className="bg-amber-500/20 border border-amber-500/50 rounded-lg p-4 mb-4">
-                        <p className="text-amber-300 font-mono font-bold text-center">
-                            PUBLISH FINAL RESULTS
-                        </p>
+                    <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-lg mb-4 text-center">
+                        <span className="text-red-400 font-mono font-bold">PUBLISH CERTIFIED RESULTS</span>
                     </div>
-
                     <input
                         type="text"
                         value={publishConfirm}
                         onChange={(e) => setPublishConfirm(e.target.value)}
                         placeholder="Type confirmation phrase here..."
-                        className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white mb-4"
+                        className="w-full px-4 py-3 bg-white border border-slate-200 rounded-lg text-iec-navy mb-4 focus:outline-none focus:border-red-500"
                     />
-
                     <button
                         onClick={handlePublish}
-                        disabled={publishConfirm !== 'PUBLISH FINAL RESULTS' || processing}
-                        className="w-full px-8 py-4 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 disabled:from-gray-600 disabled:to-gray-700 text-white font-bold rounded-lg shadow-lg text-lg disabled:cursor-not-allowed"
+                        disabled={publishConfirm !== 'PUBLISH CERTIFIED RESULTS' || processing || !canPublish}
+                        className="w-full py-4 bg-gradient-to-r from-green-600 to-teal-400 hover:from-green-500 hover:to-teal-300 disabled:from-slate-300 disabled:to-slate-300 disabled:cursor-not-allowed text-white font-bold rounded-xl text-lg transition-all"
                     >
-                        {processing ? 'Publishing...' : '🚀 PUBLISH FINAL RESULTS TO PUBLIC'}
+                        {processing ? 'Publishing…' : '📢 Publish Certified Results to Public'}
                     </button>
+                    {!canPublish && (
+                        <p className="text-red-400 text-xs text-center mt-2">
+                            You need at least one certified station before this election can be published.
+                        </p>
+                    )}
                 </div>
             </div>
         </AppLayout>

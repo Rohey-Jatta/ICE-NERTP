@@ -3,7 +3,7 @@
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use Illuminate\Support\Facades\Route;
 
-// Login routes - MUST be accessible to guests
+// Login routes — accessible to guests only
 Route::get('/auth/login', [AuthenticatedSessionController::class, 'create'])
     ->middleware('guest')
     ->name('login');

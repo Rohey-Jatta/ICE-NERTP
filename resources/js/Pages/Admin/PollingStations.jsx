@@ -1,51 +1,130 @@
 import AppLayout from '@/Layouts/AppLayout';
+import { router } from '@inertiajs/react';
+import { Button, DataTable, Field, PageHeader, Panel, Toolbar, inputClass } from '@/Components/AdminUI';
+import { useMemo, useState } from 'react';
+
+const PAGE_SIZE = 25;
 
 export default function PollingStations({ auth, stations = [] }) {
+    const [deletingId, setDeletingId] = useState(null);
+    const [search, setSearch] = useState('');
+    const [ward, setWard] = useState('');
+    const [page, setPage] = useState(1);
+
+    const wards = useMemo(() => (
+        [...new Set(stations.map((station) => station.ward).filter(Boolean))].sort()
+    ), [stations]);
+
+    const filteredStations = useMemo(() => {
+        const needle = search.trim().toLowerCase();
+        return stations.filter((station) => {
+            const matchesSearch = !needle || [station.code, station.name, station.ward]
+                .join(' ')
+                .toLowerCase()
+                .includes(needle);
+            const matchesWard = !ward || station.ward === ward;
+            return matchesSearch && matchesWard;
+        });
+    }, [stations, search, ward]);
+
+    const pageCount = Math.max(1, Math.ceil(filteredStations.length / PAGE_SIZE));
+    const safePage = Math.min(page, pageCount);
+    const visibleStations = filteredStations.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+    const totalVoters = filteredStations.reduce((sum, station) => sum + Number(station.voters || 0), 0);
+
+    const resetFilters = () => {
+        setSearch('');
+        setWard('');
+        setPage(1);
+    };
+
+    const handleDelete = (station) => {
+        if (!window.confirm(`Delete polling station "${station.name}" (${station.code})? This action cannot be undone.`)) return;
+        setDeletingId(station.id);
+        router.delete(`/admin/polling-stations/${station.id}`, {
+            preserveScroll: true,
+            onError: (errors) => alert(errors?.error || 'Failed to delete polling station.'),
+            onFinish: () => setDeletingId(null),
+        });
+    };
+
+    const columns = [
+        {
+            key: 'station',
+            header: 'Station',
+            render: (station) => (
+                <div>
+                    <div className="ws-row-strong">{station.name}</div>
+                    <div className="ws-row-mono mt-0.5">{station.code}</div>
+                </div>
+            ),
+        },
+        { key: 'ward', header: 'Ward', render: (station) => station.ward || '—' },
+        {
+            key: 'voters',
+            header: 'Registered Voters',
+            align: 'right',
+            render: (station) => Number(station.voters || 0).toLocaleString(),
+        },
+        {
+            key: 'actions',
+            header: 'Actions',
+            align: 'right',
+            render: (station) => (
+                <div className="flex justify-end gap-2">
+                    <Button href={`/admin/polling-stations/${station.id}/edit`} variant="secondary">Edit</Button>
+                    <Button variant="danger" disabled={deletingId === station.id} onClick={() => handleDelete(station)}>
+                        {deletingId === station.id ? 'Deleting...' : 'Delete'}
+                    </Button>
+                </div>
+            ),
+        },
+    ];
+
     return (
         <AppLayout user={auth?.user}>
-            <div className="container mx-auto px-4 py-8">
-                <div className="flex justify-between items-center mb-6">
-                    <h1 className="text-3xl font-bold text-white">Polling Station Management</h1>
-                    <button className="px-6 py-3 bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-lg">
-                        + Register Station
-                    </button>
-                </div>
+            <div className="ws-container">
+                <PageHeader
+                    title="Polling Station Management"
+                    description={`${filteredStations.length.toLocaleString()} stations, ${totalVoters.toLocaleString()} registered voters in current view`}
+                    actions={<Button href="/admin/polling-stations/create">Register Station</Button>}
+                />
 
-                <div className="bg-slate-800/40 rounded-xl p-6 border border-slate-700/50">
-                    {stations.length > 0 ? (
-                        <div className="overflow-x-auto">
-                            <table className="w-full">
-                                <thead>
-                                    <tr className="border-b border-slate-700">
-                                        <th className="text-left text-gray-400 py-3">Code</th>
-                                        <th className="text-left text-gray-400 py-3">Name</th>
-                                        <th className="text-left text-gray-400 py-3">Ward</th>
-                                        <th className="text-right text-gray-400 py-3">Registered Voters</th>
-                                        <th className="text-center text-gray-400 py-3">Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {stations.map((station) => (
-                                        <tr key={station.id} className="border-b border-slate-700/50">
-                                            <td className="py-4 text-white font-mono">{station.code}</td>
-                                            <td className="py-4 text-white">{station.name}</td>
-                                            <td className="py-4 text-white">{station.ward}</td>
-                                            <td className="py-4 text-right text-white">{station.voters}</td>
-                                            <td className="py-4 text-center">
-                                                <button className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm">
-                                                    Edit
-                                                </button>
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
+                <Toolbar>
+                    <Field label="Search">
+                        <input
+                            type="search"
+                            value={search}
+                            onChange={(event) => { setSearch(event.target.value); setPage(1); }}
+                            placeholder="Code, station, or ward"
+                            className={inputClass}
+                        />
+                    </Field>
+                    <Field label="Ward">
+                        <select value={ward} onChange={(event) => { setWard(event.target.value); setPage(1); }} className={inputClass}>
+                            <option value="">All wards</option>
+                            {wards.map((wardName) => <option key={wardName} value={wardName}>{wardName}</option>)}
+                        </select>
+                    </Field>
+                    <div className="flex flex-col justify-end">
+                        <span className="ws-label">Current page</span>
+                        <div className="text-sm font-medium text-slate-700">
+                            {visibleStations.length} of {filteredStations.length.toLocaleString()} stations
                         </div>
-                    ) : (
-                        <div className="text-center py-12">
-                            <p className="text-gray-400">Polling stations will be loaded from database</p>
-                        </div>
-                    )}
+                    </div>
+                    <div className="ws-toolbar-actions">
+                        <Button variant="secondary" onClick={resetFilters} className="w-full">Reset Filters</Button>
+                    </div>
+                </Toolbar>
+
+                <DataTable columns={columns} rows={visibleStations} empty="No polling stations match the current filters." />
+
+                <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
+                    <p className="text-sm text-slate-500">Page {safePage} of {pageCount}</p>
+                    <div className="flex gap-2">
+                        <Button variant="secondary" disabled={safePage <= 1} onClick={() => setPage((value) => Math.max(1, value - 1))}>Previous</Button>
+                        <Button variant="secondary" disabled={safePage >= pageCount} onClick={() => setPage((value) => Math.min(pageCount, value + 1))}>Next</Button>
+                    </div>
                 </div>
             </div>
         </AppLayout>

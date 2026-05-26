@@ -24,15 +24,28 @@ class Result extends Model
     const STATUS_NATIONALLY_CERTIFIED     = 'nationally_certified';
     const STATUS_REJECTED                 = 'rejected';
 
+    // Statuses where party reps can review results (parallel workflow)
+    const PARTY_ACCEPTABLE_STATUSES = [
+        self::STATUS_PENDING_WARD,
+        self::STATUS_WARD_CERTIFIED,
+        self::STATUS_PENDING_CONSTITUENCY,
+        self::STATUS_CONSTITUENCY_CERTIFIED,
+        self::STATUS_PENDING_ADMIN_AREA,
+        self::STATUS_ADMIN_AREA_CERTIFIED,
+        self::STATUS_PENDING_NATIONAL,
+        self::STATUS_NATIONALLY_CERTIFIED,
+        self::STATUS_PENDING_PARTY_ACCEPTANCE, // legacy
+    ];
+
     protected $fillable = [
-        'polling_station_id', 'election_id', 'submission_uuid',
+        'polling_station_id', 'election_id', 'submission_uuid', 'user_id',
         'total_registered_voters', 'total_votes_cast', 'valid_votes',
         'rejected_votes', 'disputed_votes', 'result_sheet_photo_path',
         'result_sheet_photo_hash', 'submitted_latitude', 'submitted_longitude',
-        'gps_accuracy_meters', 'gps_validated', 'certification_status',
-        'rejection_count', 'last_rejection_reason', 'last_rejected_by',
-        'last_rejected_at', 'submitted_offline', 'offline_queued_at',
-        'submitted_by', 'submitted_at', 'version', 'nationally_certified_at',
+        'gps_accuracy_meters', 'gps_validated',
+        'submitted_offline', 'offline_queued_at',
+        'submitted_by', 'submitted_at', 'version',
+        'certification_status', 'rejection_count', 'last_rejection_reason', 'last_rejected_by', 'last_rejected_at',
     ];
 
     protected $casts = [

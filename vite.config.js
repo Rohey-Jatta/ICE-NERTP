@@ -16,4 +16,56 @@ export default defineConfig({
             '@': resolve(__dirname, 'resources/js'),
         },
     },
+    build: {
+        chunkSizeWarningLimit: 2000,
+        rollupOptions: {
+            output: {
+                manualChunks(id) {
+                    // Vendor splitting — keeps app code separate from stable library code
+                    // so browsers cache libraries independently of app changes
+                    if (id.includes('node_modules/react-dom') || id.includes('node_modules/react/')) {
+                        return 'react-vendor';
+                    }
+                    if (id.includes('node_modules/@inertiajs')) {
+                        return 'inertia-vendor';
+                    }
+                    if (id.includes('node_modules/leaflet') || id.includes('node_modules/react-leaflet')) {
+                        return 'map-vendor';
+                    }
+                    if (
+                        id.includes('node_modules/chart.js') ||
+                        id.includes('node_modules/react-chartjs-2') ||
+                        id.includes('node_modules/recharts') ||
+                        id.includes('node_modules/d3')
+                    ) {
+                        return 'chart-vendor';
+                    }
+                    if (id.includes('node_modules/')) {
+                        return 'vendor';
+                    }
+                },
+            },
+        },
+    },
+    server: {
+        host: '::',         // bind to IPv4 + IPv6 so [::1] resolves
+        port: 5173,
+        strictPort: true,
+        cors: {
+            origin: [
+                'http://ice-nertp.test',
+                'https://ice-nertp.test',
+                'http://localhost',
+                'http://127.0.0.1',
+            ],
+            credentials: true,
+        },
+        hmr: {
+            overlay: false,
+            host: 'localhost',
+        },
+    },
+    optimizeDeps: {
+        include: ['react', 'react-dom', '@inertiajs/react', 'axios'],
+    },
 });
