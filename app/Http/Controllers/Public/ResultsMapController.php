@@ -12,12 +12,13 @@ use Inertia\Inertia;
 
 class ResultsMapController extends Controller
 {
-    // ── Public page ──────────────────────────────────────────────────────────
+    // ── Full map page ─────────────────────────────────────────────────────────
 
     public function index(Request $request)
     {
         $selectedId = (int) $request->get('election', 0);
 
+        // Dropdown only shows elections the admin has marked for public display
         $availableElections = Election::where('allow_provisional_public_display', true)
             ->whereIn('status', ['active', 'certifying', 'results_pending', 'certified'])
             ->orderByDesc('start_date')
@@ -42,7 +43,7 @@ class ResultsMapController extends Controller
         }
 
         $cacheKey = "results_map_{$election->id}";
-        $stations = Cache::remember($cacheKey, 300, fn() => $this->computeStationsData($election));
+        $stations = Cache::remember($cacheKey, 30, fn() => $this->computeStationsData($election));
 
         return Inertia::render('Public/ResultsMap', [
             'stations'           => $stations,
@@ -58,7 +59,11 @@ class ResultsMapController extends Controller
         ]);
     }
 
-    // ── JSON endpoint for homepage embedded map ───────────────────────────────
+    // ── JSON endpoint for the embedded map on the Results homepage ────────────
+    // This is called by Results.jsx via fetch('/api/public/map-stations?election=X')
+    // It MUST resolve the election the same way the summary page does — without
+    // requiring allow_provisional_public_display — so the map always matches
+    // the summary data shown on that page.
 
     public function stationsJson(Request $request): JsonResponse
     {
@@ -70,7 +75,7 @@ class ResultsMapController extends Controller
         }
 
         $cacheKey = "results_map_{$election->id}";
-        $stations = Cache::remember($cacheKey, 300, fn() => $this->computeStationsData($election));
+        $stations = Cache::remember($cacheKey, 30, fn() => $this->computeStationsData($election));
 
         return response()->json(['stations' => $stations]);
     }
@@ -78,36 +83,51 @@ class ResultsMapController extends Controller
     // ── Private helpers ───────────────────────────────────────────────────────
 
     /**
-     * Resolve which publicly displayable election to show.
-     * Prefers $selectedId if valid, otherwise falls back to latest active/certified.
+     * Resolve which election to display on public pages.
+     *
+     * NOTE: We do NOT filter by allow_provisional_public_display here because:
+     *  - The summary page (ResultsSummaryController) never requires that flag
+     *  - The embedded map is rendered inside the summary page using the same election
+     *  - If the summary shows data, the map must also show data for the same election
+     *
+     * allow_provisional_public_display is used only for the dropdown selectors.
      */
     private function resolvePublicElection(int $selectedId): ?Election
     {
         if ($selectedId) {
-            $election = Election::where('allow_provisional_public_display', true)
-                ->whereIn('status', ['active', 'certifying', 'results_pending', 'certified'])
+            $election = Election::whereIn('status', ['active', 'certifying', 'results_pending', 'certified'])
                 ->where('id', $selectedId)
                 ->first();
             if ($election) return $election;
         }
 
-        return Election::where('allow_provisional_public_display', true)
-            ->where('status', 'active')
-            ->latest()
+        // Prefer live/in-progress, fall back to latest certified
+        return Election::whereIn('status', ['active', 'certifying', 'results_pending'])
+            ->latest('start_date')
             ->first()
-            ?? Election::whereIn('status', ['certifying', 'results_pending', 'certified'])
-                ->where('allow_provisional_public_display', true)
-                ->latest()
+            ?? Election::where('status', 'certified')
+                ->latest('start_date')
                 ->first();
     }
 
     /**
      * Build the stations array for the Leaflet map.
-     * Used by both the full map page (index) and the JSON API (stationsJson).
-     * Results are cached under "results_map_{election_id}".
+     * Includes all stations with their current pipeline status and candidate votes.
      */
     private function computeStationsData(Election $election): array
     {
+        $latestResults = <<<SQL
+SELECT DISTINCT ON (polling_station_id)
+    *
+FROM results
+WHERE election_id = {$election->id}
+ORDER BY polling_station_id,
+    CASE WHEN certification_status = 'nationally_certified' THEN 0 ELSE 1 END,
+    nationally_certified_at DESC NULLS LAST,
+    submitted_at DESC,
+    id DESC
+SQL;
+
         $stationsRaw = DB::table('polling_stations as ps')
             ->selectRaw("
                 ps.id, ps.code, ps.name, ps.registered_voters,
@@ -122,11 +142,15 @@ class ResultsMapController extends Controller
             ->leftJoin('administrative_hierarchy as w',   'w.id',   '=', 'ps.ward_id')
             ->leftJoin('administrative_hierarchy as cst', 'cst.id', '=', 'w.parent_id')
             ->leftJoin('administrative_hierarchy as aa',  'aa.id',  '=', 'cst.parent_id')
-            ->leftJoin('results as r', function ($join) use ($election) {
-                $join->on('r.polling_station_id', '=', 'ps.id')
-                     ->where('r.election_id', $election->id);
+            ->leftJoin(DB::raw("({$latestResults}) as r"), 'r.polling_station_id', '=', 'ps.id')
+            ->where(function ($query) use ($election) {
+                $query->where('ps.election_id', $election->id)
+                      ->orWhereIn('ps.id', function ($query) use ($election) {
+                          $query->select('polling_station_id')
+                                ->from('results')
+                                ->where('election_id', $election->id);
+                      });
             })
-            ->where('ps.election_id', $election->id)
             ->whereNotNull('ps.latitude')
             ->whereNotNull('ps.longitude')
             ->get();

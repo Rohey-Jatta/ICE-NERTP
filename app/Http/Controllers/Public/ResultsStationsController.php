@@ -13,9 +13,9 @@ class ResultsStationsController extends Controller
 {
     public function index(Request $request)
     {
-        // ── Resolve election (honours ?election=ID param) ─────────────────────
         $selectedId = (int) $request->get('election', 0);
 
+        // Dropdown only shows elections the admin has marked for public display
         $availableElections = Election::where('allow_provisional_public_display', true)
             ->whereIn('status', ['active', 'certifying', 'results_pending', 'certified'])
             ->orderByDesc('start_date')
@@ -28,14 +28,30 @@ class ResultsStationsController extends Controller
                 'start_date' => $e->start_date?->toDateString(),
             ]);
 
+        // Resolve election: direct URL access works without the flag;
+        // only the dropdown selector requires it.
         $election = null;
         if ($selectedId && $availableElections->contains('id', $selectedId)) {
             $election = Election::find($selectedId);
         }
+        if (!$selectedId && $election === null) {
+            // No explicit selection — find best active/certified election
+        }
         if (!$election) {
+            // Try with the flag first (matches dropdown)
             $election = Election::where('allow_provisional_public_display', true)
                 ->whereIn('status', ['active', 'certifying', 'results_pending', 'certified'])
-                ->latest()->first();
+                ->latest('start_date')
+                ->first();
+        }
+        if (!$election) {
+            // Fallback: any active/certified election so page is never blank
+            $election = Election::whereIn('status', ['active', 'certifying', 'results_pending'])
+                ->latest('start_date')
+                ->first()
+                ?? Election::where('status', 'certified')
+                    ->latest('start_date')
+                    ->first();
         }
 
         if (!$election) {
@@ -52,11 +68,10 @@ class ResultsStationsController extends Controller
         $isPublished = $election->status === 'certified';
         $cacheKey    = "results_stations_{$election->id}_" . ($isPublished ? 'pub' : 'prov');
 
-        $data = Cache::remember($cacheKey, 300, fn() => $this->computeStations($election, $isPublished));
+        $data = Cache::remember($cacheKey, 30, fn() => $this->computeStations($election, $isPublished));
 
-        // Filter options are cached separately (less volatile than station results)
-        $filterOptions = Cache::remember("stations_filters_{$election->id}", 600, fn() => [
-            'wards'         => DB::table('administrative_hierarchy')
+        $filterOptions = Cache::remember("stations_filters_{$election->id}", 300, fn() => [
+            'wards'          => DB::table('administrative_hierarchy')
                 ->where('election_id', $election->id)
                 ->where('level', 'ward')
                 ->select('id', 'name')
@@ -68,7 +83,7 @@ class ResultsStationsController extends Controller
                 ->select('id', 'name')
                 ->orderBy('name')
                 ->get(),
-            'adminAreas'    => DB::table('administrative_hierarchy')
+            'adminAreas'     => DB::table('administrative_hierarchy')
                 ->where('election_id', $election->id)
                 ->where('level', 'admin_area')
                 ->select('id', 'name')
@@ -86,14 +101,24 @@ class ResultsStationsController extends Controller
 
     private function computeStations(Election $election, bool $isPublished): array
     {
-        // ── Extended query: includes ward / constituency / admin_area for client-side filtering
+        $latestResults = <<<SQL
+SELECT DISTINCT ON (polling_station_id)
+    *
+FROM results
+WHERE election_id = {$election->id}
+ORDER BY polling_station_id,
+    CASE WHEN certification_status = 'nationally_certified' THEN 0 ELSE 1 END,
+    nationally_certified_at DESC NULLS LAST,
+    submitted_at DESC,
+    id DESC
+SQL;
+
         $stations = DB::select("
             SELECT
                 ps.id,
                 ps.code,
                 ps.name,
                 ps.registered_voters,
-                -- Hierarchy (used for client-side filtering)
                 w.id   AS ward_id,
                 w.name AS ward_name,
                 c.id   AS constituency_id,
@@ -110,10 +135,10 @@ class ResultsStationsController extends Controller
             LEFT JOIN administrative_hierarchy w  ON ps.ward_id   = w.id
             LEFT JOIN administrative_hierarchy c  ON w.parent_id  = c.id
             LEFT JOIN administrative_hierarchy aa ON c.parent_id  = aa.id
-            LEFT JOIN results r
+            LEFT JOIN ({$latestResults}) AS r
                 ON  r.polling_station_id = ps.id
-                AND r.election_id        = ?
             WHERE ps.election_id = ?
+               OR ps.id IN (SELECT polling_station_id FROM results WHERE election_id = ?)
             ORDER BY COALESCE(aa.name,''), COALESCE(c.name,''), COALESCE(w.name,''), ps.code
         ", [$election->id, $election->id]);
 
@@ -151,6 +176,7 @@ class ResultsStationsController extends Controller
                 ];
             }
 
+            // Only show party acceptance details for officially published elections
             if ($isPublished) {
                 $paRows = DB::select("
                     SELECT
@@ -187,24 +213,22 @@ class ResultsStationsController extends Controller
                 'name'              => $station->name,
                 'registered_voters' => $station->registered_voters,
                 'status'            => $station->status,
-                // Hierarchy IDs for client-side filtering
                 'ward_id'           => $station->ward_id,
                 'ward_name'         => $station->ward_name,
                 'constituency_id'   => $station->constituency_id,
                 'constituency_name' => $station->constituency_name,
                 'admin_area_id'     => $station->admin_area_id,
                 'admin_area_name'   => $station->admin_area_name,
-                // Result data
                 'total_votes_cast'  => $station->total_votes_cast,
                 'valid_votes'       => $station->valid_votes,
                 'rejected_votes'    => $station->rejected_votes,
                 'candidate_votes'   => $resultId ? ($candidateVotesByResult[$resultId] ?? []) : [],
                 'party_acceptances' => ($isPublished && $resultId)
-                                        ? ($partyAcceptancesByResult[$resultId] ?? [])
-                                        : [],
-                'photo_url'         => ($isPublished && $station->result_sheet_photo_path)
-                                        ? asset('storage/' . $station->result_sheet_photo_path)
-                                        : null,
+                    ? ($partyAcceptancesByResult[$resultId] ?? [])
+                    : [],
+                'photo_url' => ($isPublished && $station->result_sheet_photo_path)
+                    ? asset('storage/' . $station->result_sheet_photo_path)
+                    : null,
             ];
         })->toArray();
 

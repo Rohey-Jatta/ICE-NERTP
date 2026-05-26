@@ -4,13 +4,23 @@ import { useState } from 'react';
 
 export default function Publish({ auth, readinessCheck = {}, summary = {} }) {
     const [publishConfirm, setPublishConfirm] = useState('');
+    const [closeConfirm, setCloseConfirm] = useState('');
     const { post, processing } = useForm();
 
     const canPublish = readinessCheck.canPublish;
+    const canClose = readinessCheck.canPublish;
 
     const handlePublish = () => {
         if (publishConfirm === 'PUBLISH CERTIFIED RESULTS') {
             post('/chairman/publish-results');
+        } else {
+            alert('Please type the confirmation phrase exactly as shown.');
+        }
+    };
+
+    const handleClose = () => {
+        if (closeConfirm === 'CLOSE ELECTION') {
+            post('/chairman/close-election');
         } else {
             alert('Please type the confirmation phrase exactly as shown.');
         }
@@ -37,8 +47,8 @@ export default function Publish({ auth, readinessCheck = {}, summary = {} }) {
                 <div className="mb-6 p-5 bg-red-500/10 border border-red-500/40 rounded-xl">
                     <h2 className="text-red-500 font-bold mb-1">⚠ Critical Action</h2>
                     <p className="text-red-400 text-sm">
-                        Publishing will mark this election complete. Individual station results are already visible to the public
-                        as soon as they are nationally certified, so this action is only needed to finalize the election record.
+                        Publishing will expose certified station results publicly, but it will keep the election open for additional
+                        station submissions until you explicitly close the election.
                     </p>
                 </div>
 
@@ -137,6 +147,30 @@ export default function Publish({ auth, readinessCheck = {}, summary = {} }) {
                             You need at least one certified station before this election can be published.
                         </p>
                     )}
+
+                    <div className="mt-8 border-t border-slate-200 pt-6">
+                        <h3 className="text-iec-navy font-semibold text-lg mb-3">Close Election</h3>
+                        <p className="text-slate-500 text-sm mb-4">
+                            When you are ready to finalize this election, close it to prevent any further station submissions.
+                        </p>
+                        <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg mb-4">
+                            <span className="font-mono text-slate-600">CLOSE ELECTION</span>
+                        </div>
+                        <input
+                            type="text"
+                            value={closeConfirm}
+                            onChange={(e) => setCloseConfirm(e.target.value)}
+                            placeholder="Type closure confirmation phrase here..."
+                            className="w-full px-4 py-3 bg-white border border-slate-200 rounded-lg text-iec-navy mb-4 focus:outline-none focus:border-red-500"
+                        />
+                        <button
+                            onClick={handleClose}
+                            disabled={closeConfirm !== 'CLOSE ELECTION' || processing || !canClose}
+                            className="w-full py-4 bg-gradient-to-r from-rose-600 to-red-500 hover:from-rose-500 hover:to-red-400 disabled:from-slate-300 disabled:to-slate-300 disabled:cursor-not-allowed text-white font-bold rounded-xl text-lg transition-all"
+                        >
+                            {processing ? 'Closing…' : '🔒 Close Election'}
+                        </button>
+                    </div>
                 </div>
             </div>
         </AppLayout>

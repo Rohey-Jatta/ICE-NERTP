@@ -91,6 +91,17 @@ class ResultSubmissionController extends Controller
             ], 403);
         }
 
+        $activeSubmissionExists = Result::where('polling_station_id', $station->id)
+            ->where('election_id', $validated['election_id'])
+            ->where('rejection_count', 0)
+            ->exists();
+
+        if ($activeSubmissionExists) {
+            return response()->json([
+                'message' => 'A submission for this polling station is already in progress.',
+            ], 409);
+        }
+
         // Validate submission data
         $validation = $this->validationService->validateSubmission($validated, $station);
         if (!$validation['valid']) {
