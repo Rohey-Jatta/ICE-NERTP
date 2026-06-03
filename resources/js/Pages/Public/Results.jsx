@@ -236,8 +236,10 @@ function HomeResultsPage({ election, elections, selectedElectionId, stats, pipel
     const validPct = totalCast > 0 ? ((totalValidVotes / totalCast) * 100).toFixed(2) : '0.00';
     const rejectedPct = totalCast > 0 ? ((rejectedVotes / totalCast) * 100).toFixed(2) : '0.00';
 
-    const hasStats = !!stats;
+    // stats is always present as an aggregate row even when no results are certified
+    // yet, so we gate the empty-state on whether any stations have actually reported.
     const hasPublishedResults = stationsReported > 0;
+    const hasStats = hasPublishedResults;
     const hasCandidates = Array.isArray(candidates) && candidates.length > 0;
     const regionList = Array.isArray(regions) ? regions : [];
     const isCertified = election?.status === 'certified';

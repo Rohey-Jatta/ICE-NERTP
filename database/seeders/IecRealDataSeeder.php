@@ -69,20 +69,33 @@ class IecRealDataSeeder extends Seeder
         $now        = Carbon::now()->toDateTimeString();
 
         // ── 1. Clear existing data for election 1 ─────────────────────────────
+        // Delete in FK-safe order so the seeder is re-runnable on any driver
+        // (PostgreSQL enforces FK RESTRICT; SQLite is lenient but also ordered).
         $this->command->info('Clearing existing election-1 data…');
-        DB::statement('PRAGMA foreign_keys = OFF');
 
-        DB::table('result_candidate_votes')
-            ->whereIn('result_id', DB::table('results')->where('election_id', $electionId)->pluck('id'))
-            ->delete();
-        DB::table('party_acceptances')
-            ->whereIn('result_id', DB::table('results')->where('election_id', $electionId)->pluck('id'))
-            ->delete();
+        $resultIds  = DB::table('results')->where('election_id', $electionId)->pluck('id');
+        $stationIds = DB::table('polling_stations')->where('election_id', $electionId)->pluck('id');
+        $hierIds    = DB::table('administrative_hierarchy')->where('election_id', $electionId)->pluck('id');
+
+        // Leaf tables first (child → parent order)
+        if ($resultIds->isNotEmpty()) {
+            DB::table('result_candidate_votes')->whereIn('result_id', $resultIds)->delete();
+            DB::table('party_acceptances')->whereIn('result_id', $resultIds)->delete();
+            DB::table('result_certifications')->whereIn('result_id', $resultIds)->delete();
+        }
         DB::table('results')->where('election_id', $electionId)->delete();
+
+        if ($stationIds->isNotEmpty()) {
+            DB::table('aggregated_results')->whereIn('polling_station_id', $stationIds)->delete();
+        }
         DB::table('polling_stations')->where('election_id', $electionId)->delete();
+
+        if ($hierIds->isNotEmpty()) {
+            DB::table('aggregated_results')->whereIn('hierarchy_node_id', $hierIds)->delete();
+            DB::table('result_certifications')->whereIn('hierarchy_node_id', $hierIds)->delete();
+        }
         DB::table('administrative_hierarchy')->where('election_id', $electionId)->delete();
 
-        DB::statement('PRAGMA foreign_keys = ON');
         $this->command->info('  → Done.');
 
         // ── 2. Build hierarchical index from flat rows ──────────────────────────
@@ -193,7 +206,7 @@ class IecRealDataSeeder extends Seeder
                             'latitude'            => round($geo['lat'] + $this->smallOffset($officerOffset), 6),
                             'longitude'           => round($geo['lng'] + $this->smallOffset($officerOffset + 500), 6),
                             'registered_voters'   => rand(300, 1200),
-                            'assigned_officer_id' => self::OFFICER_START + ($officerOffset * 2),
+                            'assigned_officer_id' => self::OFFICER_START + ($officerOffset % 1554),
                             'is_active'           => 1,
                             'is_test_station'     => 0,
                             'station_photo_path'  => null,
