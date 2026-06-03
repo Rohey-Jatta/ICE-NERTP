@@ -1,18 +1,6 @@
 import AppLayout from '@/Layouts/AppLayout';
 import { Link, router } from '@inertiajs/react';
-
-const STATUS_CFG = {
-    submitted:                { label: 'Submitted',             color: 'bg-sky-500/20 text-sky-300' },
-    pending_party_acceptance: { label: 'Party Review',          color: 'bg-yellow-500/20 text-yellow-300' },
-    pending_ward:             { label: 'Ward Review',           color: 'bg-amber-500/20 text-amber-300' },
-    ward_certified:           { label: 'Ward Certified',        color: 'bg-iec-pink-500/20 text-iec-pink-600' },
-    pending_constituency:     { label: 'Constituency',          color: 'bg-iec-pink-500/20 text-iec-pink-600' },
-    constituency_certified:   { label: 'Const. Certified',      color: 'bg-cyan-500/20 text-cyan-300' },
-    pending_admin_area:       { label: 'Admin Area',            color: 'bg-iec-pink-50 text-iec-pink-600' },
-    admin_area_certified:     { label: 'Area Certified',        color: 'bg-violet-500/20 text-violet-300' },
-    pending_national:         { label: 'Pending National ⚑',   color: 'bg-amber-500/20 text-amber-300 font-bold' },
-    nationally_certified:     { label: 'Nationally Certified ✓',color: 'bg-green-500/20 text-green-300' },
-};
+import { RESULT_STATUS, getResultStatusMeta } from '@/Utils/resultStatus';
 
 export default function AllResults({ auth, results = {}, filter = 'all', counts = {} }) {
     const data     = results.data || [];
@@ -80,9 +68,8 @@ export default function AllResults({ auth, results = {}, filter = 'all', counts 
                                 </thead>
                                 <tbody>
                                     {data.map((result) => {
-                                        const cfg = STATUS_CFG[result.certification_status]
-                                            || { label: result.certification_status, color: 'bg-slate-100 text-slate-600' };
-                                        const isPendingNational = result.certification_status === 'pending_national';
+                                        const cfg = getResultStatusMeta(result.certification_status);
+                                        const isPendingNational = result.certification_status === RESULT_STATUS.PENDING_NATIONAL;
 
                                         return (
                                             <tr key={result.id}
@@ -97,7 +84,7 @@ export default function AllResults({ auth, results = {}, filter = 'all', counts 
                                                 <td className="py-3 px-4 text-right text-iec-navy">{result.total_votes_cast?.toLocaleString()}</td>
                                                 <td className="py-3 px-4 text-right text-iec-pink-600">{result.turnout_percentage}%</td>
                                                 <td className="py-3 px-4 text-center">
-                                                    <span className={`px-2.5 py-1 rounded-full text-xs ${cfg.color}`}>
+                                                    <span className={`px-2.5 py-1 rounded-full text-xs ${cfg.badgeClass}`}>
                                                         {cfg.label}
                                                     </span>
                                                 </td>

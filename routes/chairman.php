@@ -3,7 +3,6 @@
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 use App\Models\AuditLog;
@@ -12,6 +11,7 @@ use App\Models\PollingStation;
 use App\Models\Result;
 use App\Models\ResultCandidateVote;
 use App\Models\AdministrativeHierarchy;
+use App\Services\CertificationWorkflowService;
 
 Route::middleware(['auth', 'role:iec-chairman'])
     ->prefix('chairman')
@@ -42,7 +42,6 @@ Route::middleware(['auth', 'role:iec-chairman'])
 
             $pipelineCounts = [
                 'submitted'              => (int) ($statusCounts[Result::STATUS_SUBMITTED] ?? 0),
-                'pending_party'          => (int) ($statusCounts[Result::STATUS_PENDING_PARTY_ACCEPTANCE] ?? 0),
                 'pending_ward'           => (int) ($statusCounts[Result::STATUS_PENDING_WARD] ?? 0),
                 'ward_certified'         => (int) ($statusCounts[Result::STATUS_WARD_CERTIFIED] ?? 0),
                 'pending_constituency'   => (int) ($statusCounts[Result::STATUS_PENDING_CONSTITUENCY] ?? 0),
@@ -51,6 +50,7 @@ Route::middleware(['auth', 'role:iec-chairman'])
                 'admin_area_certified'   => (int) ($statusCounts[Result::STATUS_ADMIN_AREA_CERTIFIED] ?? 0),
                 'pending_national'       => $pendingNational,
                 'nationally_certified'   => $nationallyCertified,
+                'legacy_party_gate'      => (int) ($statusCounts[Result::STATUS_PENDING_PARTY_ACCEPTANCE] ?? 0),
             ];
 
             return [
@@ -160,51 +160,14 @@ Route::middleware(['auth', 'role:iec-chairman'])
             'comments' => 'nullable|string|max:2000',
         ]);
 
-        if ($result->certification_status !== Result::STATUS_PENDING_NATIONAL) {
+        try {
+            app(CertificationWorkflowService::class)->approve($result, Auth::user(), 'national', $request->comments);
+        } catch (\Throwable $e) {
             return back()->withErrors(['error' => 'Result is not pending national certification.']);
         }
 
-        $approverId = Auth::id();
-
-        $nationalNodeId = AdministrativeHierarchy::where('level', 'national')->value('id');
-        if (!$nationalNodeId) {
-            $wardParentId    = AdministrativeHierarchy::where('id', $result->pollingStation?->ward_id)->value('parent_id');
-            $adminAreaNodeId = AdministrativeHierarchy::where('id', $wardParentId)->value('parent_id');
-            $nationalNodeId  = $adminAreaNodeId
-                ?? AdministrativeHierarchy::where('level', 'admin_area')->value('id')
-                ?? AdministrativeHierarchy::orderBy('id')->value('id')
-                ?? 1;
-        }
-
-        $result->update([
-            'certification_status'    => Result::STATUS_NATIONALLY_CERTIFIED,
-            'nationally_certified_at' => now(),
-        ]);
-
-        \App\Models\ResultCertification::create([
-            'result_id'           => $result->id,
-            'certification_level' => 'national',
-            'hierarchy_node_id'   => $nationalNodeId,
-            'approver_id'         => $approverId,
-            'status'              => 'approved',
-            'comments'            => $request->comments,
-            'assigned_at'         => now(),
-            'decided_at'          => now(),
-        ]);
-
-        AuditLog::record(
-            action: 'certification.national.approved',
-            event: 'updated',
-            module: 'Certification',
-            auditable: $result,
-            extra: ['outcome' => 'success', 'comments' => $request->comments]
-        );
-
-        // Bust public results cache so the certified result appears immediately
-        Cache::forget("results_summary_v3_{$result->election_id}_active");
-        Cache::forget("results_summary_v3_{$result->election_id}_certifying");
-        Cache::forget("results_summary_v3_{$result->election_id}_results_pending");
-        Cache::forget("results_map_{$result->election_id}");
+        // Bust public results cache so the certified result appears immediately.
+        Election::forgetPublicCaches($result->election_id, $result->election?->status);
         Cache::forget('chairman_dashboard_stats');
 
         return back()->with('success', 'Result has been nationally certified and is now publicly visible.');
@@ -216,48 +179,11 @@ Route::middleware(['auth', 'role:iec-chairman'])
             'reason' => 'required|string|max:2000',
         ]);
 
-        if ($result->certification_status !== Result::STATUS_PENDING_NATIONAL) {
+        try {
+            app(CertificationWorkflowService::class)->reject($result, Auth::user(), 'national', $request->reason);
+        } catch (\Throwable $e) {
             return back()->withErrors(['error' => 'Result is not pending national approval.']);
         }
-
-        $approverId = Auth::id();
-
-        $nationalNodeId = AdministrativeHierarchy::where('level', 'national')->value('id');
-        if (!$nationalNodeId) {
-            $wardParentId    = AdministrativeHierarchy::where('id', $result->pollingStation?->ward_id)->value('parent_id');
-            $adminAreaNodeId = AdministrativeHierarchy::where('id', $wardParentId)->value('parent_id');
-            $nationalNodeId  = $adminAreaNodeId
-                ?? AdministrativeHierarchy::where('level', 'admin_area')->value('id')
-                ?? AdministrativeHierarchy::orderBy('id')->value('id')
-                ?? 1;
-        }
-
-        $result->update([
-            'certification_status'  => Result::STATUS_PENDING_ADMIN_AREA,
-            'last_rejection_reason' => $request->reason,
-            'last_rejected_by'      => $approverId,
-            'last_rejected_at'      => now(),
-            'rejection_count'       => $result->rejection_count + 1,
-        ]);
-
-        \App\Models\ResultCertification::create([
-            'result_id'           => $result->id,
-            'certification_level' => 'national',
-            'hierarchy_node_id'   => $nationalNodeId,
-            'approver_id'         => $approverId,
-            'status'              => 'rejected',
-            'comments'            => $request->reason,
-            'assigned_at'         => now(),
-            'decided_at'          => now(),
-        ]);
-
-        AuditLog::record(
-            action: 'certification.national.rejected',
-            event: 'updated',
-            module: 'Certification',
-            auditable: $result,
-            extra: ['outcome' => 'rejected', 'reason' => $request->reason]
-        );
 
         return back()->with('success', 'Result returned to Admin Area level for review.');
     })->name('reject')->middleware('permission:override-rejection');
@@ -453,11 +379,7 @@ Route::middleware(['auth', 'role:iec-chairman'])
         $election->update(['status' => 'certified']);
 
         // Bust all public caches so status change reflects immediately
-        Cache::forget("results_summary_v3_{$election->id}_active");
-        Cache::forget("results_summary_v3_{$election->id}_certifying");
-        Cache::forget("results_summary_v3_{$election->id}_results_pending");
-        Cache::forget("results_summary_v3_{$election->id}_certified");
-        Cache::forget("results_map_{$election->id}");
+        Election::forgetPublicCaches($election->id, $election->status);
         Cache::forget('public_results_data');
 
         AuditLog::record(

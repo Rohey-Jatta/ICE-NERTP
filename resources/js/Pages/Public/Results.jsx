@@ -1,508 +1,456 @@
 import AppLayout from '@/Layouts/AppLayout';
-import { Link, router, usePage } from '@inertiajs/react';
-import { useState, useEffect } from 'react';
+import { Link, router } from '@inertiajs/react';
+import { useState } from 'react';
 import useInertiaPrefetch from '@/Hooks/useInertiaPrefetch';
 import { electionTypeLabel, publicElectionTitle } from '@/Utils/publicElection';
-import LeafletMap from '@/Components/Map/LeafletMap';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function numeric(v) { return Number(v || 0); }
 
-// ── Candidate Row ─────────────────────────────────────────────────────────────
-function CandidateRow({ candidate, rank, totalValidVotes }) {
-    const pct = totalValidVotes > 0
-        ? (numeric(candidate.total_votes) / numeric(totalValidVotes)) * 100
-        : 0;
-    const pctDisplay = pct.toFixed(2);
+function pct(value, total, precision = 2) {
+    return total > 0 ? ((numeric(value) / numeric(total)) * 100).toFixed(precision) : (0).toFixed(precision);
+}
+
+function candidateInitials(name = '') {
+    const parts = String(name).trim().split(/\s+/).filter(Boolean);
+    if (parts.length === 0) return '?';
+    if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+    return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
+}
+
+function firstColor(value, fallback = '#6b7280') {
+    return (value || fallback).split(',')[0].trim();
+}
+
+// ── Candidate tile ──────────────────────────────────────────────────────────
+function CandidateTile({ candidate, rank, totalValidVotes }) {
+    const color = firstColor(candidate.party_color, '#155AA6');
     const isLeading = rank === 1;
-    const color = (candidate.party_color || '#64748b').split(',')[0].trim();
+    const share = pct(candidate.total_votes, totalValidVotes);
     const [imgError, setImgError] = useState(false);
 
     return (
-        <div className={`flex items-center gap-3 px-5 py-3 border-b border-gray-100 last:border-b-0 transition-colors ${
-            isLeading ? 'bg-emerald-50/60' : 'hover:bg-gray-50/50'
-        }`}>
-            {/* Rank */}
-            <div className="w-5 text-center flex-shrink-0">
-                <span className={`text-sm font-mono ${isLeading ? 'font-bold text-amber-500' : 'text-gray-300'}`}>
-                    {rank}
+        <article
+            className={`relative flex flex-col overflow-hidden rounded-[14px] border bg-white transition hover:-translate-y-0.5 ${
+                isLeading
+                    ? 'border-[#e61a6e] shadow-[0_0_0_3px_#fff5fa,0_12px_30px_-10px_rgba(230,26,110,.22)]'
+                    : 'border-[#e6e8ec] hover:border-[#353b45] hover:shadow-[0_12px_30px_-10px_rgba(15,17,21,.14)]'
+            }`}
+        >
+            {/* Rank / leading pin */}
+            {isLeading ? (
+                <span className="absolute right-3.5 top-3.5 z-20 rounded-full bg-[#e61a6e] px-2.5 py-1 text-[0.66rem] font-bold uppercase tracking-[0.06em] text-white">
+                    Leading
                 </span>
-            </div>
+            ) : (
+                <span className="absolute right-3.5 top-3.5 z-20 grid h-[26px] w-[26px] place-items-center rounded-full border border-[#e6e8ec] bg-white/70 font-serif text-[13px] font-bold text-[#8b95a3]">
+                    #{rank}
+                </span>
+            )}
 
-            {/* Photo or initial */}
-            <div className="flex-shrink-0">
+            {/* Head */}
+            <div className="relative flex items-center gap-[18px] overflow-hidden border-b border-[#e6e8ec] bg-[#fafafb] px-[22px] py-[18px] pt-[22px]">
+                <div
+                    className="pointer-events-none absolute inset-0"
+                    style={{
+                        background: `linear-gradient(120deg, ${color} 0%, transparent 65%)`,
+                        opacity: isLeading ? 0.18 : 0.1,
+                    }}
+                />
                 {candidate.photo_url && !imgError ? (
                     <img
                         src={candidate.photo_url}
                         alt={candidate.name}
-                        className="w-10 h-10 rounded-full object-cover border-2 flex-shrink-0"
-                        style={{ borderColor: color }}
                         onError={() => setImgError(true)}
+                        className="relative z-10 h-[84px] w-[84px] flex-shrink-0 rounded-full object-cover shadow-[0_0_0_4px_#fff,0_0_0_5px_#e6e8ec,0_6px_14px_rgba(15,17,21,.08)]"
+                        style={isLeading ? { boxShadow: `0 0 0 4px #fff, 0 0 0 6px ${color}, 0 6px 14px rgba(15,17,21,.10)` } : undefined}
                     />
                 ) : (
                     <div
-                        className="w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold ring-1 ring-gray-200"
-                        style={{ backgroundColor: color }}
+                        className="relative z-10 grid h-[84px] w-[84px] flex-shrink-0 place-items-center rounded-full font-serif text-[28px] font-bold tracking-tight text-white shadow-[0_0_0_4px_#fff,0_0_0_5px_#e6e8ec,0_6px_14px_rgba(15,17,21,.08)]"
+                        style={{
+                            backgroundColor: color,
+                            ...(isLeading ? { boxShadow: `0 0 0 4px #fff, 0 0 0 6px ${color}, 0 6px 14px rgba(15,17,21,.10)` } : {}),
+                        }}
                     >
-                        {candidate.name?.charAt(0)?.toUpperCase() || '?'}
+                        {candidateInitials(candidate.name)}
                     </div>
                 )}
+
+                <div className="relative z-10 min-w-0 flex-1 pr-12">
+                    <div className="font-serif text-[19px] font-bold leading-tight tracking-tight text-[#0e1014]">
+                        {candidate.name}
+                    </div>
+                    <div className="mt-2 flex items-center gap-2">
+                        <span
+                            className="grid h-7 min-w-7 flex-shrink-0 place-items-center rounded-md px-1.5 text-[10px] font-bold tracking-wide text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,.18)]"
+                            style={{ backgroundColor: color }}
+                        >
+                            {candidate.party_abbr || 'IND'}
+                        </span>
+                        <span className="line-clamp-2 text-[12.5px] leading-snug text-[#5f6773]">
+                            <b className="font-semibold text-[#1f2329]">{candidate.party_abbr || 'IND'}</b>
+                            {candidate.party_name && candidate.party_name !== 'Independent' && <> · {candidate.party_name}</>}
+                        </span>
+                    </div>
+                </div>
             </div>
 
-            {/* Name + party + bar */}
-            <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-0.5">
-                    <span className={`text-sm truncate ${isLeading ? 'font-bold text-gray-900' : 'font-semibold text-gray-800'}`}>
-                        {candidate.name}
-                    </span>
-                    {isLeading && (
-                        <span className="flex-shrink-0 text-[10px] font-bold text-emerald-700 bg-emerald-100 border border-emerald-200 px-1.5 py-0.5 rounded-sm uppercase tracking-wide">
-                            Leading
-                        </span>
-                    )}
+            {/* Body */}
+            <div className="flex flex-col gap-3.5 px-[22px] py-5">
+                <div className="flex items-baseline justify-between gap-3.5">
+                    <div>
+                        <div className="font-serif text-[36px] font-bold leading-none tracking-tight tabular-nums text-[#0e1014]">
+                            {numeric(candidate.total_votes).toLocaleString()}
+                        </div>
+                        <div className="mt-1 text-[11px] font-bold uppercase tracking-[0.08em] text-[#5f6773]">Votes</div>
+                    </div>
+                    <div className="text-right">
+                        <div className="font-serif text-[22px] font-bold leading-none tracking-tight tabular-nums" style={{ color }}>
+                            {share}%
+                        </div>
+                        <div className="mt-1 text-[11px] font-bold uppercase tracking-[0.08em] text-[#5f6773]">Share</div>
+                    </div>
                 </div>
-                <p className="text-xs text-gray-400 mb-1.5 truncate">
-                    <span className="font-medium text-gray-500">{candidate.party_abbr}</span>
-                    {candidate.party_name && candidate.party_name !== 'Independent' && ` — ${candidate.party_name}`}
-                </p>
-                <div className="h-1.5 bg-gray-100 overflow-hidden">
+                <div className="relative h-2 overflow-hidden rounded-[4px] bg-[#f1f3f5]">
                     <div
-                        className="h-full transition-all duration-500"
-                        style={{ width: `${Math.min(100, pct)}%`, backgroundColor: color }}
+                        className="absolute inset-y-0 left-0 rounded-[4px] transition-[width] duration-700"
+                        style={{ width: `${Math.max(2, Number(share))}%`, backgroundColor: color }}
                     />
                 </div>
-            </div>
-
-            {/* Votes */}
-            <div className="text-right flex-shrink-0 min-w-[90px]">
-                <div className="text-base font-bold text-gray-900 tabular-nums">
-                    {numeric(candidate.total_votes).toLocaleString()}
+                <div className="flex justify-between text-[11.5px] tabular-nums text-[#5f6773]">
+                    <span>{candidate.incumbent || isLeading ? 'Leading candidate' : 'Challenger'}</span>
+                    <span>Rank #{rank}</span>
                 </div>
-                <div className="text-xs text-gray-500 tabular-nums font-medium">{pctDisplay}%</div>
             </div>
+        </article>
+    );
+}
+
+// ── Certification workflow step ───────────────────────────────────────────────
+function WorkflowStep({ step, index }) {
+    const isDone = step.state === 'done';
+    const isActive = step.state === 'active';
+
+    return (
+        <div className="border-b border-r border-[#e6e8ec] px-[18px] py-[18px] pb-5 last:border-r-0">
+            <div
+                className={`mb-3 grid h-6 w-6 place-items-center rounded-full border text-xs font-bold ${
+                    isDone
+                        ? 'border-[#0e8c5a] bg-[#0e8c5a] text-white'
+                        : isActive
+                        ? 'border-[#e61a6e] bg-[#e61a6e] text-white'
+                        : 'border-[#e6e8ec] bg-[#f5f6f8] text-[#5f6773]'
+                }`}
+            >
+                {isDone ? '✓' : index + 1}
+            </div>
+            <div className={`text-[13.5px] font-semibold ${isActive ? 'text-[#e61a6e]' : 'text-[#0e1014]'}`}>
+                {step.title}
+            </div>
+            <div className="mt-1 text-[12px] leading-snug text-[#5f6773]">{step.description}</div>
+            {step.meta && <div className="mt-1.5 text-[11px] font-medium text-[#5f6773]">{step.meta}</div>}
         </div>
     );
 }
 
-// ── Main Component ────────────────────────────────────────────────────────────
-export default function Results({ election, elections = [], selectedElectionId, stats, candidates, message }) {
-    const { url } = usePage();
-    const isHome   = url?.split('?')[0] === '/';
-    const basePath = isHome ? '/' : '/results';
-    const param    = selectedElectionId ? `?election=${selectedElectionId}` : '';
+// ── Regional leaders bars (derived from admin_area hierarchy) ──────────────────
+function RegionalBars({ regions }) {
+    const maxStations = Math.max(1, ...regions.map((r) => numeric(r.total_stations)));
 
-    const [mapStations, setMapStations] = useState([]);
-    const [mapLoading,  setMapLoading]  = useState(true);
-    const [mapError,    setMapError]    = useState(false);
-    const [isDropdownOpen, setIsDropdownOpen] = useState(false);
-    const [searchTerm, setSearchTerm] = useState('');
+    return (
+        <div className="flex flex-col gap-2.5">
+            {regions.map((region) => {
+                const widthPct = (numeric(region.total_stations) / maxStations) * 100;
+                const leader = region.leader;
+                const color = leader ? firstColor(leader.color) : '#e6e8ec';
 
-    useInertiaPrefetch([`/results/map${param}`, `/results/stations${param}`]);
-
-    useEffect(() => {
-        if (!election?.id) { setMapLoading(false); return; }
-        setMapLoading(true);
-        setMapError(false);
-        fetch(`/api/public/map-stations?election=${election.id}`, {
-            headers: { 'Accept': 'application/json' }
-        })
-            .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
-            .then(data => { setMapStations(Array.isArray(data.stations) ? data.stations : []); setMapLoading(false); })
-            .catch(() => { setMapError(true); setMapLoading(false); });
-    }, [election?.id]);
-
-    // Derived statistics
-    const totalValidVotes    = numeric(stats?.valid_votes);
-    const totalStations      = numeric(stats?.total_stations);
-    const stationsCertified  = numeric(stats?.stations_reported);
-    const totalRegistered    = numeric(stats?.total_registered);
-    const totalCast          = numeric(stats?.total_cast);
-    const turnoutPct         = totalRegistered > 0 ? ((totalCast / totalRegistered) * 100).toFixed(1) : '0.0';
-    const certPct            = totalStations > 0 ? Math.round((stationsCertified / totalStations) * 100) : 0;
-    const hasStats           = stats && stationsCertified > 0;
-    const hasCandidates      = Array.isArray(candidates) && candidates.length > 0;
-    const isCertified        = election?.status === 'certified';
-
-    // ── No election configured ────────────────────────────────────────────────
-    if (!election) {
-        return (
-            <AppLayout>
-                <div className="bg-gray-50 min-h-screen flex items-center justify-center p-8">
-                    <div className="text-center max-w-sm bg-white border border-gray-200 p-10">
-                        <div className="text-4xl mb-4">🏛️</div>
-                        <h1 className="text-xl font-bold text-gray-800 mb-2">No Active Election</h1>
-                        <p className="text-sm text-gray-500">
-                            No election is currently configured for public display.
-                        </p>
-                        {elections.length > 0 && (
-                            <div className="mt-4 flex flex-wrap justify-center gap-2">
-                                {elections.map(el => (
-                                    <button
-                                        key={el.id}
-                                        onClick={() => router.get(basePath, { election: el.id })}
-                                        className="px-3 py-1.5 text-xs border border-gray-300 text-gray-600 hover:border-gray-500 transition-colors rounded-sm"
-                                    >
-                                        {publicElectionTitle(el)}
-                                    </button>
-                                ))}
-                            </div>
-                        )}
+                return (
+                    <div
+                        key={region.id}
+                        className="grid items-center gap-3 text-[13px] sm:grid-cols-[120px_1fr_92px]"
+                    >
+                        <span className="truncate font-semibold text-[#1f2329]">{region.name}</span>
+                        <div className="relative h-6 overflow-hidden rounded-[4px] bg-[#f1f3f5]">
+                            <div
+                                className="absolute inset-y-0 left-0 rounded-[4px] opacity-90 transition-[width] duration-700"
+                                style={{ width: `${Math.max(leader ? 6 : 0, widthPct)}%`, backgroundColor: color }}
+                            />
+                            {leader ? (
+                                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[11px] font-semibold tracking-[0.02em] text-white">
+                                    {leader.party_abbr} · {numeric(region.leader_pct).toFixed(1)}%
+                                </span>
+                            ) : (
+                                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[11px] font-semibold text-[#8b95a3]">
+                                    Awaiting certified results
+                                </span>
+                            )}
+                        </div>
+                        <span className="text-right text-[12px] tabular-nums text-[#5f6773]">
+                            {numeric(region.total_stations).toLocaleString()} stations
+                        </span>
                     </div>
-                </div>
-            </AppLayout>
-        );
-    }
+                );
+            })}
+        </div>
+    );
+}
+
+// ── Dashboard ─────────────────────────────────────────────────────────────────
+function HomeResultsPage({ election, elections, selectedElectionId, stats, candidates, regions, message, basePath, param }) {
+    const totalValidVotes = numeric(stats?.valid_votes);
+    const totalStations = numeric(stats?.total_stations);
+    const stationsReported = numeric(stats?.stations_reported);
+    const totalRegistered = numeric(stats?.total_registered);
+    const totalCast = numeric(stats?.total_cast);
+    const rejectedVotes = numeric(stats?.rejected_votes);
+    const reportingPct = totalStations > 0 ? Math.round((stationsReported / totalStations) * 100) : 0;
+    const turnoutPct = totalRegistered > 0 ? ((totalCast / totalRegistered) * 100).toFixed(1) : '0.0';
+    const validPct = totalCast > 0 ? ((totalValidVotes / totalCast) * 100).toFixed(2) : '0.00';
+    const rejectedPct = totalCast > 0 ? ((rejectedVotes / totalCast) * 100).toFixed(2) : '0.00';
+
+    const hasStats = !!stats;
+    const hasPublishedResults = stationsReported > 0;
+    const hasCandidates = Array.isArray(candidates) && candidates.length > 0;
+    const regionList = Array.isArray(regions) ? regions : [];
+    const isCertified = election?.status === 'certified';
+    const statusLabel = isCertified ? 'Official Certified Results' : 'Certification in Progress';
+
+    const workflow = [
+        { title: 'Stations Submit', description: 'Polling officers submit results', state: stationsReported > 0 ? 'done' : 'active', meta: stationsReported > 0 ? `${stationsReported.toLocaleString()} received` : 'Awaiting submissions' },
+        { title: 'Validation', description: 'System checks math and signatures', state: stationsReported > 0 ? 'done' : 'todo', meta: hasStats ? `${validPct}% valid of cast` : null },
+        { title: 'Regional Review', description: 'Returning officers compare and sign', state: hasStats && !isCertified ? 'active' : hasStats ? 'done' : 'todo', meta: hasStats ? `${reportingPct}% reporting` : null },
+        { title: 'Audit & Recount', description: 'Independent observers verify flagged data', state: isCertified ? 'done' : 'todo' },
+        { title: 'Final Certification', description: 'IEC commissioners certify and publish', state: isCertified ? 'done' : 'todo' },
+    ];
 
     return (
         <AppLayout>
-            <div className="bg-gray-50 min-h-screen">
-
-                {/* ────────────────────────────────────────────────────────────
-                    OFFICIAL ELECTION BANNER
-                ──────────────────────────────────────────────────────────── */}
-                <div className="bg-white border-b border-gray-200">
-                    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-                        <div className="flex flex-wrap items-start justify-between gap-4">
-
-                            {/* Election title + badges */}
-                            <div className="min-w-0 flex-1">
-                                <div className="flex flex-wrap items-center gap-2 mb-2">
-                                    <span className={`inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 border rounded-sm ${
-                                        isCertified
-                                            ? 'bg-emerald-50 border-emerald-300 text-emerald-800'
-                                            : 'bg-amber-50 border-amber-300 text-amber-800'
-                                    }`}>
-                                        {isCertified ? '✓ Official Certified Results' : '⟳ Certification in Progress'}
+            <div className="min-h-screen overflow-x-hidden bg-white font-sans text-[#0e1014]">
+                {/* ── Hero ─────────────────────────────────────────────────── */}
+                <section className="border-b border-[#e6e8ec] bg-white">
+                    <div className="mx-auto max-w-[1240px] px-7 py-9">
+                        <div className="grid items-end gap-8 lg:grid-cols-[1fr_auto]">
+                            <div className="min-w-0">
+                                <div className="mb-[18px] flex flex-wrap items-center gap-2">
+                                    <span className="inline-flex items-center gap-1.5 rounded-full border border-transparent bg-[#fef3c7] px-[11px] py-[5px] text-xs font-semibold text-[#b45309]">
+                                        <span className="h-1.5 w-1.5 rounded-full bg-[#b45309]" />
+                                        {statusLabel}
                                     </span>
-                                    <span className="text-xs text-gray-500 bg-gray-100 border border-gray-200 px-2.5 py-1 rounded-sm">
+                                    <span className="rounded-full border border-[#e6e8ec] bg-[#f5f6f8] px-[11px] py-[5px] text-xs font-semibold text-[#1f2329]">
                                         {electionTypeLabel(election)}
                                     </span>
-                                    {hasStats && (
-                                        <span className="text-xs text-gray-500 bg-gray-100 border border-gray-200 px-2.5 py-1 rounded-sm tabular-nums">
-                                            {stationsCertified.toLocaleString()} / {totalStations.toLocaleString()} stations certified
-                                        </span>
-                                    )}
+                                    <span className="rounded-full border border-[#e6e8ec] bg-[#f5f6f8] px-[11px] py-[5px] text-xs font-semibold tabular-nums text-[#1f2329]">
+                                        {stationsReported.toLocaleString()} / {totalStations.toLocaleString()} stations reporting · {reportingPct}%
+                                    </span>
                                 </div>
-                                <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight leading-tight">
+                                <h1 className="m-0 max-w-[calc(100vw-2rem)] break-words font-serif text-[clamp(40px,5.6vw,64px)] font-bold leading-[1.02] tracking-[-0.025em] text-[#0e1014]">
                                     {publicElectionTitle(election)}
                                 </h1>
-                                <p className="text-sm text-gray-500 mt-1">
-                                    Independent Electoral Commission · The Gambia
+                                <p className="mt-2.5 max-w-[580px] text-base leading-7 text-[#5f6773]">
+                                    Independent Electoral Commission · The Gambia · Updated as certified polling station results are published.
                                 </p>
                             </div>
 
-                            {/* Election switcher — searchable dropdown */}
                             {elections.length > 1 && (
-                                <div className="flex-shrink-0 w-full sm:w-auto">
-                                    <p className="text-xs font-medium text-gray-400 mb-2 uppercase tracking-wide">Select Election</p>
-                                    <div className="relative w-full sm:w-72">
-                                        {/* Dropdown trigger button */}
-                                        <button
-                                            onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                                            className="w-full px-4 py-2 text-left text-sm font-medium bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-transparent transition-colors flex items-center justify-between"
-                                        >
-                                            <span className="truncate">
-                                                {election ? publicElectionTitle(election) : 'Choose an election...'}
-                                            </span>
-                                            <svg className={`w-4 h-4 text-gray-400 transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
-                                            </svg>
-                                        </button>
-
-                                        {/* Dropdown menu */}
-                                        {isDropdownOpen && (
-                                            <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg">
-                                                {/* Search input */}
-                                                <div className="p-2 border-b border-gray-200">
-                                                    <input
-                                                        type="text"
-                                                        placeholder="Search elections..."
-                                                        value={searchTerm}
-                                                        onChange={(e) => setSearchTerm(e.target.value)}
-                                                        className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-transparent"
-                                                        autoFocus
-                                                    />
-                                                </div>
-
-                                                {/* Election list */}
-                                                <div className="max-h-64 overflow-y-auto">
-                                                    {elections
-                                                        .filter(el => publicElectionTitle(el).toLowerCase().includes(searchTerm.toLowerCase()))
-                                                        .map(el => (
-                                                            <button
-                                                                key={el.id}
-                                                                onClick={() => {
-                                                                    router.get(basePath, { election: el.id }, { preserveScroll: false });
-                                                                    setIsDropdownOpen(false);
-                                                                    setSearchTerm('');
-                                                                }}
-                                                                className={`w-full text-left px-4 py-2.5 text-sm border-b border-gray-100 last:border-b-0 transition-colors ${
-                                                                    selectedElectionId === el.id
-                                                                        ? 'bg-pink-50 text-pink-900 font-semibold'
-                                                                        : 'text-gray-700 hover:bg-gray-50'
-                                                                }`}
-                                                            >
-                                                                <div className="flex items-center justify-between">
-                                                                    <span>{publicElectionTitle(el)}</span>
-                                                                    {selectedElectionId === el.id && (
-                                                                        <svg className="w-4 h-4 text-pink-600" fill="currentColor" viewBox="0 0 20 20">
-                                                                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                                                                        </svg>
-                                                                    )}
-                                                                </div>
-                                                            </button>
-                                                        ))}
-                                                    {elections.filter(el => publicElectionTitle(el).toLowerCase().includes(searchTerm.toLowerCase())).length === 0 && (
-                                                        <div className="px-4 py-6 text-center text-sm text-gray-500">
-                                                            No elections found
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        )}
-
-                                        {/* Overlay to close dropdown */}
-                                        {isDropdownOpen && (
-                                            <div
-                                                className="fixed inset-0 z-40"
-                                                onClick={() => {
-                                                    setIsDropdownOpen(false);
-                                                    setSearchTerm('');
-                                                }}
-                                            />
-                                        )}
-                                    </div>
+                                <div className="min-w-0 lg:w-80">
+                                    <p className="mb-1 text-[10.5px] font-semibold uppercase tracking-[0.08em] text-[#5f6773]">Select election</p>
+                                    <select
+                                        value={selectedElectionId || ''}
+                                        onChange={(event) => router.get(basePath, { election: event.target.value }, { preserveScroll: false })}
+                                        className="w-full rounded-[10px] border border-[#e6e8ec] bg-white px-4 py-3 text-sm font-semibold text-[#0e1014] outline-none transition focus:border-[#e61a6e] focus:ring-4 focus:ring-[#e61a6e]/10"
+                                    >
+                                        {elections.map((item) => (
+                                            <option key={item.id} value={item.id}>{publicElectionTitle(item)}</option>
+                                        ))}
+                                    </select>
                                 </div>
                             )}
                         </div>
                     </div>
-                </div>
+                </section>
 
-                {/* ────────────────────────────────────────────────────────────
-                    NO RESULTS STATE
-                ──────────────────────────────────────────────────────────── */}
                 {!hasStats && (
-                    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-                        <div className="bg-white border border-gray-200 p-12 max-w-md mx-auto text-center">
-                            <div className="text-4xl mb-4">🗳️</div>
-                            <h2 className="text-lg font-bold text-gray-800 mb-2">
-                                Awaiting Certified Results
-                            </h2>
-                            <p className="text-sm text-gray-500 leading-relaxed">
-                                {message || 'Results will appear here as polling stations are officially certified by the IEC Chairman.'}
+                    <div className="mx-auto max-w-[1240px] px-7 py-16">
+                        <div className="mx-auto max-w-xl rounded-[14px] border border-dashed border-[#e6e8ec] bg-white p-10 text-center">
+                            <h2 className="font-serif text-3xl font-bold text-[#0e1014]">Awaiting Published Results</h2>
+                            <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-[#5f6773]">
+                                {message || 'Results will appear here as polling stations are officially certified and published.'}
                             </p>
                         </div>
                     </div>
                 )}
 
-                {/* ────────────────────────────────────────────────────────────
-                    MAIN RESULTS DASHBOARD
-                ──────────────────────────────────────────────────────────── */}
                 {hasStats && (
-                    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-4 pb-8 space-y-4">
-
-                        {/* ── CANDIDATE RESULTS TABLE (FIRST) ────────────────────────── */}
+                    <>
+                        {/* ── Candidate results ─────────────────────────────── */}
                         {hasCandidates && (
-                            <div className="bg-white border border-gray-200 shadow-sm">
-
-                                {/* Section header */}
-                                <div className="flex items-center justify-between px-5 py-3 bg-gray-50 border-b border-gray-200">
-                                    <div>
-                                        <h2 className="text-xs font-bold uppercase tracking-widest text-gray-500">
-                                            Candidate Results
-                                        </h2>
-                                        <p className="text-xs text-gray-400 mt-0.5">
-                                            Official vote totals · {stationsCertified.toLocaleString()} certified stations
-                                        </p>
+                            <section className="py-6">
+                                <div className="mx-auto max-w-[1240px] px-7">
+                                    <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+                                        <div>
+                                            <div className="text-[11px] font-semibold uppercase tracking-[0.1em] text-[#e61a6e]">Candidate Results</div>
+                                            <h2 className="mt-1.5 font-serif text-[clamp(24px,2.4vw,30px)] font-bold tracking-[-0.02em] text-[#0e1014]">
+                                                Vote totals by candidate
+                                            </h2>
+                                            <p className="mt-1 text-sm text-[#5f6773]">
+                                                {hasPublishedResults ? 'Published totals' : 'Candidate slate'} from {stationsReported.toLocaleString()} reporting stations ·
+                                                <span className="font-semibold text-[#0e8c5a]"> {totalValidVotes.toLocaleString()} valid votes </span>·
+                                                <span className="font-semibold text-[#b45309]"> {rejectedVotes.toLocaleString()} rejected</span>
+                                            </p>
+                                        </div>
+                                        <Link
+                                            href={`/results/stations${param}`}
+                                            className="inline-flex items-center gap-2 self-start rounded-lg border border-[#e6e8ec] px-4 py-2.5 text-sm font-medium text-[#1f2329] transition hover:border-[#353b45] hover:bg-[#f5f6f8]"
+                                        >
+                                            Browse by station <span aria-hidden>→</span>
+                                        </Link>
                                     </div>
-                                    <div className="text-right text-xs hidden sm:block">
-                                        <div className="text-gray-500">
-                                            <span className="font-semibold text-emerald-700 tabular-nums">
-                                                {numeric(stats?.valid_votes).toLocaleString()}
-                                            </span>{' '}valid votes
-                                        </div>
-                                        <div className="text-gray-500">
-                                            <span className="font-semibold text-amber-600 tabular-nums">
-                                                {numeric(stats?.rejected_votes).toLocaleString()}
-                                            </span>{' '}rejected
-                                        </div>
+                                    <div className="grid grid-cols-1 gap-[18px] sm:grid-cols-2 lg:grid-cols-3">
+                                        {candidates.map((candidate, index) => (
+                                            <CandidateTile
+                                                key={candidate.id}
+                                                candidate={candidate}
+                                                rank={index + 1}
+                                                totalValidVotes={totalValidVotes}
+                                            />
+                                        ))}
                                     </div>
                                 </div>
-
-                                {/* Column headers */}
-                                <div className="flex items-center gap-3 px-5 py-2 border-b border-gray-100 bg-gray-50/50">
-                                    <div className="w-5 text-xs font-bold uppercase tracking-wider text-gray-300">#</div>
-                                    <div className="w-10" />
-                                    <div className="flex-1 text-xs font-bold uppercase tracking-wider text-gray-400">Candidate</div>
-                                    <div className="min-w-[90px] text-right text-xs font-bold uppercase tracking-wider text-gray-400">Votes</div>
-                                </div>
-
-                                {/* Candidate rows */}
-                                {candidates.map((candidate, idx) => (
-                                    <CandidateRow
-                                        key={candidate.id}
-                                        candidate={candidate}
-                                        rank={idx + 1}
-                                        totalValidVotes={totalValidVotes}
-                                    />
-                                ))}
-                            </div>
+                            </section>
                         )}
 
-                        {/* ── STATS PANEL + LIVE MAP (SECOND) ────────────── */}
-                        <div className="grid grid-cols-1 lg:grid-cols-5 bg-white border border-gray-200 shadow-sm overflow-hidden">
+                        {/* ── Stat strip ────────────────────────────────────── */}
+                        <section className="grid border-y border-[#e6e8ec] bg-white sm:grid-cols-2 lg:grid-cols-5">
+                            {[
+                                ['Registered Voters', totalRegistered.toLocaleString(), 'National roll'],
+                                ['Votes Cast', totalCast.toLocaleString(), `${turnoutPct}% of registered`],
+                                ['Valid Votes', totalValidVotes.toLocaleString(), `${validPct}% of cast`, 'text-[#0e8c5a]'],
+                                ['Rejected', rejectedVotes.toLocaleString(), `${rejectedPct}% rejection rate`],
+                                ['Turnout', `${turnoutPct}%`, 'National average', 'text-[#e61a6e]'],
+                            ].map(([label, value, helper, accent]) => (
+                                <div key={label} className="border-r border-[#e6e8ec] px-6 py-7 last:border-r-0">
+                                    <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#5f6773]">{label}</div>
+                                    <div className={`mt-3 font-serif text-[clamp(28px,3vw,38px)] font-bold leading-none tracking-[-0.025em] tabular-nums ${accent || 'text-[#0e1014]'}`}>
+                                        {value}
+                                    </div>
+                                    <div className="mt-2 text-[12.5px] tabular-nums text-[#5f6773]">{helper}</div>
+                                </div>
+                            ))}
+                        </section>
 
-                            {/* LEFT: Results statistics */}
-                            <div className="lg:col-span-2 border-b lg:border-b-0 lg:border-r border-gray-200 flex flex-col">
-
-                                {/* Panel label */}
-                                <div className="px-5 py-2.5 bg-gray-50 border-b border-gray-200 flex-shrink-0">
-                                    <span className="text-xs font-bold uppercase tracking-widest text-gray-400">
-                                        Results Summary
-                                    </span>
+                        {/* ── Reporting + certification workflow ────────────── */}
+                        <section className="py-9">
+                            <div className="mx-auto grid max-w-[1240px] gap-5 px-7 lg:grid-cols-[1fr_1.6fr]">
+                                <div className="rounded-[14px] border border-[#e6e8ec] bg-white px-6 py-5">
+                                    <div className="mb-3.5 flex items-baseline justify-between gap-4">
+                                        <div>
+                                            <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#5f6773]">Reporting Progress</div>
+                                            <div className="mt-1 text-[13px] tabular-nums text-[#5f6773]">{stationsReported.toLocaleString()} of {totalStations.toLocaleString()} stations</div>
+                                        </div>
+                                        <div className="font-serif text-[32px] font-bold leading-none tracking-[-0.02em] tabular-nums text-[#0e1014]">{reportingPct}%</div>
+                                    </div>
+                                    <div className="relative h-2.5 overflow-hidden rounded-[5px] bg-[#f1f3f5]">
+                                        <div
+                                            className="absolute inset-y-0 left-0 rounded-[5px] bg-gradient-to-r from-[#e61a6e] to-[#b81259] transition-[width] duration-700"
+                                            style={{ width: `${reportingPct}%` }}
+                                        />
+                                    </div>
+                                    <div className="mt-3.5 flex flex-wrap justify-between gap-2 text-xs text-[#5f6773]">
+                                        <span>Certification window open</span>
+                                        <span className="tabular-nums">{stationsReported.toLocaleString()} published results</span>
+                                    </div>
                                 </div>
 
-                                {/* Key stat blocks — 2×2 grid */}
-                                <div className="grid grid-cols-2 border-b border-gray-100 flex-shrink-0">
-                                    {[
-                                        { label: 'Registered Voters', value: totalRegistered.toLocaleString(), accent: 'text-gray-900', borderR: true, borderB: true },
-                                        { label: 'Votes Cast',        value: totalCast.toLocaleString(),       accent: 'text-[var(--iec-pink)]', sub: `${turnoutPct}% turnout`, borderR: false, borderB: true },
-                                        { label: 'Valid Votes',       value: numeric(stats?.valid_votes).toLocaleString(),    accent: 'text-emerald-700', borderR: true, borderB: false },
-                                        { label: 'Rejected Ballots',  value: numeric(stats?.rejected_votes).toLocaleString(), accent: 'text-gray-700', borderR: false, borderB: false },
-                                    ].map(s => (
-                                        <div
-                                            key={s.label}
-                                            className={`px-5 py-4 ${s.borderR ? 'border-r border-gray-100' : ''} ${s.borderB ? 'border-b border-gray-100' : ''}`}
-                                        >
-                                            <div className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">
-                                                {s.label}
-                                            </div>
-                                            <div className={`text-xl font-bold tabular-nums ${s.accent}`}>{s.value}</div>
-                                            {s.sub && <div className="text-xs text-gray-400 mt-0.5">{s.sub}</div>}
-                                        </div>
+                                <div className="grid overflow-hidden rounded-[14px] border border-[#e6e8ec] bg-white sm:grid-cols-2 lg:grid-cols-5">
+                                    {workflow.map((step, index) => (
+                                        <WorkflowStep key={step.title} step={step} index={index} />
                                     ))}
                                 </div>
-
-                                {/* Voter turnout bar */}
-                                <div className="px-5 py-4 border-b border-gray-100 flex-shrink-0">
-                                    <div className="flex items-center justify-between mb-2">
-                                        <span className="text-xs font-medium text-gray-400 uppercase tracking-wide">
-                                            Voter Turnout
-                                        </span>
-                                        <span className="text-sm font-bold text-gray-900 tabular-nums">{turnoutPct}%</span>
-                                    </div>
-                                    <div className="h-2 bg-gray-100 overflow-hidden rounded-sm">
-                                        <div
-                                            className="h-full bg-sky-500 rounded-sm transition-all duration-700"
-                                            style={{ width: `${Math.min(100, parseFloat(turnoutPct))}%` }}
-                                        />
-                                    </div>
-                                    <p className="text-xs text-gray-400 mt-1.5 tabular-nums">
-                                        {totalCast.toLocaleString()} of {totalRegistered.toLocaleString()} registered voters
-                                    </p>
-                                </div>
-
-                                {/* Certification progress bar */}
-                                <div className="px-5 py-4 border-b border-gray-100 flex-shrink-0">
-                                    <div className="flex items-center justify-between mb-2">
-                                        <span className="text-xs font-medium text-gray-400 uppercase tracking-wide">
-                                            Certification Progress
-                                        </span>
-                                        <span className={`text-sm font-bold tabular-nums ${certPct === 100 ? 'text-emerald-600' : 'text-amber-600'}`}>
-                                            {certPct}%
-                                        </span>
-                                    </div>
-                                    <div className="h-2 bg-gray-100 overflow-hidden rounded-sm">
-                                        <div
-                                            className={`h-full rounded-sm transition-all duration-700 ${certPct === 100 ? 'bg-emerald-500' : 'bg-amber-500'}`}
-                                            style={{ width: `${certPct}%` }}
-                                        />
-                                    </div>
-                                    <p className="text-xs text-gray-400 mt-1.5 tabular-nums">
-                                        {stationsCertified.toLocaleString()} of {totalStations.toLocaleString()} polling stations nationally certified
-                                    </p>
-                                </div>
-
-                                {/* Navigation links — pushed to bottom via mt-auto */}
-                                <div className="mt-auto px-5 py-4 space-y-2 flex-shrink-0 border-t border-gray-100">
-                                    <Link
-                                        href={`/results/map${param}`}
-                                        className="flex items-center justify-between w-full px-3 py-2 text-sm text-gray-700 border border-gray-200 hover:bg-gray-50 hover:border-gray-300 transition-colors group"
-                                    >
-                                        <span>Full Interactive Map</span>
-                                        <span className="text-gray-400 group-hover:translate-x-0.5 transition-transform">→</span>
-                                    </Link>
-                                    <Link
-                                        href={`/results/stations${param}`}
-                                        className="flex items-center justify-between w-full px-3 py-2 text-sm text-gray-700 border border-gray-200 hover:bg-gray-50 hover:border-gray-300 transition-colors group"
-                                    >
-                                        <span>Station-by-Station Results</span>
-                                        <span className="text-gray-400 group-hover:translate-x-0.5 transition-transform">→</span>
-                                    </Link>
-                                </div>
                             </div>
+                        </section>
 
-                            {/* RIGHT: Embedded live map */}
-                            <div
-                                className="lg:col-span-3 relative bg-slate-900 overflow-hidden"
-                                style={{ minHeight: '480px' }}
-                            >
-                                {/* Map header bar */}
-                                <div className="absolute top-0 left-0 right-0 z-30 flex items-center justify-between px-4 h-9 bg-slate-900/98 border-b border-slate-800 flex-shrink-0">
-                                    <div className="flex items-center gap-2">
-                                        <span className={`w-2 h-2 rounded-full flex-shrink-0 ${
-                                            mapLoading ? 'bg-amber-400 animate-pulse' : 'bg-emerald-400'
-                                        }`} />
-                                        <span className="text-xs font-semibold text-white">
-                                            Live Polling Station Map
-                                        </span>
-                                        {!mapLoading && !mapError && (
-                                            <span className="hidden sm:inline text-xs text-slate-500">
-                                                · {mapStations.length.toLocaleString()} stations
-                                            </span>
-                                        )}
-                                    </div>
-                                    <Link
-                                        href={`/results/map${param}`}
-                                        className="text-xs text-slate-400 hover:text-white transition-colors"
-                                    >
-                                        Expand →
-                                    </Link>
-                                </div>
-
-                                {/* Loading overlay */}
-                                {mapLoading && (
-                                    <div className="absolute inset-0 z-20 flex items-center justify-center bg-slate-900/80">
-                                        <div className="text-center">
-                                            <div className="w-8 h-8 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
-                                            <p className="text-xs text-slate-400">Loading station data…</p>
+                        {/* ── Regional leaders ──────────────────────────────── */}
+                        {regionList.length > 0 && (
+                            <section className="border-t border-[#e6e8ec] bg-[#fafafb] py-9">
+                                <div className="mx-auto max-w-[1240px] px-7">
+                                    <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+                                        <div>
+                                            <div className="text-[11px] font-semibold uppercase tracking-[0.1em] text-[#e61a6e]">By region</div>
+                                            <h2 className="mt-1.5 font-serif text-[clamp(24px,2.4vw,30px)] font-bold tracking-[-0.02em] text-[#0e1014]">
+                                                Regional leaders
+                                            </h2>
+                                            <p className="mt-1 max-w-2xl text-sm text-[#5f6773]">
+                                                Leading candidate by certified votes in each administrative region. Open the map for full regional results.
+                                            </p>
                                         </div>
+                                        <Link
+                                            href={`/results/map${param}`}
+                                            className="inline-flex items-center gap-2 self-start rounded-lg border border-[#e6e8ec] bg-white px-4 py-2.5 text-sm font-medium text-[#1f2329] transition hover:border-[#353b45] hover:bg-[#f5f6f8]"
+                                        >
+                                            Open map <span aria-hidden>→</span>
+                                        </Link>
                                     </div>
-                                )}
-
-                                {/* Error overlay */}
-                                {mapError && !mapLoading && (
-                                    <div className="absolute inset-0 z-20 flex items-center justify-center bg-slate-900/80">
-                                        <div className="text-center p-6">
-                                            <p className="text-slate-400 text-sm mb-3">Map data unavailable</p>
-                                            <Link
-                                                href={`/results/map${param}`}
-                                                className="text-xs font-semibold text-emerald-400 hover:text-emerald-300 underline"
-                                            >
-                                                Open full map →
-                                            </Link>
-                                        </div>
+                                    <div className="rounded-[14px] border border-[#e6e8ec] bg-white p-6">
+                                        <RegionalBars regions={regionList} />
                                     </div>
-                                )}
-
-                                {/* Leaflet map — fills below the header bar */}
-                                <div className="absolute top-9 left-0 right-0 bottom-0">
-                                    <LeafletMap stations={mapStations} height="100%" />
                                 </div>
-                            </div>
-                        </div>
-                    </div>
+                            </section>
+                        )}
+                    </>
                 )}
+            </div>
+        </AppLayout>
+    );
+}
+
+// ── Main component ──────────────────────────────────────────────────────────
+export default function Results({ election, elections = [], selectedElectionId, stats, candidates, regions = [], message }) {
+    const param = selectedElectionId ? `?election=${selectedElectionId}` : '';
+    const basePath = '/results';
+
+    useInertiaPrefetch([`/results/map${param}`, `/results/stations${param}`]);
+
+    if (election) {
+        return (
+            <HomeResultsPage
+                election={election}
+                elections={elections}
+                selectedElectionId={selectedElectionId}
+                stats={stats}
+                candidates={candidates}
+                regions={regions}
+                message={message}
+                basePath={basePath}
+                param={param}
+            />
+        );
+    }
+
+    // ── No election configured ────────────────────────────────────────────────
+    return (
+        <AppLayout>
+            <div className="flex min-h-screen items-center justify-center bg-[#fafafb] p-8">
+                <div className="max-w-sm rounded-[14px] border border-[#e6e8ec] bg-white p-10 text-center">
+                    <div className="mb-4 text-4xl">🏛️</div>
+                    <h1 className="mb-2 text-xl font-bold text-[#0e1014]">No Active Election</h1>
+                    <p className="text-sm text-[#5f6773]">
+                        No election is currently configured for public display.
+                    </p>
+                    {elections.length > 0 && (
+                        <div className="mt-4 flex flex-wrap justify-center gap-2">
+                            {elections.map((el) => (
+                                <button
+                                    key={el.id}
+                                    onClick={() => router.get(basePath, { election: el.id })}
+                                    className="rounded-md border border-[#e6e8ec] px-3 py-1.5 text-xs text-[#5f6773] transition-colors hover:border-[#353b45]"
+                                >
+                                    {publicElectionTitle(el)}
+                                </button>
+                            ))}
+                        </div>
+                    )}
+                </div>
             </div>
         </AppLayout>
     );

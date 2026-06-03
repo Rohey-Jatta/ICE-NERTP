@@ -3,6 +3,7 @@
 use App\Http\Middleware\EnsureDeviceBound;
 use App\Http\Middleware\EnsureGpsValid;
 use App\Http\Middleware\HandleInertiaRequests;
+use App\Http\Middleware\AuditRequestMiddleware;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -22,6 +23,11 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $middleware->web(append: [
             HandleInertiaRequests::class,
+            AuditRequestMiddleware::class,
+        ]);
+
+        $middleware->api(append: [
+            AuditRequestMiddleware::class,
         ]);
 
         $middleware->alias([
@@ -39,13 +45,13 @@ return Application::configure(basePath: dirname(__DIR__))
         if (env('VERCEL')) {
             // Set the compiled view path to /tmp (the only writable folder on Vercel)
             $compiledPath = '/tmp/storage/framework/views';
-            
+
             if (!is_dir($compiledPath)) {
                 mkdir($compiledPath, 0755, true);
             }
-            
+
             config(['view.compiled' => $compiledPath]);
-            
+
             // Also ensure the session and cache have a place to go if using file driver
             if (!is_dir('/tmp/storage/framework/sessions')) {
                 mkdir('/tmp/storage/framework/sessions', 0755, true);

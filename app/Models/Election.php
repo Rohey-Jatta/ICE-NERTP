@@ -45,19 +45,36 @@ class Election extends Model
         // election id for 30s–10min; without this, edits to start_date,
         // name, status, or public-display flag would not appear on the
         // homepage until the TTL expires.
-        $bust = function (Election $election): void {
-            Cache::forget("results_summary_v2_{$election->id}");
-            Cache::forget("results_map_{$election->id}");
-            Cache::forget("results_stations_{$election->id}_pub");
-            Cache::forget("results_stations_{$election->id}_prov");
-            Cache::forget("stations_filters_{$election->id}");
-        };
+        $bust = fn(Election $election) => self::forgetPublicCaches($election->id, $election->status);
 
         static::saved($bust);
         static::deleted($bust);
         if (method_exists(static::class, 'restored')) {
             static::restored($bust);
         }
+    }
+
+    public static function forgetPublicCaches(int $electionId, ?string $status = null): void
+    {
+        $statuses = array_unique(array_filter([
+            $status,
+            'active',
+            'certifying',
+            'results_pending',
+            'certified',
+        ]));
+
+        foreach ($statuses as $publicStatus) {
+            Cache::forget("results_summary_v7_{$electionId}_{$publicStatus}");
+            Cache::forget("results_summary_v3_{$electionId}_{$publicStatus}");
+        }
+
+        Cache::forget("results_summary_v2_{$electionId}");
+        Cache::forget("results_map_{$electionId}");
+        Cache::forget("results_map_agg_v3_{$electionId}");
+        Cache::forget("results_stations_{$electionId}_pub");
+        Cache::forget("results_stations_{$electionId}_prov");
+        Cache::forget("stations_filters_{$electionId}");
     }
 
     /**

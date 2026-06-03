@@ -2,17 +2,14 @@
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Cache;
 use Inertia\Inertia;
-use App\Models\AuditLog;
 use App\Models\AdministrativeHierarchy;
 use App\Models\Election;
 use App\Models\PollingStation;
 use App\Models\Result;
-use App\Models\ResultCertification;
+use App\Services\CertificationWorkflowService;
 
 Route::middleware(['auth', 'role:ward-approver'])
     ->prefix('ward')
@@ -238,46 +235,11 @@ Route::middleware(['auth', 'role:ward-approver'])
     Route::post('/approve/{result}', function (Request $request, Result $result) {
         $request->validate(['comments' => 'nullable|string|max:5000']);
 
-        // Parallel workflow: ward approver can certify results in pending_ward or pending_party_acceptance
-        $approveableStatuses = [
-            Result::STATUS_PENDING_WARD,
-            Result::STATUS_PENDING_PARTY_ACCEPTANCE, // legacy backwards compat
-        ];
-
-        if (!in_array($result->certification_status, $approveableStatuses)) {
+        try {
+            app(CertificationWorkflowService::class)->approve($result, Auth::user(), 'ward', $request->comments);
+        } catch (\Throwable $e) {
             return back()->withErrors(['error' => 'Result is not pending ward approval.']);
         }
-
-        $approverId = Auth::id();
-        $ward       = AdministrativeHierarchy::where('assigned_approver_id', $approverId)
-            ->where('level', 'ward')->first();
-        $wardNodeId = $ward?->id
-            ?? AdministrativeHierarchy::where('id', $result->pollingStation?->ward_id)->value('id')
-            ?? 1;
-
-        DB::transaction(function () use ($result, $request, $approverId, $wardNodeId) {
-            ResultCertification::create([
-                'result_id'           => $result->id,
-                'certification_level' => 'ward',
-                'hierarchy_node_id'   => $wardNodeId,
-                'approver_id'         => $approverId,
-                'status'              => 'approved',
-                'comments'            => $request->comments,
-                'assigned_at'         => now(),
-                'decided_at'          => now(),
-            ]);
-
-            $result->update(['certification_status' => Result::STATUS_WARD_CERTIFIED]);
-            $result->update(['certification_status' => Result::STATUS_PENDING_CONSTITUENCY]);
-        });
-
-        AuditLog::record(
-            action:    'certification.ward.approved',
-            event:     'updated',
-            module:    'Certification',
-            auditable: $result,
-            extra:     ['outcome' => 'success', 'comments' => $request->comments]
-        );
 
         return redirect()->route('ward.approval-queue')->with('success', 'Result certified at ward level and promoted to Constituency queue.');
     })->name('approve')->middleware('permission:approve-ward-result');
@@ -286,45 +248,11 @@ Route::middleware(['auth', 'role:ward-approver'])
     Route::post('/approve-with-reservation/{result}', function (Request $request, Result $result) {
         $request->validate(['comments' => 'required|string|max:5000']);
 
-        $approveableStatuses = [
-            Result::STATUS_PENDING_WARD,
-            Result::STATUS_PENDING_PARTY_ACCEPTANCE,
-        ];
-
-        if (!in_array($result->certification_status, $approveableStatuses)) {
+        try {
+            app(CertificationWorkflowService::class)->approve($result, Auth::user(), 'ward', $request->comments, true);
+        } catch (\Throwable $e) {
             return back()->withErrors(['error' => 'Result is not pending ward approval.']);
         }
-
-        $approverId = Auth::id();
-        $ward       = AdministrativeHierarchy::where('assigned_approver_id', $approverId)
-            ->where('level', 'ward')->first();
-        $wardNodeId = $ward?->id
-            ?? AdministrativeHierarchy::where('id', $result->pollingStation?->ward_id)->value('id')
-            ?? 1;
-
-        DB::transaction(function () use ($result, $request, $approverId, $wardNodeId) {
-            ResultCertification::create([
-                'result_id'           => $result->id,
-                'certification_level' => 'ward',
-                'hierarchy_node_id'   => $wardNodeId,
-                'approver_id'         => $approverId,
-                'status'              => 'approved',
-                'comments'            => '[RESERVATION] ' . $request->comments,
-                'assigned_at'         => now(),
-                'decided_at'          => now(),
-            ]);
-
-            $result->update(['certification_status' => Result::STATUS_WARD_CERTIFIED]);
-            $result->update(['certification_status' => Result::STATUS_PENDING_CONSTITUENCY]);
-        });
-
-        AuditLog::record(
-            action:    'certification.ward.approved_with_reservation',
-            event:     'updated',
-            module:    'Certification',
-            auditable: $result,
-            extra:     ['outcome' => 'success', 'reservation' => $request->comments]
-        );
 
         return redirect()->route('ward.approval-queue')->with('success', 'Result certified with reservation and promoted to Constituency queue.');
     })->name('approve-with-reservation')->middleware('permission:reject-ward-result-with-reservation|approve-ward-result');
@@ -333,50 +261,11 @@ Route::middleware(['auth', 'role:ward-approver'])
     Route::post('/reject/{result}', function (Request $request, Result $result) {
         $request->validate(['comments' => 'required|string|max:5000']);
 
-        $approveableStatuses = [
-            Result::STATUS_PENDING_WARD,
-            Result::STATUS_PENDING_PARTY_ACCEPTANCE,
-        ];
-
-        if (!in_array($result->certification_status, $approveableStatuses)) {
+        try {
+            app(CertificationWorkflowService::class)->reject($result, Auth::user(), 'ward', $request->comments);
+        } catch (\Throwable $e) {
             return back()->withErrors(['error' => 'Result is not pending ward approval.']);
         }
-
-        $approverId = Auth::id();
-        $ward       = AdministrativeHierarchy::where('assigned_approver_id', $approverId)
-            ->where('level', 'ward')->first();
-        $wardNodeId = $ward?->id
-            ?? AdministrativeHierarchy::where('id', $result->pollingStation?->ward_id)->value('id')
-            ?? 1;
-
-        DB::transaction(function () use ($result, $request, $approverId, $wardNodeId) {
-            ResultCertification::create([
-                'result_id'           => $result->id,
-                'certification_level' => 'ward',
-                'hierarchy_node_id'   => $wardNodeId,
-                'approver_id'         => $approverId,
-                'status'              => 'rejected',
-                'comments'            => $request->comments,
-                'assigned_at'         => now(),
-                'decided_at'          => now(),
-            ]);
-
-            $result->update([
-                'certification_status'  => Result::STATUS_SUBMITTED,
-                'last_rejection_reason' => $request->comments,
-                'last_rejected_by'      => $approverId,
-                'last_rejected_at'      => now(),
-                'rejection_count'       => $result->rejection_count + 1,
-            ]);
-        });
-
-        AuditLog::record(
-            action:    'certification.ward.rejected',
-            event:     'updated',
-            module:    'Certification',
-            auditable: $result,
-            extra:     ['outcome' => 'rejected', 'reason' => $request->comments]
-        );
 
         return redirect()->route('ward.approval-queue')->with('success', 'Result rejected and returned to the Polling Officer.');
     })->name('reject')->middleware('permission:reject-ward-result');

@@ -1,19 +1,7 @@
 import { useState } from 'react';
 import AppLayout from '@/Layouts/AppLayout';
 import { Link, router } from '@inertiajs/react';
-
-const STATUS_LABELS = {
-    submitted:                  { label: 'Submitted',              color: 'bg-slate-100 text-slate-600' },
-    pending_party_acceptance:   { label: 'Pending Ward',           color: 'bg-iec-pink-500/20 text-iec-pink-600' },
-    pending_ward:               { label: 'Pending Ward',           color: 'bg-iec-pink-500/20 text-iec-pink-600' },
-    ward_certified:             { label: 'Ward Certified',         color: 'bg-iec-pink-500/20 text-iec-pink-600' },
-    pending_constituency:       { label: 'At Constituency',        color: 'bg-iec-pink-500/20 text-iec-pink-600' },
-    constituency_certified:     { label: 'Constituency Certified', color: 'bg-cyan-500/20 text-cyan-300' },
-    pending_admin_area:         { label: 'At Admin Area',          color: 'bg-iec-pink-50 text-iec-pink-600' },
-    admin_area_certified:       { label: 'Admin Area Certified',   color: 'bg-violet-500/20 text-violet-300' },
-    pending_national:           { label: 'At National',            color: 'bg-pink-500/20 text-pink-300' },
-    nationally_certified:       { label: 'Nationally Certified',   color: 'bg-green-500/20 text-green-300' },
-};
+import { RESULT_STATUS, getResultStatusMeta } from '@/Utils/resultStatus';
 
 const PARTY_STATUS_CONFIG = {
     accepted:                  { label: 'Accepted',             color: 'bg-iec-pink-500/20 text-iec-pink-600 border-teal-500/30',     icon: '✓' },
@@ -187,11 +175,11 @@ export default function WardApprovalQueue({ auth, ward, results = [], filter = '
                 ) : (
                     <div className="space-y-4">
                         {results.map(result => {
-                            const statusCfg = STATUS_LABELS[result.certification_status] || { label: result.certification_status, color: 'bg-slate-100 text-slate-600' };
+                            const statusCfg = getResultStatusMeta(result.certification_status);
 
                             // Parallel workflow: both pending_ward and legacy pending_party_acceptance are actionable
-                            const isPending = result.certification_status === 'pending_ward'
-                                || result.certification_status === 'pending_party_acceptance';
+                            const isPending = result.certification_status === RESULT_STATUS.PENDING_WARD
+                                || result.certification_status === RESULT_STATUS.PENDING_PARTY_ACCEPTANCE;
 
                             return (
                                 <div
@@ -206,7 +194,7 @@ export default function WardApprovalQueue({ auth, ward, results = [], filter = '
                                             <div className="flex items-center gap-3 mb-1 flex-wrap">
                                                 <h3 className="text-lg font-bold text-iec-navy">{result.polling_station}</h3>
                                                 <span className="text-xs font-mono text-slate-500">{result.polling_station_code}</span>
-                                                <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${statusCfg.color}`}>
+                                                <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${statusCfg.badgeClass}`}>
                                                     {statusCfg.label}
                                                 </span>
                                                 {result.rejection_count > 0 && (

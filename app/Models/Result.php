@@ -23,6 +23,7 @@ class Result extends Model
     const STATUS_PENDING_NATIONAL         = 'pending_national';
     const STATUS_NATIONALLY_CERTIFIED     = 'nationally_certified';
     const STATUS_REJECTED                 = 'rejected';
+    const STATUS_NOT_REPORTED             = 'not_reported';
 
     // Statuses where party reps can review results (parallel workflow)
     const PARTY_ACCEPTABLE_STATUSES = [
@@ -35,6 +36,60 @@ class Result extends Model
         self::STATUS_PENDING_NATIONAL,
         self::STATUS_NATIONALLY_CERTIFIED,
         self::STATUS_PENDING_PARTY_ACCEPTANCE, // legacy
+    ];
+
+    /**
+     * Active certification path. Party review is parallel and non-blocking; the
+     * pending_party_acceptance status is retained only for legacy records.
+     */
+    const CERTIFICATION_PIPELINE_STATUSES = [
+        self::STATUS_SUBMITTED,
+        self::STATUS_PENDING_WARD,
+        self::STATUS_WARD_CERTIFIED,
+        self::STATUS_PENDING_CONSTITUENCY,
+        self::STATUS_CONSTITUENCY_CERTIFIED,
+        self::STATUS_PENDING_ADMIN_AREA,
+        self::STATUS_ADMIN_AREA_CERTIFIED,
+        self::STATUS_PENDING_NATIONAL,
+        self::STATUS_NATIONALLY_CERTIFIED,
+    ];
+
+    const LEGACY_STATUSES = [
+        self::STATUS_PENDING_PARTY_ACCEPTANCE,
+    ];
+
+    const WORKFLOW_TERMINAL_STATUSES = [
+        self::STATUS_NATIONALLY_CERTIFIED,
+        self::STATUS_REJECTED,
+    ];
+
+    const ALL_CERTIFICATION_STATUSES = [
+        self::STATUS_SUBMITTED,
+        self::STATUS_PENDING_PARTY_ACCEPTANCE,
+        self::STATUS_PENDING_WARD,
+        self::STATUS_WARD_CERTIFIED,
+        self::STATUS_PENDING_CONSTITUENCY,
+        self::STATUS_CONSTITUENCY_CERTIFIED,
+        self::STATUS_PENDING_ADMIN_AREA,
+        self::STATUS_ADMIN_AREA_CERTIFIED,
+        self::STATUS_PENDING_NATIONAL,
+        self::STATUS_NATIONALLY_CERTIFIED,
+        self::STATUS_REJECTED,
+    ];
+
+    const PUBLIC_STATUS_LABELS = [
+        self::STATUS_NOT_REPORTED             => 'Not reported',
+        self::STATUS_SUBMITTED                => 'Submitted',
+        self::STATUS_PENDING_PARTY_ACCEPTANCE => 'Legacy party gate',
+        self::STATUS_PENDING_WARD             => 'Pending ward review',
+        self::STATUS_WARD_CERTIFIED           => 'Ward certified',
+        self::STATUS_PENDING_CONSTITUENCY     => 'Pending constituency review',
+        self::STATUS_CONSTITUENCY_CERTIFIED   => 'Constituency certified',
+        self::STATUS_PENDING_ADMIN_AREA       => 'Pending admin area review',
+        self::STATUS_ADMIN_AREA_CERTIFIED     => 'Admin area certified',
+        self::STATUS_PENDING_NATIONAL         => 'Pending national review',
+        self::STATUS_NATIONALLY_CERTIFIED     => 'Nationally certified',
+        self::STATUS_REJECTED                 => 'Rejected',
     ];
 
     protected $fillable = [
@@ -79,6 +134,7 @@ class Result extends Model
     }
     public function getNextStatus(): ?string {
         $map = [
+            self::STATUS_SUBMITTED                => self::STATUS_PENDING_WARD,
             self::STATUS_PENDING_PARTY_ACCEPTANCE => self::STATUS_PENDING_WARD,
             self::STATUS_PENDING_WARD             => self::STATUS_WARD_CERTIFIED,
             self::STATUS_WARD_CERTIFIED           => self::STATUS_PENDING_CONSTITUENCY,

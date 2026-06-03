@@ -1,16 +1,7 @@
 import { useState } from 'react';
 import AppLayout from '@/Layouts/AppLayout';
 import { Link, router } from '@inertiajs/react';
-
-const STATUS_LABELS = {
-    pending_ward:             { label: 'Returned to Ward',       color: 'bg-red-500/20 text-red-300' },
-    pending_constituency:     { label: 'Pending Constituency',   color: 'bg-amber-500/20 text-amber-300' },
-    constituency_certified:   { label: 'Constituency Certified', color: 'bg-iec-pink-500/20 text-iec-pink-600' },
-    pending_admin_area:       { label: 'At Admin Area',          color: 'bg-iec-pink-500/20 text-iec-pink-600' },
-    admin_area_certified:     { label: 'Admin Area Certified',   color: 'bg-cyan-500/20 text-cyan-300' },
-    pending_national:         { label: 'At National',            color: 'bg-pink-500/20 text-pink-300' },
-    nationally_certified:     { label: 'Nationally Certified',   color: 'bg-green-500/20 text-green-300' },
-};
+import { RESULT_STATUS, getResultStatusMeta } from '@/Utils/resultStatus';
 
 const PARTY_STATUS = {
     accepted:                  { label: 'Accepted',            color: 'bg-iec-pink-500/20 text-iec-pink-600 border-teal-500/30',    icon: '✓' },
@@ -182,8 +173,8 @@ export default function ConstituencyApprovalQueue({
                 ) : (
                     <div className="space-y-4">
                         {results.map(result => {
-                            const statusCfg = STATUS_LABELS[result.certification_status] || { label: result.certification_status, color: 'bg-slate-100 text-slate-600' };
-                            const isPending = result.certification_status === 'pending_constituency';
+                            const statusCfg = getResultStatusMeta(result.certification_status);
+                            const isPending = result.certification_status === RESULT_STATUS.PENDING_CONSTITUENCY;
                             const anomalies = detectAnomalies(result);
 
                             return (
@@ -197,7 +188,7 @@ export default function ConstituencyApprovalQueue({
                                                 <h3 className="text-lg font-bold text-iec-navy">{result.polling_station}</h3>
                                                 <span className="text-xs font-mono text-slate-500">{result.polling_station_code}</span>
                                                 <span className="text-xs text-slate-500 bg-slate-100 px-2 py-0.5 rounded">Ward: {result.ward_name}</span>
-                                                <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${statusCfg.color}`}>{statusCfg.label}</span>
+                                                <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${statusCfg.badgeClass}`}>{statusCfg.label}</span>
                                                 {result.rejection_count > 0 && (
                                                     <span className="px-2 py-0.5 rounded-full text-xs bg-orange-500/20 text-orange-300">
                                                         Rejected {result.rejection_count}×

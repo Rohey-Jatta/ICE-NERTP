@@ -1,24 +1,12 @@
 import AppLayout from '@/Layouts/AppLayout';
 import { Link } from '@inertiajs/react';
+import { getResultStatusMeta } from '@/Utils/resultStatus';
 
 const ACCEPTANCE_CONFIG = {
     accepted:                 { label: 'Accepted',              color: 'bg-iec-pink-500/20 text-iec-pink-600 border-teal-500/30',    icon: '✓' },
     accepted_with_reservation:{ label: 'Accepted (Reserved)',   color: 'bg-yellow-500/20 text-yellow-300 border-yellow-500/30', icon: '⚠' },
     rejected:                 { label: 'Disputed',              color: 'bg-red-500/20 text-red-300 border-red-500/30',       icon: '✗' },
     pending:                  { label: 'Not Yet Reviewed',      color: 'bg-slate-100 text-slate-500 border-slate-200',    icon: '○' },
-};
-
-const RESULT_STATUS_CONFIG = {
-    not_reported:             { label: 'No Result Yet',         color: 'text-slate-500' },
-    pending_party_acceptance: { label: 'Awaiting Parties',      color: 'text-yellow-400' },
-    pending_ward:             { label: 'At Ward Review',        color: 'text-amber-400' },
-    ward_certified:           { label: 'Ward Certified',        color: 'text-iec-pink-600' },
-    pending_constituency:     { label: 'At Constituency',       color: 'text-iec-pink-600' },
-    constituency_certified:   { label: 'Constituency Certified',color: 'text-cyan-400' },
-    pending_admin_area:       { label: 'At Admin Area',         color: 'text-iec-pink-600' },
-    admin_area_certified:     { label: 'Admin Area Certified',  color: 'text-violet-400' },
-    pending_national:         { label: 'At National',           color: 'text-pink-400' },
-    nationally_certified:     { label: 'Nationally Certified',  color: 'text-green-400' },
 };
 
 export default function PartyStations({ auth, stations = [], party }) {
@@ -69,7 +57,7 @@ export default function PartyStations({ auth, stations = [], party }) {
                     <div className="space-y-3">
                         {stations.map((station) => {
                             const acceptanceCfg = ACCEPTANCE_CONFIG[station.acceptance_status] || ACCEPTANCE_CONFIG.pending;
-                            const resultCfg     = RESULT_STATUS_CONFIG[station.result_status] || RESULT_STATUS_CONFIG.not_reported;
+                            const resultCfg     = getResultStatusMeta(station.result_status);
                             const canReview     = station.has_result && !station.acceptance_is_final;
 
                             return (
@@ -104,7 +92,7 @@ export default function PartyStations({ auth, stations = [], party }) {
                                                 )}
                                             </div>
                                             {/* Certification pipeline status */}
-                                            <div className={`text-xs mt-1 ${resultCfg.color}`}>
+                                            <div className={`text-xs mt-1 ${resultCfg.textClass}`}>
                                                 {station.has_result ? `Certification: ${resultCfg.label}` : 'No result submitted yet'}
                                             </div>
                                         </div>

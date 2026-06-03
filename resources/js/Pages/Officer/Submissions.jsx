@@ -1,32 +1,17 @@
 import AppLayout from '@/Layouts/AppLayout';
 import { Link } from '@inertiajs/react';
 import { useState } from 'react';
-
-const STATUS_CONFIG = {
-    submitted:                 { label: 'Submitted',             color: 'bg-sky-500/20 text-sky-300 border-sky-500/30',        icon: '📤' },
-    pending_party_acceptance:  { label: 'Party Review',          color: 'bg-pink-500/20 text-Pink-500 border-pink-500/30',icon: '🤝' },
-    pending_ward:              { label: 'Ward Review',           color: 'bg-amber-500/20 text-amber-300 border-amber-500/30',  icon: '⏳' },
-    ward_certified:            { label: 'Ward Certified',        color: 'bg-iec-pink-500/20 text-iec-pink-600 border-teal-500/30',    icon: '✓' },
-    pending_constituency:      { label: 'Constituency Review',   color: 'bg-iec-pink-500/20 text-iec-pink-600 border-blue-500/30',    icon: '⏳' },
-    constituency_certified:    { label: 'Constituency Certified',color: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30',    icon: '✓' },
-    pending_admin_area:        { label: 'Admin Area Review',     color: 'bg-iec-pink-50 text-iec-pink-600 border-iec-pink-100',icon:'⏳' },
-    admin_area_certified:      { label: 'Admin Area Certified',  color: 'bg-violet-500/20 text-violet-300 border-violet-500/30',icon:'✓' },
-    pending_national:          { label: 'National Review',       color: 'bg-pink-500/20 text-pink-300 border-pink-500/30',    icon: '⏳' },
-    nationally_certified:      { label: 'Nationally Certified',  color: 'bg-green-500/20 text-green-300 border-green-500/30', icon: '🏆' },
-    rejected:                  { label: 'Rejected',              color: 'bg-red-500/20 text-red-300 border-red-500/30',       icon: '✗' },
-};
-
-const PIPELINE_STEPS = [
-    'submitted', 'pending_party_acceptance', 'pending_ward',
-    'ward_certified', 'pending_constituency', 'constituency_certified',
-    'pending_admin_area', 'admin_area_certified', 'pending_national', 'nationally_certified',
-];
+import {
+    CERTIFIED_RESULT_STATUSES,
+    EARLY_PIPELINE_STATUSES,
+    RESULT_STATUS,
+    getCertificationPipelinePercent,
+    getResultStatusMeta,
+} from '@/Utils/resultStatus';
 
 function PipelineBar({ status }) {
-    const currentStep = PIPELINE_STEPS.indexOf(status);
-    const totalSteps  = PIPELINE_STEPS.length;
-    const pct         = currentStep >= 0 ? Math.round(((currentStep + 1) / totalSteps) * 100) : 0;
-    const cfg         = STATUS_CONFIG[status] || {};
+    const pct        = getCertificationPipelinePercent(status);
+    const isReturned = status === RESULT_STATUS.REJECTED;
 
     return (
         <div>
@@ -39,9 +24,9 @@ function PipelineBar({ status }) {
                     className="h-2 rounded-full transition-all duration-500"
                     style={{
                         width: `${pct}%`,
-                        background: status === 'nationally_certified'
+                        background: status === RESULT_STATUS.NATIONALLY_CERTIFIED
                             ? 'linear-gradient(90deg, #10b981, #14b8a6)'
-                            : status.includes('rejected') || status === 'submitted'
+                            : isReturned
                             ? '#ef4444'
                             : 'linear-gradient(90deg, #3b82f6, #8b5cf6)',
                     }}
@@ -54,8 +39,8 @@ function PipelineBar({ status }) {
 export default function Submissions({ auth, submissions = [], station }) {
     const [expandedId, setExpandedId] = useState(null);
 
-    const pendingCount   = submissions.filter(s => ['submitted','pending_party_acceptance','pending_ward'].includes(s.certification_status)).length;
-    const certifiedCount = submissions.filter(s => ['ward_certified','constituency_certified','admin_area_certified','nationally_certified'].includes(s.certification_status)).length;
+    const pendingCount   = submissions.filter(s => EARLY_PIPELINE_STATUSES.includes(s.certification_status)).length;
+    const certifiedCount = submissions.filter(s => CERTIFIED_RESULT_STATUSES.includes(s.certification_status)).length;
     const rejectedCount  = submissions.filter(s => s.is_editable).length;
 
     return (
@@ -122,7 +107,7 @@ export default function Submissions({ auth, submissions = [], station }) {
                 ) : (
                     <div className="space-y-4">
                         {submissions.map((submission) => {
-                            const cfg       = STATUS_CONFIG[submission.certification_status] || { label: submission.certification_status, color: 'bg-slate-100 text-slate-600 border-slate-200', icon: '○' };
+                            const cfg       = getResultStatusMeta(submission.certification_status);
                             const isExpanded = expandedId === submission.id;
 
                             return (
@@ -130,7 +115,7 @@ export default function Submissions({ auth, submissions = [], station }) {
                                      className={`bg-white rounded-xl border transition-all ${
                                          submission.is_editable
                                              ? 'border-red-500/40'
-                                             : submission.certification_status === 'nationally_certified'
+                                             : submission.certification_status === RESULT_STATUS.NATIONALLY_CERTIFIED
                                              ? 'border-green-500/30'
                                              : 'border-slate-200'
                                      }`}>
@@ -144,7 +129,7 @@ export default function Submissions({ auth, submissions = [], station }) {
                                                     <span className="font-mono text-xs text-slate-500 bg-white px-2 py-0.5 rounded">
                                                         {submission.polling_station_code}
                                                     </span>
-                                                    <span className={`px-2.5 py-1 rounded-full text-xs font-semibold border ${cfg.color}`}>
+                                                    <span className={`px-2.5 py-1 rounded-full text-xs font-semibold border ${cfg.borderedBadgeClass}`}>
                                                         {cfg.icon} {cfg.label}
                                                     </span>
                                                     {submission.rejection_count > 0 && (

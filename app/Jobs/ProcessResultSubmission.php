@@ -35,12 +35,10 @@ class ProcessResultSubmission implements ShouldQueue
                 return;
             }
 
-            // PARALLEL WORKFLOW:
-            // Ward Approvers and Party Representatives now work simultaneously.
-            // Results go directly to PENDING_WARD so ward approvers get immediate access.
-            // Party reps can still review and respond independently — their input is
-            // recorded as informational context and does NOT block ward certification.
-            $result->forceFill(['certification_status' => Result::STATUS_PENDING_WARD])->save();
+            // Parallel workflow: party responses are informational and do not
+            // block ward review, so new submissions skip the legacy party gate.
+            $nextStatus = $result->getNextStatus();
+            $result->forceFill(['certification_status' => $nextStatus])->save();
 
             AuditLog::record(
                 action: 'result.processing.completed',
@@ -49,7 +47,7 @@ class ProcessResultSubmission implements ShouldQueue
                 auditable: $result,
                 extra: [
                     'outcome'    => 'success',
-                    'new_status' => Result::STATUS_PENDING_WARD,
+                    'new_status' => $nextStatus,
                     'workflow'   => 'parallel',
                 ]
             );
@@ -57,7 +55,7 @@ class ProcessResultSubmission implements ShouldQueue
             Log::info('ProcessResultSubmission: advanced to pending_ward (parallel workflow)', [
                 'result_id'  => $result->id,
                 'station_id' => $result->polling_station_id,
-                'new_status' => Result::STATUS_PENDING_WARD,
+                'new_status' => $nextStatus,
             ]);
 
         } catch (\Exception $e) {

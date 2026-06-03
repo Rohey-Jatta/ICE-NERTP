@@ -3,13 +3,11 @@
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 use App\Models\AdministrativeHierarchy;
-use App\Models\AuditLog;
 use App\Models\Result;
-use App\Models\ResultCertification;
+use App\Services\CertificationWorkflowService;
 
 Route::middleware(['auth', 'role:admin-area-approver'])
     ->prefix('admin-area')
@@ -231,42 +229,11 @@ Route::middleware(['auth', 'role:admin-area-approver'])
     Route::post('/approve/{result}', function (Request $request, Result $result) {
         $request->validate(['comments' => 'nullable|string|max:5000']);
 
-        if ($result->certification_status !== Result::STATUS_PENDING_ADMIN_AREA) {
+        try {
+            app(CertificationWorkflowService::class)->approve($result, Auth::user(), 'admin_area', $request->comments);
+        } catch (\Throwable $e) {
             return back()->withErrors(['error' => 'Result is not pending admin-area approval.']);
         }
-
-        $approverId  = Auth::id();
-        $adminArea   = AdministrativeHierarchy::where('assigned_approver_id', $approverId)
-            ->where('level', 'admin_area')->first();
-        $wardParentId      = AdministrativeHierarchy::where('id', $result->pollingStation?->ward_id)->value('parent_id');
-        $adminAreaNodeId   = $adminArea?->id
-            ?? AdministrativeHierarchy::where('id', $wardParentId)->value('parent_id')
-            ?? AdministrativeHierarchy::where('level', 'admin_area')->value('id')
-            ?? 1;
-
-        DB::transaction(function () use ($result, $request, $approverId, $adminAreaNodeId) {
-            ResultCertification::create([
-                'result_id'           => $result->id,
-                'certification_level' => 'admin_area',
-                'hierarchy_node_id'   => $adminAreaNodeId,
-                'approver_id'         => $approverId,
-                'status'              => 'approved',
-                'comments'            => $request->comments,
-                'assigned_at'         => now(),
-                'decided_at'          => now(),
-            ]);
-
-            $result->update(['certification_status' => Result::STATUS_ADMIN_AREA_CERTIFIED]);
-            $result->update(['certification_status' => Result::STATUS_PENDING_NATIONAL]);
-        });
-
-        AuditLog::record(
-            action: 'certification.admin_area.approved',
-            event: 'updated',
-            module: 'Certification',
-            auditable: $result,
-            extra: ['outcome' => 'success', 'comments' => $request->comments]
-        );
 
         return back()->with('success', 'Result certified at admin-area level and promoted to IEC Chairman queue.');
     })->name('approve')->middleware('permission:approve-admin-area-result');
@@ -275,42 +242,11 @@ Route::middleware(['auth', 'role:admin-area-approver'])
     Route::post('/approve-with-reservation/{result}', function (Request $request, Result $result) {
         $request->validate(['comments' => 'required|string|max:5000']);
 
-        if ($result->certification_status !== Result::STATUS_PENDING_ADMIN_AREA) {
+        try {
+            app(CertificationWorkflowService::class)->approve($result, Auth::user(), 'admin_area', $request->comments, true);
+        } catch (\Throwable $e) {
             return back()->withErrors(['error' => 'Result is not pending admin-area approval.']);
         }
-
-        $approverId      = Auth::id();
-        $adminArea       = AdministrativeHierarchy::where('assigned_approver_id', $approverId)
-            ->where('level', 'admin_area')->first();
-        $wardParentId    = AdministrativeHierarchy::where('id', $result->pollingStation?->ward_id)->value('parent_id');
-        $adminAreaNodeId = $adminArea?->id
-            ?? AdministrativeHierarchy::where('id', $wardParentId)->value('parent_id')
-            ?? AdministrativeHierarchy::where('level', 'admin_area')->value('id')
-            ?? 1;
-
-        DB::transaction(function () use ($result, $request, $approverId, $adminAreaNodeId) {
-            ResultCertification::create([
-                'result_id'           => $result->id,
-                'certification_level' => 'admin_area',
-                'hierarchy_node_id'   => $adminAreaNodeId,
-                'approver_id'         => $approverId,
-                'status'              => 'approved',
-                'comments'            => '[RESERVATION] ' . $request->comments,
-                'assigned_at'         => now(),
-                'decided_at'          => now(),
-            ]);
-
-            $result->update(['certification_status' => Result::STATUS_ADMIN_AREA_CERTIFIED]);
-            $result->update(['certification_status' => Result::STATUS_PENDING_NATIONAL]);
-        });
-
-        AuditLog::record(
-            action: 'certification.admin_area.approved_with_reservation',
-            event: 'updated',
-            module: 'Certification',
-            auditable: $result,
-            extra: ['outcome' => 'success', 'reservation' => $request->comments]
-        );
 
         return back()->with('success', 'Result certified with reservation and promoted to IEC Chairman queue.');
     })->name('approve-with-reservation')->middleware('permission:approve-admin-area-result-with-reservation|approve-admin-area-result');
@@ -319,47 +255,11 @@ Route::middleware(['auth', 'role:admin-area-approver'])
     Route::post('/reject/{result}', function (Request $request, Result $result) {
         $request->validate(['comments' => 'required|string|max:5000']);
 
-        if ($result->certification_status !== Result::STATUS_PENDING_ADMIN_AREA) {
+        try {
+            app(CertificationWorkflowService::class)->reject($result, Auth::user(), 'admin_area', $request->comments);
+        } catch (\Throwable $e) {
             return back()->withErrors(['error' => 'Result is not pending admin-area approval.']);
         }
-
-        $approverId      = Auth::id();
-        $adminArea       = AdministrativeHierarchy::where('assigned_approver_id', $approverId)
-            ->where('level', 'admin_area')->first();
-        $wardParentId    = AdministrativeHierarchy::where('id', $result->pollingStation?->ward_id)->value('parent_id');
-        $adminAreaNodeId = $adminArea?->id
-            ?? AdministrativeHierarchy::where('id', $wardParentId)->value('parent_id')
-            ?? AdministrativeHierarchy::where('level', 'admin_area')->value('id')
-            ?? 1;
-
-        DB::transaction(function () use ($result, $request, $approverId, $adminAreaNodeId) {
-            ResultCertification::create([
-                'result_id'           => $result->id,
-                'certification_level' => 'admin_area',
-                'hierarchy_node_id'   => $adminAreaNodeId,
-                'approver_id'         => $approverId,
-                'status'              => 'rejected',
-                'comments'            => $request->comments,
-                'assigned_at'         => now(),
-                'decided_at'          => now(),
-            ]);
-
-            $result->update([
-                'certification_status'  => Result::STATUS_PENDING_CONSTITUENCY,
-                'last_rejection_reason' => $request->comments,
-                'last_rejected_by'      => $approverId,
-                'last_rejected_at'      => now(),
-                'rejection_count'       => $result->rejection_count + 1,
-            ]);
-        });
-
-        AuditLog::record(
-            action: 'certification.admin_area.rejected',
-            event: 'updated',
-            module: 'Certification',
-            auditable: $result,
-            extra: ['outcome' => 'rejected', 'reason' => $request->comments]
-        );
 
         return back()->with('success', 'Result rejected and returned to constituency level.');
     })->name('reject')->middleware('permission:reject-admin-area-result');

@@ -1,14 +1,6 @@
 import AppLayout from '@/Layouts/AppLayout';
 import { Link } from '@inertiajs/react';
-
-const STATUS_PIPELINE = [
-    { key: 'submitted',              label: 'Submitted',            step: 1 },
-    { key: 'pending_party_acceptance',label: 'Party Review',        step: 2 },
-    { key: 'pending_ward',           label: 'Ward Review',          step: 3 },
-    { key: 'ward_certified',         label: 'Ward Certified',       step: 4 },
-    { key: 'pending_constituency',   label: 'Constituency',         step: 5 },
-    { key: 'nationally_certified',   label: 'Nationally Certified', step: 6 },
-];
+import { ACTIVE_CERTIFICATION_PIPELINE } from '@/Utils/resultStatus';
 
 export default function OfficerDashboard({ auth, station, statistics = {}, hasSubmitted, canSubmit }) {
     return (
@@ -151,20 +143,20 @@ export default function OfficerDashboard({ auth, station, statistics = {}, hasSu
                 <div className="bg-white rounded-xl p-6 border border-slate-200">
                     <h2 className="text-iec-navy font-bold text-lg mb-4">Certification Pipeline</h2>
                     <div className="flex flex-wrap gap-2 items-center">
-                        {STATUS_PIPELINE.map((step, idx) => (
+                        {ACTIVE_CERTIFICATION_PIPELINE.map((step, idx) => (
                             <div key={step.key} className="flex items-center gap-2">
                                 <div className="flex items-center gap-1.5 px-3 py-1.5 bg-white rounded-lg border border-slate-200">
                                     <span className="text-xs text-slate-500 font-mono">{step.step}</span>
                                     <span className="text-xs text-slate-600">{step.label}</span>
                                 </div>
-                                {idx < STATUS_PIPELINE.length - 1 && (
+                                {idx < ACTIVE_CERTIFICATION_PIPELINE.length - 1 && (
                                     <span className="text-slate-600">→</span>
                                 )}
                             </div>
                         ))}
                     </div>
                     <p className="text-slate-500 text-xs mt-3">
-                        Your submission moves through this pipeline after being reviewed by party representatives, ward approvers, and IEC leadership.
+                        Party representatives review in parallel; their response is visible to approvers but does not block this certification path.
                     </p>
                 </div>
             </div>

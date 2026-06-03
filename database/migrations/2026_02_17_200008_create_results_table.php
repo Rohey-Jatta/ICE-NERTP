@@ -5,7 +5,8 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
 /**
- * Core result entity with full 10-state certification state machine.
+ * Core result entity with the active certification state machine plus
+ * legacy/returned statuses needed for compatibility and resubmission.
  * submission_uuid ensures offline idempotency (no duplicate submissions).
  */
 return new class extends Migration
