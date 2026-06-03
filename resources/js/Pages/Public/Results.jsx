@@ -1,5 +1,5 @@
 import AppLayout from '@/Layouts/AppLayout';
-import { Link, router } from '@inertiajs/react';
+import { Link, router, usePage } from '@inertiajs/react';
 import { useState } from 'react';
 import useInertiaPrefetch from '@/Hooks/useInertiaPrefetch';
 import { electionTypeLabel, publicElectionTitle } from '@/Utils/publicElection';
@@ -196,8 +196,35 @@ function RegionalBars({ regions }) {
     );
 }
 
+// ── Pipeline breakdown widget (from main) ─────────────────────────────────────
+function PipelineBreakdown({ pipeline = {}, totalStations = 0 }) {
+    const submitted    = Number(pipeline.submitted    ?? 0);
+    const underReview  = Number(pipeline.under_review ?? 0);
+    const certified    = Number(pipeline.certified    ?? 0);
+    const notReported  = Math.max(0, totalStations - submitted - underReview - certified);
+    const items = [
+        { label: 'Submitted',   value: submitted,   color: 'text-blue-700',    bg: 'bg-blue-50',    border: 'border-blue-200'    },
+        { label: 'Under Review',value: underReview,  color: 'text-amber-700',   bg: 'bg-amber-50',   border: 'border-amber-200'   },
+        { label: 'Certified',   value: certified,    color: 'text-emerald-700', bg: 'bg-emerald-50', border: 'border-emerald-200' },
+        { label: 'Not Reported',value: notReported,  color: 'text-slate-500',   bg: 'bg-slate-50',   border: 'border-slate-200'   },
+    ];
+    return (
+        <div className="rounded-[14px] border border-[#e6e8ec] bg-white p-5">
+            <p className="mb-3 text-[11px] font-bold uppercase tracking-[0.12em] text-[#5f6773]">Certification Pipeline</p>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                {items.map((item) => (
+                    <div key={item.label} className={`rounded-lg border px-3 py-2 text-center ${item.bg} ${item.border}`}>
+                        <div className={`text-lg font-extrabold tabular-nums ${item.color}`}>{item.value.toLocaleString()}</div>
+                        <div className="text-xs text-slate-500">{item.label}</div>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+}
+
 // ── Dashboard ─────────────────────────────────────────────────────────────────
-function HomeResultsPage({ election, elections, selectedElectionId, stats, candidates, regions, message, basePath, param }) {
+function HomeResultsPage({ election, elections, selectedElectionId, stats, pipeline, candidates, regions, message, basePath, param }) {
     const totalValidVotes = numeric(stats?.valid_votes);
     const totalStations = numeric(stats?.total_stations);
     const stationsReported = numeric(stats?.stations_reported);
@@ -276,6 +303,10 @@ function HomeResultsPage({ election, elections, selectedElectionId, stats, candi
                             <h2 className="font-serif text-3xl font-bold text-[#0e1014]">Awaiting Published Results</h2>
                             <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-[#5f6773]">
                                 {message || 'Results will appear here as polling stations are officially certified and published.'}
+                            </p>
+
+                            <p className="text-xs text-gray-400 mt-2">
+                                Page auto-refreshes every 60 seconds.
                             </p>
                         </div>
                     </div>
@@ -362,10 +393,13 @@ function HomeResultsPage({ election, elections, selectedElectionId, stats, candi
                                     </div>
                                 </div>
 
-                                <div className="grid overflow-hidden rounded-[14px] border border-[#e6e8ec] bg-white sm:grid-cols-2 lg:grid-cols-5">
-                                    {workflow.map((step, index) => (
-                                        <WorkflowStep key={step.title} step={step} index={index} />
-                                    ))}
+                                <div className="flex flex-col gap-4">
+                                    <div className="grid overflow-hidden rounded-[14px] border border-[#e6e8ec] bg-white sm:grid-cols-2 lg:grid-cols-5">
+                                        {workflow.map((step, index) => (
+                                            <WorkflowStep key={step.title} step={step} index={index} />
+                                        ))}
+                                    </div>
+                                    {pipeline && <PipelineBreakdown pipeline={pipeline} totalStations={totalStations} />}
                                 </div>
                             </div>
                         </section>
@@ -405,7 +439,7 @@ function HomeResultsPage({ election, elections, selectedElectionId, stats, candi
 }
 
 // ── Main component ──────────────────────────────────────────────────────────
-export default function Results({ election, elections = [], selectedElectionId, stats, candidates, regions = [], message }) {
+export default function Results({ election, elections = [], selectedElectionId, stats, pipeline, candidates, regions = [], message }) {
     const param = selectedElectionId ? `?election=${selectedElectionId}` : '';
     const basePath = '/results';
 
@@ -418,6 +452,7 @@ export default function Results({ election, elections = [], selectedElectionId, 
                 elections={elections}
                 selectedElectionId={selectedElectionId}
                 stats={stats}
+                pipeline={pipeline}
                 candidates={candidates}
                 regions={regions}
                 message={message}

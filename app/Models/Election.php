@@ -40,12 +40,11 @@ class Election extends Model
             }
         });
 
-        // Invalidate public-facing caches whenever an election is mutated.
-        // Public controllers (Results, ResultsMap, ResultsStations) cache by
-        // election id for 30s–10min; without this, edits to start_date,
-        // name, status, or public-display flag would not appear on the
-        // homepage until the TTL expires.
-        $bust = fn(Election $election) => self::forgetPublicCaches($election->id, $election->status);
+        // Invalidate ALL public-facing caches whenever an election is mutated.
+        // Covers all status variants + all versioned summary keys + map/station agg keys.
+        $bust = function (Election $election): void {
+            self::forgetPublicCaches($election->id, $election->status);
+        };
 
         static::saved($bust);
         static::deleted($bust);
@@ -79,11 +78,27 @@ class Election extends Model
 
     /**
      * Convenience: derived election year from start_date.
-     * Single source of truth for any backend code that needs the year.
      */
     public function getYearAttribute(): ?int
     {
         return $this->start_date?->year;
+    }
+
+    /**
+     * Bust all public caches for this election.
+     * Call this any time a result's certification_status changes.
+     */
+    public function bustPublicCaches(): void
+    {
+        foreach (['draft', 'active', 'certifying', 'results_pending', 'certified', 'archived'] as $status) {
+            Cache::forget("results_summary_v3_{$this->id}_{$status}");
+        }
+        Cache::forget("results_map_{$this->id}");
+        Cache::forget("results_stations_{$this->id}_pub");
+        Cache::forget("results_stations_{$this->id}_prov");
+        Cache::forget("stations_filters_{$this->id}");
+        Cache::forget('public_results_data');
+        Cache::forget('chairman_dashboard_stats');
     }
 
     public function createdBy(): BelongsTo { return $this->belongsTo(User::class, 'created_by'); }

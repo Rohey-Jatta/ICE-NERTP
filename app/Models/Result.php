@@ -12,6 +12,19 @@ class Result extends Model
 {
     use HasFactory;
 
+    protected static function booted(): void
+    {
+        static::saved(function (Result $result) {
+            if ($result->wasChanged('certification_status') || $result->wasChanged('election_id')) {
+                $result->election?->bustPublicCaches();
+            }
+        });
+
+        static::deleted(function (Result $result) {
+            $result->election?->bustPublicCaches();
+        });
+    }
+
     const STATUS_SUBMITTED                = 'submitted';
     const STATUS_PENDING_PARTY_ACCEPTANCE = 'pending_party_acceptance';
     const STATUS_PENDING_WARD             = 'pending_ward';
@@ -35,7 +48,7 @@ class Result extends Model
         self::STATUS_ADMIN_AREA_CERTIFIED,
         self::STATUS_PENDING_NATIONAL,
         self::STATUS_NATIONALLY_CERTIFIED,
-        self::STATUS_PENDING_PARTY_ACCEPTANCE, // legacy
+        self::STATUS_PENDING_PARTY_ACCEPTANCE,
     ];
 
     /**
@@ -100,13 +113,18 @@ class Result extends Model
         'gps_accuracy_meters', 'gps_validated',
         'submitted_offline', 'offline_queued_at',
         'submitted_by', 'submitted_at', 'version',
-        'certification_status', 'rejection_count', 'last_rejection_reason', 'last_rejected_by', 'last_rejected_at',
+        'certification_status', 'rejection_count',
+        'last_rejection_reason', 'last_rejected_by', 'last_rejected_at',
+        'nationally_certified_at', // ← was missing, causing silent discard
     ];
 
     protected $casts = [
-        'submitted_at' => 'datetime', 'offline_queued_at' => 'datetime',
-        'last_rejected_at' => 'datetime', 'nationally_certified_at' => 'datetime',
-        'gps_validated' => 'boolean', 'submitted_offline' => 'boolean',
+        'submitted_at'          => 'datetime',
+        'offline_queued_at'     => 'datetime',
+        'last_rejected_at'      => 'datetime',
+        'nationally_certified_at' => 'datetime',
+        'gps_validated'         => 'boolean',
+        'submitted_offline'     => 'boolean',
     ];
 
     public function pollingStation(): BelongsTo { return $this->belongsTo(PollingStation::class); }
@@ -150,5 +168,4 @@ class Result extends Model
         if ($this->total_registered_voters === 0) return 0.0;
         return round(($this->total_votes_cast / $this->total_registered_voters) * 100, 2);
     }
-
 }

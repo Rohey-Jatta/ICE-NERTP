@@ -23,7 +23,7 @@ Route::middleware(['auth', 'role:polling-officer'])
     Route::get('/dashboard', function () {
         $user           = Auth::user();
         $station        = PollingStation::where('assigned_officer_id', $user->id)->first();
-        $activeElection = Election::where('status', 'active')->latest()->first();
+        $activeElection = Election::whereIn('status', ['active', 'results_pending'])->latest()->first();
 
         $submissionStats = Result::where('submitted_by', $user->id)
             ->when($activeElection, fn($q) => $q->where('election_id', $activeElection->id))
@@ -55,7 +55,7 @@ Route::middleware(['auth', 'role:polling-officer'])
         $hasSubmitted = $station && $activeElection
             ? Result::where('polling_station_id', $station->id)
                 ->where('election_id', $activeElection->id)
-                ->whereNotIn('certification_status', [Result::STATUS_REJECTED])
+                ->where('rejection_count', 0)
                 ->exists()
             : false;
 
@@ -83,8 +83,8 @@ Route::middleware(['auth', 'role:polling-officer'])
     Route::get('/results/submit', function () {
         $user           = Auth::user();
         $station        = PollingStation::where('assigned_officer_id', $user->id)->first();
-        // FIXED: Always find the active election — never rely on station->election_id
-        $election       = Election::where('status', 'active')->latest()->first();
+        // FIXED: Always find the current election that still accepts station submissions.
+        $election       = Election::whereIn('status', ['active', 'results_pending'])->latest()->first();
 
         if (!$station) {
             return redirect()->route('officer.dashboard')
@@ -99,8 +99,8 @@ Route::middleware(['auth', 'role:polling-officer'])
         // A result that is NOT editable (already in pipeline for THIS active election)
         $existingResult = Result::where('polling_station_id', $station->id)
             ->where('election_id', $election->id)
-            ->whereNotIn('certification_status', [Result::STATUS_SUBMITTED])
             ->where('rejection_count', 0)
+            ->latest('submitted_at')
             ->first();
 
         // A rejected result the officer can fix and resubmit
@@ -298,7 +298,7 @@ Route::middleware(['auth', 'role:polling-officer'])
     Route::get('/submissions', function () {
         $user           = Auth::user();
         $station        = PollingStation::where('assigned_officer_id', $user->id)->first();
-        $activeElection = Election::where('status', 'active')->latest()->first();
+        $activeElection = Election::whereIn('status', ['active', 'results_pending'])->latest()->first();
 
         $results = Result::where('submitted_by', $user->id)
             ->when($activeElection, fn($q) => $q->where('election_id', $activeElection->id))
