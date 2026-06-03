@@ -1,37 +1,38 @@
 import { useEffect, useRef, useState } from 'react';
+import GAMBIA_GEO from '@/data/gambiaAdm1.json';
+import { RESULT_STATUS_MAP_COLORS, RESULT_STATUS_MAP_LABELS } from '@/Utils/resultStatus';
 
-const STATUS_COLORS = {
-    nationally_certified:     '#10b981',
-    admin_area_certified:     '#14b8a6',
-    constituency_certified:   '#06b6d4',
-    ward_certified:           '#3b82f6',
-    pending_national:         '#6366f1',
-    pending_admin_area:       '#8b5cf6',
-    pending_constituency:     '#a855f7',
-    pending_ward:             '#f59e0b',
-    pending_party_acceptance: '#f59e0b',
-    submitted:                '#f97316',
-    not_reported:             '#64748b',
-};
+const NO_DATA_FILL = '#e2e8f0';
 
-const STATUS_LABELS = {
-    nationally_certified:     'Certified ✓',
-    admin_area_certified:     'Area Certified',
-    constituency_certified:   'Const. Certified',
-    ward_certified:           'Ward Certified',
-    pending_national:         'At Chairman',
-    pending_admin_area:       'At Admin Area',
-    pending_constituency:     'At Constituency',
-    pending_ward:             'At Ward',
-    pending_party_acceptance: 'Party Review',
-    submitted:                'Submitted',
-    not_reported:             'Not Reported',
-};
+function firstColor(value, fallback = '#94a3b8') {
+    return (value || fallback).split(',')[0].trim();
+}
 
+// ── Region ↔ boundary name matching ───────────────────────────────────────────
+// DB admin-area names ("Greater Banjul", "Brikama (West Coast)") don't match the
+// boundary shapeNames ("Banjul", "Brikama"); normalize + alias to bridge them.
+function normalizeName(s) {
+    return String(s || '').toLowerCase().replace(/\(.*?\)/g, '').replace(/[^a-z]/g, '');
+}
+
+// Boundary feature → keywords that should match a DB region's normalized name.
+// Banjul and Kanifing are now separate regions in the DB — no aliases needed.
+const FEATURE_ALIASES = {};
+
+function matchRegion(featureName, regions) {
+    const f = normalizeName(featureName);
+    const aliases = FEATURE_ALIASES[f] || [f];
+    return regions.find((r) => {
+        const rn = normalizeName(r.name);
+        return aliases.some((a) => rn.includes(a) || a.includes(rn));
+    }) || null;
+}
+
+// ── Station popup (station-dot mode) ──────────────────────────────────────────
 function buildPopupHtml(station) {
     const status      = station.status || 'not_reported';
-    const statusLabel = STATUS_LABELS[status] || status;
-    const color       = STATUS_COLORS[status] || '#64748b';
+    const statusLabel = RESULT_STATUS_MAP_LABELS[status] || status;
+    const color       = RESULT_STATUS_MAP_COLORS[status] || '#64748b';
     const hasResult   = station.total_votes_cast != null && station.total_votes_cast > 0;
 
     const turnout = hasResult && station.registered_voters > 0
@@ -43,9 +44,7 @@ function buildPopupHtml(station) {
         try {
             candidates = typeof station.candidate_votes === 'string'
                 ? JSON.parse(station.candidate_votes)
-                : Array.isArray(station.candidate_votes)
-                ? station.candidate_votes
-                : [];
+                : Array.isArray(station.candidate_votes) ? station.candidate_votes : [];
         } catch { candidates = []; }
     }
     candidates = candidates.filter(Boolean);
@@ -54,7 +53,7 @@ function buildPopupHtml(station) {
     const candidateRows = candidates.length > 0
         ? candidates.map((cv, idx) => {
             const pct     = validVotes > 0 ? ((cv.votes / validVotes) * 100).toFixed(1) : '0.0';
-            const cvColor = (cv.color || '#6b7280').split(',')[0].trim();
+            const cvColor = firstColor(cv.color, '#6b7280');
             const isFirst = idx === 0;
             return `
                 <div style="margin-bottom:8px;">
@@ -127,24 +126,58 @@ function buildPopupHtml(station) {
         </div>`;
 }
 
-export default function LeafletMap({ stations = [], height = '460px' }) {
-    const mapRef        = useRef(null);
-    const mapInstance   = useRef(null);
-    const markersLayer  = useRef(null);
-    const LRef          = useRef(null);
+// ── Region choropleth tooltip ─────────────────────────────────────────────────
+function regionTooltipHtml(featureName, region) {
+    if (!region) {
+        return `<div style="font-family:-apple-system,sans-serif;font-size:12px;"><b>${featureName}</b><br/><span style="color:#94a3b8;">No reported results</span></div>`;
+    }
+    const leader = region.leader;
+    const lead = leader
+        ? `<span style="display:inline-flex;align-items:center;gap:5px;"><span style="width:9px;height:9px;border-radius:50%;background:${firstColor(leader.color)};"></span><b>${leader.party}</b> ${leader.pct}%</span>`
+        : '<span style="color:#94a3b8;">Awaiting results</span>';
+    return `
+        <div style="font-family:-apple-system,sans-serif;font-size:12px;line-height:1.5;">
+            <b style="font-size:13px;">${region.name}</b><br/>
+            ${lead}<br/>
+            <span style="color:#64748b;">${region.reporting_pct}% reporting · ${Number(region.total_votes).toLocaleString()} votes</span>
+        </div>`;
+}
+
+export default function LeafletMap({
+    stations = [],
+    regions = [],
+    drillStations = [],
+    mode = 'regions',
+    selectedRegion = null,
+    drillLevel = null,   // 'region' | 'constituency' | 'ward' | null
+    onRegionClick = null,
+    height = '460px',
+}) {
+    const mapRef       = useRef(null);
+    const mapInstance  = useRef(null);
+    const markersLayer = useRef(null);
+    const geoLayer     = useRef(null);
+    const LRef         = useRef(null);
+    // Keep latest props for event handlers bound once.
+    const regionsRef   = useRef(regions);
+    const onClickRef   = useRef(onRegionClick);
+    regionsRef.current = regions;
+    onClickRef.current = onRegionClick;
 
     const [mapReady, setMapReady] = useState(false);
 
-    // ── Zoom control callbacks ────────────────────────────────────────────────
     function zoomIn()  { mapInstance.current?.zoomIn();  }
     function zoomOut() { mapInstance.current?.zoomOut(); }
     function resetView() {
-        if (mapInstance.current) {
-            mapInstance.current.setView([13.45, -15.3], 9);
+        if (!mapInstance.current) return;
+        if (geoLayer.current && mode === 'regions') {
+            mapInstance.current.fitBounds(geoLayer.current.getBounds(), { padding: [20, 20] });
+        } else {
+            mapInstance.current.setView([13.45, -15.3], 8);
         }
     }
 
-    // ── Initialize map ────────────────────────────────────────────────────────
+    // ── Init map (once) ───────────────────────────────────────────────────────
     useEffect(() => {
         if (typeof window === 'undefined' || !mapRef.current) return;
         let cancelled = false;
@@ -155,98 +188,143 @@ export default function LeafletMap({ stations = [], height = '460px' }) {
             LRef.current = L;
 
             const map = L.map(mapRef.current, {
-                center:      [13.45, -15.3],
-                zoom:        9,
-                zoomControl: false,   // disable default — we use custom controls
-                zoomSnap:    0.5,
-                zoomDelta:   1,
+                center: [13.45, -15.3],
+                zoom: 8,
+                zoomControl: false,
+                zoomSnap: 0.5,
             });
 
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                attribution: '© <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a>',
-                maxZoom: 18,
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+                attribution: '© <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a> contributors © <a href="https://carto.com/attributions" target="_blank">CARTO</a>',
+                subdomains: 'abcd',
+                maxZoom: 19,
             }).addTo(map);
 
+            // Choropleth layer
+            geoLayer.current = L.geoJSON(GAMBIA_GEO, {
+                style: () => ({ weight: 1, color: '#fff', fillColor: NO_DATA_FILL, fillOpacity: 0.6 }),
+                onEachFeature: (feature, layer) => {
+                    layer.on({
+                        mouseover: (e) => {
+                            e.target.setStyle({ weight: 2.5, color: '#0f172a' });
+                            e.target.bringToFront();
+                        },
+                        mouseout: (e) => {
+                            const fname = feature.properties.name;
+                            const isSel = matchRegion(fname, regionsRef.current)?.name === selectedRegionRef.current;
+                            e.target.setStyle({ weight: isSel ? 2.5 : 1, color: isSel ? '#0f172a' : '#fff' });
+                        },
+                        click: () => {
+                            const region = matchRegion(feature.properties.name, regionsRef.current);
+                            if (onClickRef.current) onClickRef.current(region?.name || null, feature.properties.name);
+                        },
+                    });
+                },
+            });
+
             markersLayer.current = L.layerGroup().addTo(map);
-            mapInstance.current  = map;
+            mapInstance.current = map;
             setMapReady(true);
-            renderMarkers(L, map, markersLayer.current, stations);
         });
 
         return () => {
             cancelled = true;
             if (mapInstance.current) {
                 mapInstance.current.remove();
-                mapInstance.current  = null;
+                mapInstance.current = null;
                 markersLayer.current = null;
-                LRef.current         = null;
+                geoLayer.current = null;
+                LRef.current = null;
                 setMapReady(false);
             }
         };
     }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-    // ── Update markers ────────────────────────────────────────────────────────
-    useEffect(() => {
-        if (!mapInstance.current || !markersLayer.current || !LRef.current) return;
-        renderMarkers(LRef.current, mapInstance.current, markersLayer.current, stations);
-    }, [stations]);
+    // Keep selectedRegion accessible to the once-bound mouseout handler.
+    const selectedRegionRef = useRef(selectedRegion);
+    selectedRegionRef.current = selectedRegion;
 
-    const legendItems = [
-        ['nationally_certified',   'Certified'],
-        ['admin_area_certified',   'Area certified'],
-        ['constituency_certified', 'Constituency certified'],
-        ['ward_certified',         'Ward certified'],
-        ['pending_ward',           'Pending review'],
-        ['submitted',              'Submitted'],
-        ['not_reported',           'Not reported'],
-    ];
+    // ── Show/hide choropleth layer by mode ────────────────────────────────────
+    useEffect(() => {
+        const map = mapInstance.current;
+        if (!map || !mapReady || !geoLayer.current) return;
+        if (mode === 'regions') {
+            if (!map.hasLayer(geoLayer.current)) geoLayer.current.addTo(map);
+        } else if (map.hasLayer(geoLayer.current)) {
+            map.removeLayer(geoLayer.current);
+        }
+    }, [mode, mapReady]);
+
+    // ── Restyle choropleth + zoom on data / selection change ──────────────────
+    useEffect(() => {
+        const map = mapInstance.current;
+        if (!mapReady || mode !== 'regions' || !geoLayer.current || !map) return;
+
+        let selectedLayer = null;
+        geoLayer.current.eachLayer((layer) => {
+            const fname = layer.feature.properties.name;
+            const region = matchRegion(fname, regions);
+            const isSel = region?.name === selectedRegion;
+            const dimmed = selectedRegion && !isSel;
+            const hasLeader = region && region.leader;
+            const fill = hasLeader ? firstColor(region.leader.color) : NO_DATA_FILL;
+            // Dim fill by reporting completeness; fade non-selected regions when drilling.
+            let opacity = hasLeader ? 0.45 + 0.4 * (Math.min(100, region.reporting_pct) / 100) : 0.55;
+            if (dimmed) opacity = 0.12;
+            layer.setStyle({
+                weight: isSel ? 2.5 : 1,
+                color: isSel ? '#0f172a' : '#fff',
+                fillColor: fill,
+                fillOpacity: opacity,
+            });
+            layer.bindTooltip(regionTooltipHtml(fname, region), { sticky: true, opacity: 0.97 });
+            if (isSel) selectedLayer = layer;
+        });
+
+        try {
+            if (selectedLayer) {
+                map.fitBounds(selectedLayer.getBounds(), { padding: [40, 40], maxZoom: 11 });
+            } else {
+                map.fitBounds(geoLayer.current.getBounds(), { padding: [20, 20] });
+            }
+        } catch { /* ignore */ }
+    }, [regions, selectedRegion, mode, mapReady]);
+
+    // ── Render station markers (stations mode = all; regions mode = drill set) ─
+    useEffect(() => {
+        if (!mapReady || !LRef.current || !markersLayer.current) return;
+        const L = LRef.current;
+        const map = mapInstance.current;
+        if (mode === 'stations') {
+            renderMarkers(L, map, markersLayer.current, stations, true);
+        } else if (selectedRegion) {
+            // At constituency/ward level, fit to the (smaller) dot set so the
+            // user sees the zoom-in without the choropleth re-fitting overriding it.
+            const fitToDots = drillLevel === 'constituency' || drillLevel === 'ward';
+            renderMarkers(L, map, markersLayer.current, drillStations, fitToDots);
+        } else {
+            markersLayer.current.clearLayers();
+        }
+    }, [stations, drillStations, selectedRegion, drillLevel, mode, mapReady]);
 
     const mapHeight = typeof height === 'string' ? height : `${height}px`;
+    const showEmpty = mode === 'stations' && stations.length === 0;
 
     return (
         <div className="relative isolate z-0" style={{ height: mapHeight }}>
-            {/* Map container */}
-            <div ref={mapRef} className="w-full h-full rounded-xl" />
+            <div ref={mapRef} className="h-full w-full rounded-xl" />
 
-            {/* ── Custom zoom controls ─────────────────────────────────── */}
             {mapReady && (
-                <div className="absolute top-4 right-4 z-[1000] flex flex-col gap-1.5">
-                    {/* Zoom in */}
-                    <button
-                        onClick={zoomIn}
-                        className="w-10 h-10 bg-white rounded-lg shadow-md border border-slate-200 flex items-center justify-center text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-colors text-xl font-light select-none"
-                        title="Zoom in"
-                        aria-label="Zoom in"
-                    >
-                        +
-                    </button>
-
-                    {/* Zoom out */}
-                    <button
-                        onClick={zoomOut}
-                        className="w-10 h-10 bg-white rounded-lg shadow-md border border-slate-200 flex items-center justify-center text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-colors text-xl font-light select-none"
-                        title="Zoom out"
-                        aria-label="Zoom out"
-                    >
-                        −
-                    </button>
-
-                    {/* Reset view */}
-                    <button
-                        onClick={resetView}
-                        className="w-10 h-10 bg-white rounded-lg shadow-md border border-slate-200 flex items-center justify-center text-slate-500 hover:bg-slate-50 hover:text-slate-900 transition-colors select-none"
-                        title="Reset view"
-                        aria-label="Reset map view"
-                    >
-                        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
-                        </svg>
+                <div className="absolute right-4 top-4 z-[1000] flex flex-col gap-1.5">
+                    <button onClick={zoomIn} className="flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 bg-white text-xl font-light text-slate-600 shadow-md transition-colors hover:bg-slate-50" title="Zoom in" aria-label="Zoom in">+</button>
+                    <button onClick={zoomOut} className="flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 bg-white text-xl font-light text-slate-600 shadow-md transition-colors hover:bg-slate-50" title="Zoom out" aria-label="Zoom out">−</button>
+                    <button onClick={resetView} className="flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 shadow-md transition-colors hover:bg-slate-50" title="Reset view" aria-label="Reset map view">
+                        <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" /></svg>
                     </button>
                 </div>
             )}
 
-            {/* Empty state overlay */}
-            {stations.length === 0 && (
+            {showEmpty && (
                 <div className="absolute inset-0 z-30 flex items-center justify-center rounded-xl bg-white/75 p-6 backdrop-blur-sm">
                     <div className="max-w-sm rounded-xl border border-slate-200 bg-white p-5 text-center shadow-sm">
                         <h3 className="text-lg font-extrabold text-slate-950">No mapped stations match</h3>
@@ -255,26 +333,16 @@ export default function LeafletMap({ stations = [], height = '460px' }) {
                 </div>
             )}
 
-            {/* Legend */}
-            <div className="pointer-events-none absolute bottom-4 left-4 right-16 z-20 rounded-xl border border-slate-200 bg-white/95 p-3 text-xs text-slate-600 shadow-lg backdrop-blur sm:left-auto sm:right-16 sm:w-52">
-                <div className="mb-2 text-[0.65rem] font-bold uppercase tracking-[0.14em] text-slate-500">
-                    Result status
-                </div>
-                <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 sm:grid-cols-1">
-                    {legendItems.map(([key, label]) => (
-                        <div key={key} className="flex items-center gap-2">
-                            <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: STATUS_COLORS[key] }} />
-                            <span className="truncate">{label}</span>
-                        </div>
-                    ))}
-                </div>
+            {/* Boundary attribution (CC BY 4.0) */}
+            <div className="pointer-events-none absolute bottom-1 left-2 z-[400] text-[10px] text-slate-400">
+                Boundaries © geoBoundaries (CC BY 4.0)
             </div>
         </div>
     );
 }
 
-// ── Render markers ─────────────────────────────────────────────────────────────
-function renderMarkers(L, map, layer, stations) {
+// ── Station markers (dots) ────────────────────────────────────────────────────
+function renderMarkers(L, map, layer, stations, fit = true) {
     layer.clearLayers();
     const bounds = [];
 
@@ -284,32 +352,22 @@ function renderMarkers(L, map, layer, stations) {
         if (!lat || !lng || isNaN(lat) || isNaN(lng)) return;
 
         const status = station.status || 'not_reported';
-        const color  = STATUS_COLORS[status] || '#64748b';
+        const color  = RESULT_STATUS_MAP_COLORS[status] || '#64748b';
 
         const marker = L.circleMarker([lat, lng], {
-            radius:      6,
-            fillColor:   color,
-            color:       '#fff',
-            weight:      1.5,
-            opacity:     1,
-            fillOpacity: 0.82,
+            radius: 6, fillColor: color, color: '#fff', weight: 1.5, opacity: 1, fillOpacity: 0.9,
         });
-
-        marker.bindPopup(buildPopupHtml(station), {
-            maxWidth:  340,
-            minWidth:  270,
-            className: 'station-popup-leaflet',
-        });
-
+        marker.bindPopup(buildPopupHtml(station), { maxWidth: 340, minWidth: 270, className: 'station-popup-leaflet' });
         marker.addTo(layer);
+        marker.bringToFront();
         bounds.push([lat, lng]);
     });
 
-    if (bounds.length > 0) {
-        try {
-            map.fitBounds(bounds, { padding: [30, 30], maxZoom: 12 });
-        } catch { /* ignore */ }
-    } else {
-        map.setView([13.45, -15.3], 9);
+    if (fit) {
+        if (bounds.length > 0) {
+            try { map.fitBounds(bounds, { padding: [30, 30], maxZoom: 12 }); } catch { /* ignore */ }
+        } else {
+            map.setView([13.45, -15.3], 8);
+        }
     }
 }

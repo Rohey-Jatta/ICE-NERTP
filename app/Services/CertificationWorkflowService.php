@@ -3,19 +3,24 @@
 namespace App\Services;
 
 use App\Models\AuditLog;
+use App\Models\Election;
 use App\Models\Result;
 use App\Models\ResultCertification;
 use App\Models\User;
 use App\Models\AdministrativeHierarchy;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
 /**
  * CertificationWorkflowService — Sequential approval state machine.
  *
- * Workflow:
- * Submitted → Pending Party → Pending Ward → Ward Certified →
- * Pending Constituency → Constituency Certified → Pending Admin Area →
- * Admin Area Certified → Pending National → Nationally Certified
+ * Active workflow:
+ * Submitted → Pending Ward → Ward Certified → Pending Constituency →
+ * Constituency Certified → Pending Admin Area → Admin Area Certified →
+ * Pending National → Nationally Certified.
+ *
+ * Party review is parallel and non-blocking. The pending_party_acceptance status
+ * is accepted only for legacy ward-level records.
  */
 class CertificationWorkflowService
 {
@@ -26,64 +31,84 @@ class CertificationWorkflowService
         'national'     => Result::STATUS_NATIONALLY_CERTIFIED,
     ];
 
+    const REJECTION_TARGETS = [
+        'ward'         => Result::STATUS_SUBMITTED,
+        'constituency' => Result::STATUS_PENDING_WARD,
+        'admin_area'   => Result::STATUS_PENDING_CONSTITUENCY,
+        'national'     => Result::STATUS_PENDING_ADMIN_AREA,
+    ];
+
     /**
      * Approve a result at a specific certification level.
      */
-    public function approve(Result $result, User $approver, string $level, ?string $comments = null): bool
+    public function approve(
+        Result $result,
+        User $approver,
+        string $level,
+        ?string $comments = null,
+        bool $withReservation = false
+    ): bool
     {
         if (!$this->canApprove($approver, $level)) {
             throw new \Exception("User does not have permission to approve at {$level} level.");
         }
 
-        $expectedStatus = $this->getPendingStatus($level);
-        if ($result->certification_status !== $expectedStatus) {
+        if (!$this->isPendingAtLevel($result, $level)) {
             throw new \Exception("Result is not pending approval at {$level} level. Current status: {$result->certification_status}");
         }
 
         DB::beginTransaction();
         try {
-            // Find the approver's hierarchy node
-            $levelMap = [
-                'ward'         => 'ward',
-                'constituency' => 'constituency',
-                'admin_area'   => 'admin_area',
-                'national'     => 'national',
-            ];
-            $node = AdministrativeHierarchy::where('assigned_approver_id', $approver->id)
-                ->where('level', $levelMap[$level])
-                ->first();
+            $node = $this->resolveHierarchyNode($result, $approver, $level);
+            $decisionComments = $withReservation && $comments
+                ? '[RESERVATION] ' . $comments
+                : $comments;
 
-            // Record the certification decision
             ResultCertification::create([
-                'result_id'             => $result->id,
-                'certification_level'   => $level,          // correct column name
-                'hierarchy_node_id'     => $node?->id ?? $result->pollingStation?->ward_id ?? 1,
-                'approver_id'           => $approver->id,
-                'status'                => 'approved',
-                'comments'              => $comments,
-                'assigned_at'           => now(),
-                'decided_at'            => now(),           // correct column name
+                'result_id'           => $result->id,
+                'certification_level' => $level,
+                'hierarchy_node_id'   => $node->id,
+                'approver_id'         => $approver->id,
+                'status'              => 'approved',
+                'comments'            => $decisionComments,
+                'assigned_at'         => now(),
+                'decided_at'          => now(),
             ]);
 
-            // Transition to certified status for this level
             $certifiedStatus = self::CERTIFIED_LEVELS[$level];
-            $result->forceFill(['certification_status' => $certifiedStatus])->save();
+            $updates = ['certification_status' => $certifiedStatus];
+            if ($level === 'national') {
+                $updates['nationally_certified_at'] = now();
+            }
+            $result->forceFill($updates)->save();
 
-            // Auto-promote to next pending level
             $this->promoteToNextLevel($result);
 
-            // Append a version snapshot
-            $this->createVersionSnapshot($result, $approver, "Approved at {$level} level");
+            $this->createVersionSnapshot(
+                $result,
+                $approver,
+                $withReservation
+                    ? "Approved with reservation at {$level} level"
+                    : "Approved at {$level} level"
+            );
 
             AuditLog::record(
-                action:    "certification.{$level}.approved",
+                action:    $withReservation
+                    ? "certification.{$level}.approved_with_reservation"
+                    : "certification.{$level}.approved",
                 event:     'updated',
                 module:    'Certification',
                 auditable: $result,
-                extra:     ['level' => $level, 'outcome' => 'success']
+                extra:     [
+                    'level'       => $level,
+                    'outcome'     => 'success',
+                    'comments'    => $comments,
+                    'reservation' => $withReservation ? $comments : null,
+                ]
             );
 
             DB::commit();
+            $this->forgetWorkflowCaches($result);
             return true;
 
         } catch (\Exception $e) {
@@ -93,7 +118,8 @@ class CertificationWorkflowService
     }
 
     /**
-     * Reject a result at a specific level — returns it to the polling station.
+     * Reject a result at a specific level and return it to the correct earlier
+     * review point. Ward rejections return to the officer for resubmission.
      */
     public function reject(Result $result, User $approver, string $level, string $reason): bool
     {
@@ -101,20 +127,18 @@ class CertificationWorkflowService
             throw new \Exception("User does not have permission to reject at {$level} level.");
         }
 
-        $expectedStatus = $this->getPendingStatus($level);
-        if ($result->certification_status !== $expectedStatus) {
+        if (!$this->isPendingAtLevel($result, $level)) {
             throw new \Exception("Result is not pending approval at {$level} level.");
         }
 
         DB::beginTransaction();
         try {
-            $node = AdministrativeHierarchy::where('assigned_approver_id', $approver->id)
-                ->first();
+            $node = $this->resolveHierarchyNode($result, $approver, $level);
 
             ResultCertification::create([
                 'result_id'           => $result->id,
                 'certification_level' => $level,
-                'hierarchy_node_id'   => $node?->id ?? $result->pollingStation?->ward_id ?? 1,
+                'hierarchy_node_id'   => $node->id,
                 'approver_id'         => $approver->id,
                 'status'              => 'rejected',
                 'comments'            => $reason,
@@ -122,9 +146,8 @@ class CertificationWorkflowService
                 'decided_at'          => now(),
             ]);
 
-            // Return to submitted status so the officer can re-submit
             $result->update([
-                'certification_status' => Result::STATUS_SUBMITTED,
+                'certification_status' => $this->getRejectionTargetStatus($level),
                 'last_rejection_reason'=> $reason,
                 'last_rejected_by'     => $approver->id,
                 'last_rejected_at'     => now(),
@@ -142,6 +165,7 @@ class CertificationWorkflowService
             );
 
             DB::commit();
+            $this->forgetWorkflowCaches($result);
             return true;
 
         } catch (\Exception $e) {
@@ -214,6 +238,17 @@ class CertificationWorkflowService
         }
     }
 
+    private function isPendingAtLevel(Result $result, string $level): bool
+    {
+        $allowed = [$this->getPendingStatus($level)];
+
+        if ($level === 'ward') {
+            $allowed[] = Result::STATUS_PENDING_PARTY_ACCEPTANCE;
+        }
+
+        return in_array($result->certification_status, $allowed, true);
+    }
+
     private function canApprove(User $user, string $level): bool
     {
         return match ($level) {
@@ -236,6 +271,39 @@ class CertificationWorkflowService
         };
     }
 
+    private function getRejectionTargetStatus(string $level): string
+    {
+        return self::REJECTION_TARGETS[$level]
+            ?? throw new \Exception("Invalid certification level: {$level}");
+    }
+
+    private function resolveHierarchyNode(Result $result, User $approver, string $level): AdministrativeHierarchy
+    {
+        $node = AdministrativeHierarchy::where('assigned_approver_id', $approver->id)
+            ->where('level', $level)
+            ->first();
+
+        if ($node) {
+            return $node;
+        }
+
+        if ($level === 'ward' && $result->pollingStation?->ward_id) {
+            $node = AdministrativeHierarchy::find($result->pollingStation->ward_id);
+            if ($node) {
+                return $node;
+            }
+        }
+
+        $fallback = AdministrativeHierarchy::where('level', $level)->first()
+            ?? AdministrativeHierarchy::orderBy('id')->first();
+
+        if (!$fallback) {
+            throw new \Exception("No hierarchy node available for {$level} certification.");
+        }
+
+        return $fallback;
+    }
+
     private function createVersionSnapshot(Result $result, User $user, string $reason): void
     {
         try {
@@ -252,5 +320,11 @@ class CertificationWorkflowService
             // Non-fatal — don't fail the whole certification over a snapshot error
             \Illuminate\Support\Facades\Log::warning('[CertificationWorkflow] version snapshot failed: ' . $e->getMessage());
         }
+    }
+
+    private function forgetWorkflowCaches(Result $result): void
+    {
+        Election::forgetPublicCaches($result->election_id, $result->election?->status);
+        Cache::forget('chairman_dashboard_stats');
     }
 }

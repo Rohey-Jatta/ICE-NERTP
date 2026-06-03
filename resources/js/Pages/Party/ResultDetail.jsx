@@ -1,18 +1,7 @@
 import AppLayout from '@/Layouts/AppLayout';
 import { Link, router, useForm } from '@inertiajs/react';
 import { useState } from 'react';
-
-const CERT_STATUS_LABELS = {
-    pending_party_acceptance: 'Awaiting Party Acceptance',
-    pending_ward:             'At Ward Review',
-    ward_certified:           'Ward Certified',
-    pending_constituency:     'At Constituency',
-    constituency_certified:   'Constituency Certified',
-    pending_admin_area:       'At Admin Area',
-    admin_area_certified:     'Admin Area Certified',
-    pending_national:         'At National',
-    nationally_certified:     'Nationally Certified',
-};
+import { RESULT_STATUS_LABELS } from '@/Utils/resultStatus';
 
 const DECISION_CONFIG = {
     accepted: {
@@ -90,7 +79,7 @@ export default function ResultDetail({ auth, party, result, myAcceptance }) {
                                     {result.polling_station_code}
                                 </span>
                                 <span className="text-slate-500 text-sm">
-                                    {CERT_STATUS_LABELS[result.certification_status] || result.certification_status}
+                                    {RESULT_STATUS_LABELS[result.certification_status] || result.certification_status}
                                 </span>
                                 <span className="text-slate-500 text-xs">Submitted: {result.submitted_at}</span>
                             </div>

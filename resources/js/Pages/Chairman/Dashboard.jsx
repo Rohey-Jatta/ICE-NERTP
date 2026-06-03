@@ -1,17 +1,13 @@
 import AppLayout from '@/Layouts/AppLayout';
 import { Link } from '@inertiajs/react';
+import { RESULT_STATUS, RESULT_STATUS_LABELS } from '@/Utils/resultStatus';
 
 const PIPELINE_LABELS = {
-    submitted:              'Submitted',
-    pending_party:          'Party Review',
-    pending_ward:           'Ward Review',
-    ward_certified:         'Ward Certified',
-    pending_constituency:   'Constituency',
-    constituency_certified: 'Const. Certified',
-    pending_admin_area:     'Admin Area',
-    admin_area_certified:   'Area Certified',
-    pending_national:       'Pending National',
-    nationally_certified:   'Nationally Certified',
+    ...RESULT_STATUS_LABELS,
+};
+
+const LEGACY_PIPELINE_LABELS = {
+    legacy_party_gate: 'Legacy Party Gate',
 };
 
 export default function ChairmanDashboard({ auth, pendingNational, statistics = {}, recentActivity = [] }) {
@@ -103,8 +99,8 @@ export default function ChairmanDashboard({ auth, pendingNational, statistics = 
                             <div className="space-y-2">
                                 {Object.entries(PIPELINE_LABELS).map(([key, label]) => {
                                     const count = pipeline[key] || 0;
-                                    const isChairmanStage = key === 'pending_national';
-                                    const isFinal = key === 'nationally_certified';
+                                    const isChairmanStage = key === RESULT_STATUS.PENDING_NATIONAL;
+                                    const isFinal = key === RESULT_STATUS.NATIONALLY_CERTIFIED;
                                     return (
                                         <div key={key}
                                              className={`flex items-center gap-3 p-2.5 rounded-lg ${
@@ -133,6 +129,30 @@ export default function ChairmanDashboard({ auth, pendingNational, statistics = 
                                                 isChairmanStage ? 'text-amber-300' :
                                                 isFinal ? 'text-green-300' : 'text-slate-600'
                                             }`}>
+                                                {count}
+                                            </span>
+                                        </div>
+                                    );
+                                })}
+                                {Object.entries(LEGACY_PIPELINE_LABELS).map(([key, label]) => {
+                                    const count = pipeline[key] || 0;
+                                    if (count === 0) return null;
+
+                                    return (
+                                        <div key={key}
+                                             className="flex items-center gap-3 p-2.5 rounded-lg bg-amber-50 border border-amber-200">
+                                            <span className="text-xs font-semibold w-36 text-amber-700">
+                                                {label}
+                                            </span>
+                                            <div className="flex-1 bg-white rounded-full h-2">
+                                                <div
+                                                    className="h-2 rounded-full transition-all bg-amber-500"
+                                                    style={{
+                                                        width: `${statistics.totalStations > 0 ? Math.min(100, (count / statistics.totalStations) * 100) : 0}%`,
+                                                    }}
+                                                />
+                                            </div>
+                                            <span className="text-sm font-bold w-8 text-right text-amber-700">
                                                 {count}
                                             </span>
                                         </div>

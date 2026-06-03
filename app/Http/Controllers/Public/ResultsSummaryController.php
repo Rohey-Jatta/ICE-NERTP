@@ -11,6 +11,15 @@ use Inertia\Inertia;
 
 class ResultsSummaryController extends Controller
 {
+    private const PARTY_COLOR_FALLBACKS = [
+        'NPP'   => '#155AA6',
+        'UDP'   => '#D0AC4C',
+        'GDC'   => '#684AC4',
+        'PDOIS' => '#8B6253',
+        'IND'   => '#6B7280',
+        'NUP'   => '#7A3D9A',
+    ];
+
     public function index(Request $request)
     {
         // ── 1. Build the available-elections dropdown ─────────────────────────
@@ -64,7 +73,7 @@ class ResultsSummaryController extends Controller
         // ── 3. Compute / fetch cached summary data ────────────────────────────
         // Cache key includes election status so that when an election is published
         // (status: active → certified) the key changes and is always fresh.
-        $cacheKey = "results_summary_v3_{$electionModel->id}_{$electionModel->status}";
+        $cacheKey = "results_summary_v7_{$electionModel->id}_{$electionModel->status}";
         $data     = Cache::remember($cacheKey, 30, fn() => $this->computeSummary($electionModel));
 
         return Inertia::render('Public/Results', array_merge($data, [
@@ -124,6 +133,7 @@ SQL;
                 'stats'      => null,
                 'pipeline'   => null,
                 'candidates' => [],
+                'regions'    => [],
                 'message'    => 'Results will appear as the IEC Chairman certifies and publishes them.',
             ];
         }
@@ -188,7 +198,7 @@ SQL;
                     : ($c->leader_photo_path ? asset('storage/' . $c->leader_photo_path) : null),
                 'party_name'  => $c->party_name,
                 'party_abbr'  => $c->party_abbr,
-                'party_color' => $c->party_color,
+                'party_color' => $this->partyColor($c->party_abbr, $c->party_color),
                 'total_votes' => (int) $c->total_votes,
             ]);
 
@@ -197,14 +207,122 @@ SQL;
             $candidates = collect();
         }
 
+
         return [
             'election'   => $electionPayload,
             'stats'      => $stats,
             'pipeline'   => $pipeline,
             'candidates' => $candidates,
+            'regions'    => $this->computeRegions($election),
             'message'    => (int) $stats->stations_reported === 0
                 ? 'No results have been officially published yet. Check back after the IEC Chairman certifies the first results.'
                 : null,
         ];
+    }
+
+    /**
+     * Regional leaders — leading candidate per administrative area (region),
+     * aggregated from nationally_certified results only. Powers the "Regional
+     * leaders" section on the public dashboard.
+     */
+    private function computeRegions(Election $election): array
+    {
+        $publicStatuses = ['nationally_certified'];
+
+        // Votes per admin_area per candidate (certified only).
+        $voteRows = DB::table('polling_stations as ps')
+            ->join('administrative_hierarchy as w',   'ps.ward_id',    '=', 'w.id')
+            ->join('administrative_hierarchy as con', 'w.parent_id',   '=', 'con.id')
+            ->join('administrative_hierarchy as aa',  'con.parent_id', '=', 'aa.id')
+            ->join('results as r', function ($join) use ($election, $publicStatuses) {
+                $join->on('r.polling_station_id', '=', 'ps.id')
+                     ->where('r.election_id', $election->id)
+                     ->whereIn('r.certification_status', $publicStatuses);
+            })
+            ->join('result_candidate_votes as rcv', 'rcv.result_id', '=', 'r.id')
+            ->join('candidates as c', 'c.id', '=', 'rcv.candidate_id')
+            ->leftJoin('political_parties as pp', 'pp.id', '=', 'c.political_party_id')
+            ->where('ps.election_id', $election->id)
+            ->groupBy('aa.id', 'aa.name', 'c.id', 'c.name', 'pp.abbreviation', 'pp.color')
+            ->selectRaw("
+                aa.id                            AS region_id,
+                aa.name                          AS region_name,
+                c.name                           AS candidate_name,
+                COALESCE(pp.abbreviation, 'IND') AS party_abbr,
+                pp.color                         AS party_color,
+                SUM(rcv.votes)                   AS votes
+            ")
+            ->get();
+
+        // Station counts per admin_area (total + nationally certified).
+        $countRows = DB::table('polling_stations as ps')
+            ->join('administrative_hierarchy as w',   'ps.ward_id',    '=', 'w.id')
+            ->join('administrative_hierarchy as con', 'w.parent_id',   '=', 'con.id')
+            ->join('administrative_hierarchy as aa',  'con.parent_id', '=', 'aa.id')
+            ->leftJoin('results as r', function ($join) use ($election, $publicStatuses) {
+                $join->on('r.polling_station_id', '=', 'ps.id')
+                     ->where('r.election_id', $election->id)
+                     ->whereIn('r.certification_status', $publicStatuses);
+            })
+            ->where('ps.election_id', $election->id)
+            ->groupBy('aa.id', 'aa.name')
+            ->selectRaw('
+                aa.id                  AS region_id,
+                aa.name                AS region_name,
+                COUNT(DISTINCT ps.id)  AS total_stations,
+                COUNT(DISTINCT r.id)   AS reported_stations
+            ')
+            ->get();
+
+        // Group candidate votes by region and find the leader.
+        $byRegion = [];
+        foreach ($voteRows as $row) {
+            $rid = $row->region_id;
+            if (!isset($byRegion[$rid])) {
+                $byRegion[$rid] = ['total_votes' => 0, 'candidates' => []];
+            }
+            $byRegion[$rid]['total_votes'] += (int) $row->votes;
+            $byRegion[$rid]['candidates'][] = [
+                'name'       => $row->candidate_name,
+                'party_abbr' => $row->party_abbr,
+                'color'      => $this->partyColor($row->party_abbr, $row->party_color),
+                'votes'      => (int) $row->votes,
+            ];
+        }
+
+        $regions = $countRows->map(function ($cnt) use ($byRegion) {
+            $agg       = $byRegion[$cnt->region_id] ?? null;
+            $leader    = null;
+            $leaderPct = 0.0;
+
+            if ($agg && $agg['total_votes'] > 0) {
+                usort($agg['candidates'], fn($a, $b) => $b['votes'] <=> $a['votes']);
+                $leader    = $agg['candidates'][0];
+                $leaderPct = round($leader['votes'] / $agg['total_votes'] * 100, 1);
+            }
+
+            return [
+                'id'                => $cnt->region_id,
+                'name'              => $cnt->region_name,
+                'total_stations'    => (int) $cnt->total_stations,
+                'reported_stations' => (int) $cnt->reported_stations,
+                'leader'            => $leader,
+                'leader_pct'        => $leaderPct,
+            ];
+        })->toArray();
+
+        // Largest regions first — mirrors the design's ordering by station count.
+        usort($regions, fn($a, $b) => $b['total_stations'] <=> $a['total_stations']);
+
+        return $regions;
+    }
+
+    private function partyColor(?string $abbreviation, ?string $databaseColor): string
+    {
+        if ($databaseColor) {
+            return $databaseColor;
+        }
+
+        return self::PARTY_COLOR_FALLBACKS[strtoupper((string) $abbreviation)] ?? '#6B7280';
     }
 }

@@ -1,14 +1,7 @@
 import AppLayout from '@/Layouts/AppLayout';
 import { Link, router } from '@inertiajs/react';
 import { useState } from 'react';
-
-const STATUS_BADGE = {
-    pending_party_acceptance: { label: 'Awaiting Parties',  color: 'bg-yellow-500/20 text-yellow-300' },
-    pending_ward:             { label: 'At Ward Level',     color: 'bg-amber-500/20 text-amber-300' },
-    ward_certified:           { label: 'Ward Certified',    color: 'bg-iec-pink-500/20 text-iec-pink-600' },
-    pending_constituency:     { label: 'At Constituency',   color: 'bg-iec-pink-500/20 text-iec-pink-600' },
-    nationally_certified:     { label: 'Nationally Certified', color: 'bg-green-500/20 text-green-300' },
-};
+import { getResultStatusMeta } from '@/Utils/resultStatus';
 
 export default function PendingAcceptance({ auth, pendingResults = [], party }) {
     const partyColor = party?.color?.split(',')[0] || '#6b7280';
@@ -45,8 +38,7 @@ export default function PendingAcceptance({ auth, pendingResults = [], party }) 
                 ) : (
                     <div className="space-y-6">
                         {pendingResults.map((result) => {
-                            const statusCfg = STATUS_BADGE[result.certification_status]
-                                || { label: result.certification_status, color: 'bg-slate-100 text-slate-600' };
+                            const statusCfg = getResultStatusMeta(result.certification_status);
 
                             const totalVotes = result.valid_votes || 0;
                             const topCandidate = [...(result.candidate_votes || [])]
@@ -64,7 +56,7 @@ export default function PendingAcceptance({ auth, pendingResults = [], party }) 
                                                 <span className="text-xs font-mono text-slate-500 bg-white px-2 py-0.5 rounded">
                                                     {result.polling_station_code}
                                                 </span>
-                                                <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${statusCfg.color}`}>
+                                        <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${statusCfg.badgeClass}`}>
                                                     {statusCfg.label}
                                                 </span>
                                             </div>

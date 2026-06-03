@@ -1,23 +1,10 @@
 import AppLayout from '@/Layouts/AppLayout';
 import { Link } from '@inertiajs/react';
-
-const STATUS_CONFIG = {
-    not_reported:           { label: 'Not Reported',           color: 'bg-slate-100 text-slate-600 border-slate-200' },
-    submitted:              { label: 'Submitted',               color: 'bg-amber-500/20 text-amber-300 border-amber-500/30' },
-    pending_party_acceptance:{ label: 'Party Acceptance',       color: 'bg-yellow-500/20 text-yellow-300 border-yellow-500/30' },
-    pending_ward:           { label: 'Pending Ward',            color: 'bg-orange-500/20 text-orange-300 border-orange-500/30' },
-    ward_certified:         { label: 'Ward Certified',          color: 'bg-iec-pink-500/20 text-iec-pink-600 border-blue-500/30' },
-    pending_constituency:   { label: 'Pending Constituency',    color: 'bg-iec-pink-50 text-iec-pink-600 border-iec-pink-100' },
-    constituency_certified: { label: 'Constituency Certified',  color: 'bg-slate-100 text-slate-600 border-slate-200' },
-    pending_admin_area:     { label: 'Pending Admin Area',      color: 'bg-pink-500/20 text-pink-300 border-pink-500/30' },
-    admin_area_certified:   { label: 'Admin Area Certified',    color: 'bg-iec-pink-500/20 text-iec-pink-600 border-teal-500/30' },
-    pending_national:       { label: 'Pending National',        color: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30' },
-    nationally_certified:   { label: 'Nationally Certified',    color: 'bg-green-500/20 text-green-300 border-green-500/30' },
-};
+import { CERTIFIED_RESULT_STATUSES, RESULT_STATUS, getResultStatusMeta } from '@/Utils/resultStatus';
 
 export default function MonitorStations({ auth, monitor, stations = [] }) {
     const certified = stations.filter(s =>
-        s.result_status === 'nationally_certified' || s.result_status === 'ward_certified' || s.result_status === 'constituency_certified'
+        CERTIFIED_RESULT_STATUSES.includes(s.result_status)
     ).length;
 
     return (
@@ -48,7 +35,7 @@ export default function MonitorStations({ auth, monitor, stations = [] }) {
                         </div>
                         <div className="bg-white rounded-xl p-4 border border-slate-200">
                             <div className="text-2xl font-bold text-amber-300">
-                                {stations.filter(s => s.result_status === 'submitted').length}
+                                {stations.filter(s => s.result_status === RESULT_STATUS.SUBMITTED).length}
                             </div>
                             <div className="text-slate-500 text-sm">Results Submitted</div>
                         </div>
@@ -65,7 +52,7 @@ export default function MonitorStations({ auth, monitor, stations = [] }) {
                 <div className="space-y-4">
                     {stations.length > 0 ? (
                         stations.map((station) => {
-                            const statusCfg = STATUS_CONFIG[station.result_status] || STATUS_CONFIG.not_reported;
+                            const statusCfg = getResultStatusMeta(station.result_status);
                             return (
                                 <div key={station.id} className="bg-white rounded-xl p-5 border border-slate-200">
                                     <div className="flex flex-wrap gap-4 justify-between items-start">
@@ -76,7 +63,7 @@ export default function MonitorStations({ auth, monitor, stations = [] }) {
                                                 <span className="text-xs font-mono text-slate-500 bg-slate-100 px-2 py-0.5 rounded">
                                                     {station.code}
                                                 </span>
-                                                <span className={`px-2 py-0.5 rounded-full text-xs font-semibold border ${statusCfg.color}`}>
+                                                <span className={`px-2 py-0.5 rounded-full text-xs font-semibold border ${statusCfg.borderedBadgeClass}`}>
                                                     {statusCfg.label}
                                                 </span>
                                             </div>

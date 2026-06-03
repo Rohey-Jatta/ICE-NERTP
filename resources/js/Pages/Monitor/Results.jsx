@@ -1,19 +1,7 @@
 import AppLayout from '@/Layouts/AppLayout';
 import { Link } from '@inertiajs/react';
 import { useState } from 'react';
-
-const STATUS_CONFIG = {
-    not_reported:           { label: 'Not Reported',         color: 'bg-slate-100 text-slate-600' },
-    submitted:              { label: 'Submitted',             color: 'bg-amber-500/20 text-amber-300' },
-    pending_ward:           { label: 'Pending Ward',          color: 'bg-orange-500/20 text-orange-300' },
-    ward_certified:         { label: 'Ward Certified',        color: 'bg-iec-pink-500/20 text-iec-pink-600' },
-    pending_constituency:   { label: 'Pending Constituency',  color: 'bg-iec-pink-50 text-iec-pink-600' },
-    constituency_certified: { label: 'Constituency Certified',color: 'bg-slate-100 text-slate-600' },
-    pending_admin_area:     { label: 'Pending Admin Area',    color: 'bg-pink-500/20 text-pink-300' },
-    admin_area_certified:   { label: 'Admin Area Certified',  color: 'bg-iec-pink-500/20 text-iec-pink-600' },
-    pending_national:       { label: 'Pending National',      color: 'bg-cyan-500/20 text-cyan-300' },
-    nationally_certified:   { label: 'Nationally Certified',  color: 'bg-green-500/20 text-green-300' },
-};
+import { RESULT_STATUS, getResultStatusMeta } from '@/Utils/resultStatus';
 
 export default function MonitorResults({ auth, monitor, results = [] }) {
     const [expandedId, setExpandedId] = useState(null);
@@ -45,7 +33,7 @@ export default function MonitorResults({ auth, monitor, results = [] }) {
                         </div>
                         <div className="bg-white rounded-xl p-4 border border-slate-200">
                             <div className="text-2xl font-bold text-green-300">
-                                {results.filter(r => r.status === 'nationally_certified').length}
+                                {results.filter(r => r.status === RESULT_STATUS.NATIONALLY_CERTIFIED).length}
                             </div>
                             <div className="text-slate-500 text-sm">Nationally Certified</div>
                         </div>
@@ -75,7 +63,7 @@ export default function MonitorResults({ auth, monitor, results = [] }) {
                 ) : (
                     <div className="space-y-4">
                         {results.map((result) => {
-                            const statusCfg  = STATUS_CONFIG[result.status] || STATUS_CONFIG.not_reported;
+                            const statusCfg  = getResultStatusMeta(result.status);
                             const isExpanded = expandedId === result.id;
 
                             return (
@@ -88,7 +76,7 @@ export default function MonitorResults({ auth, monitor, results = [] }) {
                                             <div className="flex items-center gap-3 flex-wrap mb-1">
                                                 <h3 className="text-iec-navy font-bold">{result.station_name}</h3>
                                                 <span className="text-xs font-mono text-slate-500">{result.station_code}</span>
-                                                <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${statusCfg.color}`}>
+                                                <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${statusCfg.badgeClass}`}>
                                                     {statusCfg.label}
                                                 </span>
                                             </div>
