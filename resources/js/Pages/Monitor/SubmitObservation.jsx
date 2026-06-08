@@ -1,6 +1,7 @@
 import AppLayout from '@/Layouts/AppLayout';
 import { useForm, Link } from '@inertiajs/react';
 import { useState } from 'react';
+import SearchableSelect from '@/Components/SearchableSelect';
 
 const OBSERVATION_TYPES = [
     { value: 'general',         label: 'General Observation',   color: 'text-iec-pink-600',   icon: '📋' },
@@ -121,17 +122,13 @@ export default function SubmitObservation({ auth, monitor, stations = [], presel
                                 </div>
                             ) : (
                                 <>
-                                    <select
-                                        value={data.polling_station_id}
-                                        onChange={(e) => setData('polling_station_id', e.target.value)}
-                                        className="w-full px-4 py-3 bg-white border border-slate-200 rounded-lg text-iec-navy"
-                                        required
-                                    >
-                                        <option value="">— Select a Polling Station —</option>
-                                        {stations.map(s => (
-                                            <option key={s.id} value={s.id}>{s.code} — {s.name}</option>
-                                        ))}
-                                    </select>
+                                    <SearchableSelect
+                                        value={String(data.polling_station_id)}
+                                        onChange={(val) => setData('polling_station_id', val)}
+                                        options={stations.map(s => ({ value: String(s.id), label: `${s.code} - ${s.name}` }))}
+                                        placeholder="Select a Polling Station"
+                                        className="w-full"
+                                    />
                                     {errors.polling_station_id && (
                                         <p className="text-red-400 text-sm mt-1">{errors.polling_station_id}</p>
                                     )}

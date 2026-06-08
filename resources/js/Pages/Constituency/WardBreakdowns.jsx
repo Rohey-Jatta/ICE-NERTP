@@ -121,7 +121,7 @@ export default function WardBreakdowns({ auth, constituency, wards = [] }) {
 
                 {/* Navigation */}
                 <div className="mt-6 flex gap-4">
-                    <Link href="/constituency/approval-queue" className="px-6 py-3 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-lg">
+                    <Link href="/constituency/approval-queue" className="px-6 py-3 bg-pink-600 hover:bg-pink-700 text-white font-bold rounded-lg">
                         Go to Approval Queue
                     </Link>
                     <Link href="/constituency/reports" className="px-6 py-3 bg-iec-pink-600 hover:bg-iec-pink-700 text-white font-bold rounded-lg">

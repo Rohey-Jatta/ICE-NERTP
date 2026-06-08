@@ -21,14 +21,14 @@ export default function ConstituencyDashboard({ auth, constituency, statistics }
 
                 {/* Alert if pending */}
                 {statistics?.pending > 0 && (
-                    <div className="mb-6 p-4 bg-amber-500/10 border border-amber-500/40 rounded-xl flex items-center gap-3">
-                        <div className="w-3 h-3 bg-amber-400 rounded-full animate-pulse flex-shrink-0" />
-                        <p className="text-amber-300">
+                    <div className="mb-6 p-4 bg-pink-500/10 border border-pink-500/40 rounded-xl flex items-center gap-3">
+                        <div className="w-3 h-3 bg-pink-400 rounded-full animate-pulse flex-shrink-0" />
+                        <p className="text-pink-500">
                             <strong>{statistics.pending} result{statistics.pending !== 1 ? 's' : ''}</strong> awaiting your constituency certification
                         </p>
                         <Link
                             href="/constituency/approval-queue"
-                            className="ml-auto px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-bold rounded-lg"
+                            className="ml-auto px-4 py-2 bg-pink-500 hover:bg-pink-600 text-white text-sm font-bold rounded-lg"
                         >
                             Review Now →
                         </Link>
@@ -38,15 +38,15 @@ export default function ConstituencyDashboard({ auth, constituency, statistics }
                 {/* Stats */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
                     <div className="bg-white rounded-xl p-5 border border-slate-200">
-                        <div className="text-3xl font-bold text-amber-300">{statistics?.pending || 0}</div>
+                        <div className="text-3xl font-bold text-amber-600">{statistics?.pending || 0}</div>
                         <div className="text-slate-500 text-sm mt-1">Pending Certification</div>
                     </div>
                     <div className="bg-white rounded-xl p-5 border border-slate-200">
-                        <div className="text-3xl font-bold text-iec-pink-600">{statistics?.certified || 0}</div>
+                        <div className="text-3xl font-bold text-pink-600">{statistics?.certified || 0}</div>
                         <div className="text-slate-500 text-sm mt-1">Constituency Certified</div>
                     </div>
                     <div className="bg-white rounded-xl p-5 border border-slate-200">
-                        <div className="text-3xl font-bold text-red-300">{statistics?.rejected || 0}</div>
+                        <div className="text-3xl font-bold text-red-500">{statistics?.rejected || 0}</div>
                         <div className="text-slate-500 text-sm mt-1">Returned to Ward</div>
                     </div>
                     <div className="bg-white rounded-xl p-5 border border-slate-200">
@@ -77,13 +77,13 @@ export default function ConstituencyDashboard({ auth, constituency, statistics }
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <Link
                             href="/constituency/approval-queue?filter=pending"
-                            className="group p-5 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 rounded-xl transition-all block"
+                            className="group p-5 bg-pink-500/10 hover:bg-pink-500/20 border border-pink-500/30 rounded-xl transition-all block"
                         >
                             <div className="flex items-center gap-3 mb-2">
-                                <div className="w-8 h-8 bg-amber-500/20 rounded-lg flex items-center justify-center text-amber-400">⏳</div>
+                                <div className="w-8 h-8 bg-pink-500/20 rounded-lg flex items-center justify-center text-pink-400">⏳</div>
                                 <div className="text-lg font-bold text-iec-navy">Approval Queue</div>
                             </div>
-                            <div className="text-amber-300 text-sm">
+                            <div className="text-pink-300 text-sm">
                                 {statistics?.pending > 0
                                     ? `${statistics.pending} ward-certified result${statistics.pending !== 1 ? 's' : ''} pending`
                                     : 'No results pending'}

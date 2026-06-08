@@ -1,6 +1,7 @@
 import AppLayout from '@/Layouts/AppLayout';
 import { useForm } from '@inertiajs/react';
 import { Button, Field, PageHeader, Panel, inputClass } from '@/Components/AdminUI';
+import SearchableSelect from '@/Components/SearchableSelect';
 
 export default function Settings({ auth, settings = {} }) {
     const { data, setData, post, processing, errors } = useForm({
@@ -60,11 +61,17 @@ export default function Settings({ auth, settings = {} }) {
                                 <input type="email" value={data.system_email} onChange={(event) => setData('system_email', event.target.value)} className={inputClass} />
                             </Field>
                             <Field label="Timezone">
-                                <select value={data.timezone} onChange={(event) => setData('timezone', event.target.value)} className={inputClass}>
-                                    <option value="UTC">UTC</option>
-                                    <option value="Africa/Dakar">Africa/Dakar (GMT+0)</option>
-                                    <option value="Africa/Banjul">Africa/Banjul (GMT+0)</option>
-                                </select>
+                                <SearchableSelect
+                                    value={data.timezone}
+                                    onChange={(val) => setData('timezone', val)}
+                                    options={[
+                                        { value: 'UTC', label: 'UTC' },
+                                        { value: 'Africa/Dakar', label: 'Africa/Dakar (GMT+0)' },
+                                        { value: 'Africa/Banjul', label: 'Africa/Banjul (GMT+0)' }
+                                    ]}
+                                    placeholder="Select timezone"
+                                    className="w-full"
+                                />
                             </Field>
                             <Field label="Maximum File Size (KB)">
                                 <input

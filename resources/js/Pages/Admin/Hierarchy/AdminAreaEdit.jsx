@@ -1,5 +1,6 @@
 import AppLayout from '@/Layouts/AppLayout';
 import { useForm, Link } from '@inertiajs/react';
+import SearchableSelect from '@/Components/SearchableSelect';
 
 export default function AdminAreaEdit({ auth, adminArea, elections = [] }) {
     const { data, setData, put, processing, errors } = useForm({
@@ -45,17 +46,14 @@ export default function AdminAreaEdit({ auth, adminArea, elections = [] }) {
                                     </p>
                                 </div>
                             ) : (
-                                <select
-                                    value={data.election_id}
-                                    onChange={(e) => setData('election_id', e.target.value)}
-                                    className="w-full px-4 py-3 bg-white border border-slate-200 rounded-lg text-iec-navy"
+                                <SearchableSelect
+                                    value={String(data.election_id)}
+                                    onChange={(val) => setData('election_id', val)}
+                                    options={[{ value: '', label: '— Select Election —' }, ...elections.map((el) => ({ value: String(el.id), label: el.name }))]}
+                                    placeholder="Select election"
+                                    className="w-full"
                                     required
-                                >
-                                    <option value="">— Select Election —</option>
-                                    {elections.map((el) => (
-                                        <option key={el.id} value={el.id}>{el.name}</option>
-                                    ))}
-                                </select>
+                                />
                             )}
                             {errors.election_id && <p className="text-red-400 text-sm mt-1">{errors.election_id}</p>}
                         </div>

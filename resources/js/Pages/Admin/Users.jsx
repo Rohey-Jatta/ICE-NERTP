@@ -2,6 +2,7 @@ import AppLayout from '@/Layouts/AppLayout';
 import { router, useForm } from '@inertiajs/react';
 import { Button, Badge, DataTable, Field, PageHeader, Pagination, Toolbar, inputClass, roleLabel } from '@/Components/AdminUI';
 import { useState } from 'react';
+import SearchableSelect from '@/Components/SearchableSelect';
 import { can } from '@/Utils/permissions';
 
 const ROLE_OPTIONS = [
@@ -135,32 +136,29 @@ export default function Users({ auth, users = {}, filters = {} }) {
                             />
                         </Field>
                         <Field label="Role">
-                            <select
+                            <SearchableSelect
                                 id="user-role-filter"
-                                name="role"
                                 value={data.role}
-                                onChange={(event) => setData('role', event.target.value)}
-                                className={inputClass}
-                            >
-                                <option value="">All roles</option>
-                                {ROLE_OPTIONS.map((role) => (
-                                    <option key={role} value={role}>{roleLabel(role)}</option>
-                                ))}
-                            </select>
+                                onChange={(val) => setData('role', val)}
+                                options={[{ value: '', label: 'All roles' }, ...ROLE_OPTIONS.map((role) => ({ value: role, label: roleLabel(role) }))]}
+                                placeholder="All roles"
+                                className="w-full"
+                            />
                         </Field>
                         <Field label="Status">
-                            <select
+                            <SearchableSelect
                                 id="user-status-filter"
-                                name="status"
                                 value={data.status}
-                                onChange={(event) => setData('status', event.target.value)}
-                                className={inputClass}
-                            >
-                                <option value="">All statuses</option>
-                                <option value="active">Active</option>
-                                <option value="inactive">Inactive</option>
-                                <option value="suspended">Suspended</option>
-                            </select>
+                                onChange={(val) => setData('status', val)}
+                                options={[
+                                    { value: '', label: 'All statuses' },
+                                    { value: 'active', label: 'Active' },
+                                    { value: 'inactive', label: 'Inactive' },
+                                    { value: 'suspended', label: 'Suspended' }
+                                ]}
+                                placeholder="All statuses"
+                                className="w-full"
+                            />
                         </Field>
                         <div className="flex items-end gap-2">
                             <Button type="submit" disabled={processing} className="flex-1">

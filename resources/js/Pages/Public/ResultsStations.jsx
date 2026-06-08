@@ -2,6 +2,7 @@ import { useDeferredValue, useMemo, useState } from 'react';
 import AppLayout from '@/Layouts/AppLayout';
 import { Link, router } from '@inertiajs/react';
 import useInertiaPrefetch from '@/Hooks/useInertiaPrefetch';
+import SearchableSelect from '@/Components/SearchableSelect';
 import { publicElectionTitle } from '@/Utils/publicElection';
 import { RESULT_STATUS, RESULT_STATUS_PUBLIC_LABELS } from '@/Utils/resultStatus';
 
@@ -381,15 +382,13 @@ export default function ResultsStations({ election, elections = [], selectedElec
                             <h1 className="truncate font-serif text-[22px] font-bold tracking-[-0.015em] text-[#0e1014]">{publicElectionTitle(election)}</h1>
                         </div>
                         {elections.length > 1 && (
-                            <select
-                                value={selectedElectionId || ''}
-                                onChange={(event) => router.get('/results/stations', { election: event.target.value }, { preserveScroll: false })}
-                                className="w-full rounded-[10px] border border-[#e6e8ec] bg-white px-4 py-2.5 text-sm font-semibold text-[#0e1014] outline-none transition focus:border-[#e61a6e] focus:ring-4 focus:ring-[#e61a6e]/10 sm:w-72"
-                            >
-                                {elections.map((item) => (
-                                    <option key={item.id} value={item.id}>{publicElectionTitle(item)}</option>
-                                ))}
-                            </select>
+                            <SearchableSelect
+                                value={String(selectedElectionId || '')}
+                                onChange={(val) => router.get('/results/stations', { election: val }, { preserveScroll: false })}
+                                options={elections.map((el) => ({ value: String(el.id), label: publicElectionTitle(el) }))}
+                                placeholder="Select election"
+                                className="w-full sm:w-72 text-sm"
+                            />
                         )}
                     </div>
                 </div>

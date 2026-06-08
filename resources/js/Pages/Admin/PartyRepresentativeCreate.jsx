@@ -1,6 +1,7 @@
 import AppLayout from '@/Layouts/AppLayout';
 import { useForm, Link } from '@inertiajs/react';
 import { useState } from 'react';
+import SearchableSelect from '@/Components/SearchableSelect';
 
 export default function PartyRepresentativeCreate({ auth, users, parties, pollingStations, hasElection = true }) {
     const { data, setData, post, processing, errors } = useForm({
@@ -78,23 +79,15 @@ export default function PartyRepresentativeCreate({ auth, users, parties, pollin
                                 <label className="block text-slate-600 mb-2 font-semibold">
                                     Select Party Representative User <span className="text-red-400">*</span>
                                 </label>
-                                <select
-                                    value={data.user_id}
-                                    onChange={(e) => setData('user_id', e.target.value)}
-                                    className="w-full px-4 py-3 bg-white border border-slate-200 rounded-lg text-iec-navy"
+                                <SearchableSelect
+                                    value={String(data.user_id)}
+                                    onChange={(val) => setData('user_id', val)}
+                                    options={[{ value: '', label: '— Choose a user —' }, ...users.map((user) => ({ value: String(user.id), label: `${user.name} (${user.email})` }))]}
+                                    placeholder="Select user"
+                                    className="w-full"
+                                    emptyLabel={users.length === 0 ? 'No users with party-representative role found' : 'No results found'}
                                     required
-                                >
-                                    <option value="">— Choose a user —</option>
-                                    {users.length > 0 ? (
-                                        users.map((user) => (
-                                            <option key={user.id} value={user.id}>
-                                                {user.name} ({user.email})
-                                            </option>
-                                        ))
-                                    ) : (
-                                        <option disabled>No users with party-representative role found</option>
-                                    )}
-                                </select>
+                                />
                                 {errors.user_id && <p className="text-red-400 text-sm mt-1">{errors.user_id}</p>}
                                 {users.length === 0 && (
                                     <p className="text-amber-600 text-xs mt-1">
@@ -133,19 +126,14 @@ export default function PartyRepresentativeCreate({ auth, users, parties, pollin
                                     </p>
                                 </div>
                             ) : (
-                                <select
-                                    value={data.political_party_id}
-                                    onChange={(e) => setData('political_party_id', e.target.value)}
-                                    className="w-full px-4 py-3 bg-white border border-slate-200 rounded-lg text-iec-navy"
+                                <SearchableSelect
+                                    value={String(data.political_party_id)}
+                                    onChange={(val) => setData('political_party_id', val)}
+                                    options={[{ value: '', label: '— Choose a party —' }, ...parties.map((party) => ({ value: String(party.id), label: party.name }))]}
+                                    placeholder="Select party"
+                                    className="w-full"
                                     required
-                                >
-                                    <option value="">— Choose a party —</option>
-                                    {parties.map((party) => (
-                                        <option key={party.id} value={party.id}>
-                                            {party.name}
-                                        </option>
-                                    ))}
-                                </select>
+                                />
                             )}
                             {errors.political_party_id && <p className="text-red-400 text-sm mt-1">{errors.political_party_id}</p>}
                         </div>

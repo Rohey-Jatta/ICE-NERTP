@@ -130,7 +130,7 @@ export default function ConstituencyReports({ auth, constituency, reportData }) 
 
                 {/* Navigation */}
                 <div className="mt-6 flex gap-4">
-                    <Link href="/constituency/approval-queue" className="px-6 py-3 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-lg">
+                    <Link href="/constituency/approval-queue" className="px-6 py-3 bg-pink-400 hover:bg-pink-500 text-white font-bold rounded-lg">
                         Back to Approval Queue
                     </Link>
                     <Link href="/constituency/ward-breakdowns" className="px-6 py-3 bg-iec-pink-600 hover:bg-iec-pink-700 text-white font-bold rounded-lg">

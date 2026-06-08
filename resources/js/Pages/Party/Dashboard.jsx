@@ -96,15 +96,15 @@ export default function PartyDashboard({ auth, party, assignedStations = [], sta
 
                 {/* Pending alert */}
                 {statistics.pendingAcceptance > 0 && (
-                    <div className="mb-6 p-4 bg-amber-500/10 border border-amber-500/40 rounded-xl flex items-center gap-3">
-                        <span className="w-3 h-3 bg-amber-400 rounded-full animate-pulse flex-shrink-0" />
-                        <p className="text-amber-300 flex-1">
+                    <div className="mb-6 p-4 bg-pink-500/10 border border-pink-500/40 rounded-xl flex items-center gap-3">
+                        <span className="w-3 h-3 bg-pink-400 rounded-full animate-pulse flex-shrink-0" />
+                        <p className="text-pink-00 flex-1">
                             <strong>{statistics.pendingAcceptance}</strong> result{statistics.pendingAcceptance > 1 ? 's' : ''} from
                             your assigned stations are awaiting your decision.
                         </p>
                         <Link
                             href="/party/pending-acceptance"
-                            className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-white text-sm font-bold rounded-lg whitespace-nowrap"
+                            className="px-4 py-2 bg-pink-500 hover:bg-pink-400 text-white text-sm font-bold rounded-lg whitespace-nowrap"
                         >
                             Review Now →
                         </Link>
@@ -115,20 +115,20 @@ export default function PartyDashboard({ auth, party, assignedStations = [], sta
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
                     <Link
                         href="/party/pending-acceptance"
-                        className="group p-6 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 rounded-xl transition-all"
+                        className="group p-6 bg-pink-500/10 hover:bg-pink-500/20 border border-pink-500/30 rounded-xl transition-all"
                     >
                         <div className="flex items-center gap-3 mb-2">
-                            <div className="w-10 h-10 bg-amber-500/20 rounded-xl flex items-center justify-center text-amber-400 text-xl">⚖️</div>
+                            <div className="w-10 h-10 bg-pink-500/20 rounded-xl flex items-center justify-center text-pink-600 text-xl">⚖️</div>
                             <div>
                                 <div className="font-bold text-iec-navy text-lg">Review Pending Results</div>
-                                <div className="text-amber-300 text-sm">
+                                <div className="text-pink-600 text-sm">
                                     {statistics.pendingAcceptance > 0
                                         ? `${statistics.pendingAcceptance} result${statistics.pendingAcceptance > 1 ? 's' : ''} awaiting your decision`
                                         : 'All results reviewed — nothing pending'}
                                 </div>
                             </div>
                         </div>
-                        <p className="text-slate-500 text-xs mt-2 ml-13">
+                        <p className="text-slate-600 text-xs mt-2 ml-13">
                             Accept, accept with reservation, or dispute results from your assigned polling stations.
                         </p>
                     </Link>

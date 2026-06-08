@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 
 /**
  * SearchableSelect — Drop-in replacement for <select> with type-to-filter.
@@ -26,9 +27,11 @@ export default function SearchableSelect({
     const [open, setOpen]   = useState(false);
     const [query, setQuery] = useState('');
     const containerRef      = useRef(null);
+    const dropdownRef       = useRef(null);
     const inputRef          = useRef(null);
     const listRef           = useRef(null);
     const [highlightIdx, setHighlightIdx] = useState(-1);
+    const [dropdownStyle, setDropdownStyle] = useState(null);
 
     const selectedOption = options.find(o => String(o.value) === String(value));
 
@@ -42,15 +45,48 @@ export default function SearchableSelect({
     /* close on outside click */
     useEffect(() => {
         const handler = (e) => {
-            if (containerRef.current && !containerRef.current.contains(e.target)) {
-                setOpen(false);
-                setQuery('');
-                setHighlightIdx(-1);
+            if (
+                containerRef.current?.contains(e.target) ||
+                dropdownRef.current?.contains(e.target)
+            ) {
+                return;
             }
+            setOpen(false);
+            setQuery('');
+            setHighlightIdx(-1);
         };
         document.addEventListener('mousedown', handler);
         return () => document.removeEventListener('mousedown', handler);
     }, []);
+
+    /* track dropdown position while open */
+    useEffect(() => {
+        if (!open) {
+            setDropdownStyle(null);
+            return;
+        }
+
+        const updateStyle = () => {
+            const rect = containerRef.current?.getBoundingClientRect();
+            if (!rect) return;
+            setDropdownStyle({
+                position: 'absolute',
+                top: rect.bottom + window.scrollY,
+                left: rect.left + window.scrollX,
+                width: rect.width,
+                minWidth: rect.width,
+                zIndex: 9999,
+            });
+        };
+
+        updateStyle();
+        window.addEventListener('resize', updateStyle);
+        window.addEventListener('scroll', updateStyle, true);
+        return () => {
+            window.removeEventListener('resize', updateStyle);
+            window.removeEventListener('scroll', updateStyle, true);
+        };
+    }, [open]);
 
     /* scroll highlighted option into view */
     useEffect(() => {
@@ -137,9 +173,12 @@ export default function SearchableSelect({
             </button>
 
             {/* Dropdown */}
-            {open && (
-                <div className="absolute z-[200] w-full mt-1 bg-white rounded-lg border border-slate-200 shadow-xl overflow-hidden"
-                     style={{ minWidth: '100%' }}>
+            {open && dropdownStyle && createPortal(
+                <div
+                    ref={dropdownRef}
+                    className="bg-white rounded-lg border border-slate-200 shadow-2xl"
+                    style={{ ...dropdownStyle }}
+                >
                     {/* Search */}
                     <div className="p-2 border-b border-slate-100 bg-slate-50">
                         <input
@@ -156,7 +195,7 @@ export default function SearchableSelect({
                     {/* Option list */}
                     <ul
                         ref={listRef}
-                        className="max-h-56 overflow-y-auto"
+                        className="max-h-64 overflow-y-auto"
                         role="listbox"
                     >
                         {filtered.length === 0 ? (
@@ -194,7 +233,8 @@ export default function SearchableSelect({
                             })
                         )}
                     </ul>
-                </div>
+                </div>,
+                document.body
             )}
         </div>
     );

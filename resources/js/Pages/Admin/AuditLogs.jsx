@@ -2,6 +2,7 @@ import AppLayout from '@/Layouts/AppLayout';
 import { useForm, router } from '@inertiajs/react';
 import { Badge, Button, DataTable, Field, PageHeader, Pagination, Panel, Toolbar, inputClass } from '@/Components/AdminUI';
 import { useState } from 'react';
+import SearchableSelect from '@/Components/SearchableSelect';
 
 const moduleOptions = ['Authentication', 'ElectionManagement', 'PartyManagement', 'PollingStation', 'UserManagement', 'System'];
 const outcomeTone = (outcome) => {
@@ -78,18 +79,27 @@ export default function AuditLogs({ auth, logs = {}, filters = {} }) {
                             <input value={data.action} onChange={(event) => setData('action', event.target.value)} placeholder="auth.login.success" className={inputClass} />
                         </Field>
                         <Field label="Module">
-                            <select value={data.module} onChange={(event) => setData('module', event.target.value)} className={inputClass}>
-                                <option value="">All modules</option>
-                                {moduleOptions.map((module) => <option key={module} value={module}>{module}</option>)}
-                            </select>
+                            <SearchableSelect
+                                value={data.module}
+                                onChange={(val) => setData('module', val)}
+                                options={[{ value: '', label: 'All modules' }, ...moduleOptions.map((module) => ({ value: module, label: module }))]}
+                                placeholder="Select module"
+                                className="w-full"
+                            />
                         </Field>
                         <Field label="Outcome">
-                            <select value={data.outcome} onChange={(event) => setData('outcome', event.target.value)} className={inputClass}>
-                                <option value="">All outcomes</option>
-                                <option value="success">Success</option>
-                                <option value="failure">Failure</option>
-                                <option value="blocked">Blocked</option>
-                            </select>
+                            <SearchableSelect
+                                value={data.outcome}
+                                onChange={(val) => setData('outcome', val)}
+                                options={[
+                                    { value: '', label: 'All outcomes' },
+                                    { value: 'success', label: 'Success' },
+                                    { value: 'failure', label: 'Failure' },
+                                    { value: 'blocked', label: 'Blocked' }
+                                ]}
+                                placeholder="Select outcome"
+                                className="w-full"
+                            />
                         </Field>
                         <div className="flex items-end gap-2">
                             <Button type="submit" disabled={processing} className="flex-1">{processing ? 'Applying...' : 'Apply Filters'}</Button>

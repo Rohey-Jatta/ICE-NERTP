@@ -27,13 +27,13 @@ export default function ChairmanDashboard({ auth, pendingNational, statistics = 
 
                 {/* Pending alert */}
                 {pendingNational > 0 && (
-                    <div className="mb-6 p-4 bg-amber-500/10 border border-amber-500/40 rounded-xl flex items-center gap-3">
-                        <span className="w-3 h-3 bg-amber-400 rounded-full animate-pulse flex-shrink-0" />
-                        <p className="text-amber-300 flex-1 font-semibold">
+                    <div className="mb-6 p-4 bg-pink-500/10 border border-pink-500/40 rounded-xl flex items-center gap-3">
+                        <span className="w-3 h-3 bg-pink-400 rounded-full animate-pulse flex-shrink-0" />
+                        <p className="text-pink-500 flex-1 font-semibold">
                             {pendingNational} result{pendingNational > 1 ? 's' : ''} awaiting your final national certification.
                         </p>
                         <Link href="/chairman/national-queue"
-                              className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-white text-sm font-bold rounded-lg whitespace-nowrap">
+                              className="px-4 py-2 bg-pink-500 hover:bg-pink-400 text-white text-sm font-bold rounded-lg whitespace-nowrap">
                             Certify Now →
                         </Link>
                     </div>

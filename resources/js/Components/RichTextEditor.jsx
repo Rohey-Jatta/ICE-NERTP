@@ -1,4 +1,5 @@
-import { useRef, useCallback, useEffect } from 'react';
+import { useRef, useCallback, useEffect, useState } from 'react';
+import SearchableSelect from './SearchableSelect';
 
 /**
  * RichTextEditor - Rich text editor
@@ -7,6 +8,7 @@ import { useRef, useCallback, useEffect } from 'react';
 export default function RichTextEditor({ value, onChange, placeholder = 'Add your comments here...', minHeight = '200px' }) {
     const editorRef = useRef(null);
     const isComposing = useRef(false);
+    const [headingFormat, setHeadingFormat] = useState('p');
 
     // Sync value into the editor only on mount (or when value is cleared externally)
     useEffect(() => {
@@ -80,19 +82,20 @@ export default function RichTextEditor({ value, onChange, placeholder = 'Add you
                 dir="ltr"
             >
                 {/* Heading select */}
-                <select
-                    onMouseDown={(e) => e.stopPropagation()}
-                    onChange={(e) => {
-                        document.execCommand('formatBlock', false, e.target.value);
-                        editorRef.current?.focus();
-                        handleInput();
-                    }}
-                    className="text-xs bg-white text-gray-200 border border-slate-200 rounded px-1 py-1 mr-1 cursor-pointer"
-                >
-                    {headingOptions.map(h => (
-                        <option key={h.tag} value={h.tag}>{h.label}</option>
-                    ))}
-                </select>
+                <div className="w-32">
+                    <SearchableSelect
+                        value={headingFormat}
+                        onChange={(val) => {
+                            setHeadingFormat(val);
+                            document.execCommand('formatBlock', false, val);
+                            editorRef.current?.focus();
+                            handleInput();
+                        }}
+                        options={headingOptions.map(h => ({ value: h.tag, label: h.label }))}
+                        placeholder="Select heading"
+                        className="text-xs"
+                    />
+                </div>
 
                 <div className="w-px h-5 bg-slate-100 mx-1" />
 

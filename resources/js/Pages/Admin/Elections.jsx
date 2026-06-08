@@ -2,6 +2,7 @@ import AppLayout from '@/Layouts/AppLayout';
 import { Link, router, useForm } from '@inertiajs/react';
 import { useState } from 'react';
 import { Badge, Button, PageHeader, Panel } from '@/Components/AdminUI';
+import SearchableSelect from '@/Components/SearchableSelect';
 
 /* ── Multi-select party picker ─────────────────────────────────────────── */
 function PartySelector({ allParties, selectedIds, onChange }) {
@@ -287,15 +288,13 @@ export default function Elections({ auth, elections = [], allParties = [], flash
                                     <label className="block text-slate-600 mb-1.5 text-sm font-semibold">
                                         Election Type <span className="text-red-400">*</span>
                                     </label>
-                                    <select
+                                    <SearchableSelect
                                         value={data.type}
-                                        onChange={(e) => setData('type', e.target.value)}
-                                        className="w-full px-4 py-3 bg-white border border-slate-200 rounded-lg text-iec-navy text-sm focus:outline-none focus:border-iec-pink-500"
-                                    >
-                                        {TYPE_OPTIONS.map(o => (
-                                            <option key={o.value} value={o.value}>{o.label}</option>
-                                        ))}
-                                    </select>
+                                        onChange={(val) => setData('type', val)}
+                                        options={TYPE_OPTIONS}
+                                        placeholder="Select election type"
+                                        className="w-full text-sm"
+                                    />
                                 </div>
                                 <div>
                                     <label className="block text-slate-600 mb-1.5 text-sm font-semibold">
@@ -314,17 +313,16 @@ export default function Elections({ auth, elections = [], allParties = [], flash
                             {/* Status */}
                             <div>
                                 <label className="block text-slate-600 mb-1.5 text-sm font-semibold">Status</label>
-                                <select
+                                <SearchableSelect
                                     value={data.status}
-                                    onChange={(e) => setData('status', e.target.value)}
-                                    className="w-full px-4 py-3 bg-white border border-slate-200 rounded-lg text-iec-navy text-sm focus:outline-none focus:border-iec-pink-500"
-                                >
-                                    {STATUS_OPTIONS.map(s => (
-                                        <option key={s} value={s}>
-                                            {s.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
-                                        </option>
-                                    ))}
-                                </select>
+                                    onChange={(val) => setData('status', val)}
+                                    options={STATUS_OPTIONS.map(s => ({
+                                        value: s,
+                                        label: s.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())
+                                    }))}
+                                    placeholder="Select status"
+                                    className="w-full text-sm"
+                                />
                             </div>
 
                             {/* Public Display */}

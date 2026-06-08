@@ -1,6 +1,7 @@
 import AppLayout from '@/Layouts/AppLayout';
 import { useForm, router } from '@inertiajs/react';
 import { useState } from 'react';
+import SearchableSelect from '@/Components/SearchableSelect';
 
 export default function UserCreate({ auth, pollingStations = [], wards = [], constituencies = [], adminAreas = [] }) {
     const { data, setData, post, processing, errors } = useForm({
@@ -43,16 +44,13 @@ export default function UserCreate({ auth, pollingStations = [], wards = [], con
                                 </p>
                             </div>
                         ) : (
-                            <select value={data.polling_station_id}
-                                onChange={(e) => setData('polling_station_id', e.target.value)}
-                                className="w-full px-4 py-3 bg-white border border-slate-200 rounded-lg text-iec-navy">
-                                <option value="">— No station assigned yet —</option>
-                                {pollingStations.map((station) => (
-                                    <option key={station.id} value={station.id}>
-                                        {station.code} — {station.name}
-                                    </option>
-                                ))}
-                            </select>
+                            <SearchableSelect
+                                value={String(data.polling_station_id)}
+                                onChange={(val) => setData('polling_station_id', val)}
+                                options={[{ value: '', label: '— No station assigned yet —' }, ...pollingStations.map((station) => ({ value: String(station.id), label: `${station.code} — ${station.name}` }))]}
+                                placeholder="Select polling station"
+                                className="w-full"
+                            />
                         )}
                         {errors.polling_station_id && <p className="text-red-400 text-sm mt-1">{errors.polling_station_id}</p>}
                     </div>
@@ -69,14 +67,13 @@ export default function UserCreate({ auth, pollingStations = [], wards = [], con
                                 <p className="text-amber-300 text-sm">No wards found. Configure the administrative hierarchy first.</p>
                             </div>
                         ) : (
-                            <select value={data.ward_id}
-                                onChange={(e) => setData('ward_id', e.target.value)}
-                                className="w-full px-4 py-3 bg-white border border-slate-200 rounded-lg text-iec-navy">
-                                <option value="">— No ward assigned yet —</option>
-                                {wards.map((ward) => (
-                                    <option key={ward.id} value={ward.id}>{ward.name}</option>
-                                ))}
-                            </select>
+                            <SearchableSelect
+                                value={String(data.ward_id)}
+                                onChange={(val) => setData('ward_id', val)}
+                                options={[{ value: '', label: '— No ward assigned yet —' }, ...wards.map((ward) => ({ value: String(ward.id), label: ward.name }))]}
+                                placeholder="Select ward"
+                                className="w-full"
+                            />
                         )}
                         {errors.ward_id && <p className="text-red-400 text-sm mt-1">{errors.ward_id}</p>}
                     </div>
@@ -93,14 +90,13 @@ export default function UserCreate({ auth, pollingStations = [], wards = [], con
                                 <p className="text-amber-300 text-sm">No constituencies found. Configure the administrative hierarchy first.</p>
                             </div>
                         ) : (
-                            <select value={data.constituency_id}
-                                onChange={(e) => setData('constituency_id', e.target.value)}
-                                className="w-full px-4 py-3 bg-white border border-slate-200 rounded-lg text-iec-navy">
-                                <option value="">— No constituency assigned yet —</option>
-                                {constituencies.map((c) => (
-                                    <option key={c.id} value={c.id}>{c.name}</option>
-                                ))}
-                            </select>
+                            <SearchableSelect
+                                value={String(data.constituency_id)}
+                                onChange={(val) => setData('constituency_id', val)}
+                                options={[{ value: '', label: '— No constituency assigned yet —' }, ...constituencies.map((c) => ({ value: String(c.id), label: c.name }))]}
+                                placeholder="Select constituency"
+                                className="w-full"
+                            />
                         )}
                         {errors.constituency_id && <p className="text-red-400 text-sm mt-1">{errors.constituency_id}</p>}
                     </div>
@@ -117,14 +113,13 @@ export default function UserCreate({ auth, pollingStations = [], wards = [], con
                                 <p className="text-amber-300 text-sm">No admin areas found. Configure the administrative hierarchy first.</p>
                             </div>
                         ) : (
-                            <select value={data.admin_area_id}
-                                onChange={(e) => setData('admin_area_id', e.target.value)}
-                                className="w-full px-4 py-3 bg-white border border-slate-200 rounded-lg text-iec-navy">
-                                <option value="">— No admin area assigned yet —</option>
-                                {adminAreas.map((area) => (
-                                    <option key={area.id} value={area.id}>{area.name}</option>
-                                ))}
-                            </select>
+                            <SearchableSelect
+                                value={String(data.admin_area_id)}
+                                onChange={(val) => setData('admin_area_id', val)}
+                                options={[{ value: '', label: '— No admin area assigned yet —' }, ...adminAreas.map((area) => ({ value: String(area.id), label: area.name }))]}
+                                placeholder="Select admin area"
+                                className="w-full"
+                            />
                         )}
                         {errors.admin_area_id && <p className="text-red-400 text-sm mt-1">{errors.admin_area_id}</p>}
                     </div>
@@ -213,19 +208,21 @@ export default function UserCreate({ auth, pollingStations = [], wards = [], con
 
                         <div>
                             <label className="block text-slate-600 mb-2 font-semibold">Role <span className="text-red-400">*</span></label>
-                            <select
+                            <SearchableSelect
                                 value={data.role}
-                                onChange={(e) => handleRoleChange(e.target.value)}
-                                className="w-full px-4 py-3 bg-white border border-slate-200 rounded-lg text-iec-navy"
-                            >
-                                <option value="polling-officer">Polling Station Officer</option>
-                                <option value="ward-approver">Ward Approver</option>
-                                <option value="constituency-approver">Constituency Approver</option>
-                                <option value="admin-area-approver">Admin Area Approver</option>
-                                <option value="iec-chairman">IEC Chairman</option>
-                                <option value="party-representative">Party Representative</option>
-                                <option value="election-monitor">Election Monitor</option>
-                            </select>
+                                onChange={(val) => handleRoleChange(val)}
+                                options={[
+                                    { value: 'polling-officer', label: 'Polling Station Officer' },
+                                    { value: 'ward-approver', label: 'Ward Approver' },
+                                    { value: 'constituency-approver', label: 'Constituency Approver' },
+                                    { value: 'admin-area-approver', label: 'Admin Area Approver' },
+                                    { value: 'iec-chairman', label: 'IEC Chairman' },
+                                    { value: 'party-representative', label: 'Party Representative' },
+                                    { value: 'election-monitor', label: 'Election Monitor' }
+                                ]}
+                                placeholder="Select role"
+                                className="w-full"
+                            />
                             {errors.role && <p className="text-red-400 text-sm mt-1">{errors.role}</p>}
                         </div>
 

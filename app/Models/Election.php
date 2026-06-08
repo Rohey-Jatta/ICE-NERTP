@@ -40,8 +40,6 @@ class Election extends Model
             }
         });
 
-        // Invalidate ALL public-facing caches whenever an election is mutated.
-        // Covers all status variants + all versioned summary keys + map/station agg keys.
         $bust = function (Election $election): void {
             self::forgetPublicCaches($election->id, $election->status);
         };
@@ -76,24 +74,19 @@ class Election extends Model
         Cache::forget("stations_filters_{$electionId}");
     }
 
-    /**
-     * Convenience: derived election year from start_date.
-     */
     public function getYearAttribute(): ?int
     {
         return $this->start_date?->year;
     }
 
-    /**
-     * Bust all public caches for this election.
-     * Call this any time a result's certification_status changes.
-     */
     public function bustPublicCaches(): void
     {
         foreach (['draft', 'active', 'certifying', 'results_pending', 'certified', 'archived'] as $status) {
+            Cache::forget("results_summary_v7_{$this->id}_{$status}");
             Cache::forget("results_summary_v3_{$this->id}_{$status}");
         }
         Cache::forget("results_map_{$this->id}");
+        Cache::forget("results_map_agg_v3_{$this->id}");
         Cache::forget("results_stations_{$this->id}_pub");
         Cache::forget("results_stations_{$this->id}_prov");
         Cache::forget("stations_filters_{$this->id}");
@@ -119,7 +112,25 @@ class Election extends Model
     public function isActive(): bool { return $this->status === 'active'; }
     public function isCertifying(): bool { return in_array($this->status, ['results_pending', 'certifying']); }
     public function isNationallyCertified(): bool { return $this->status === 'certified'; }
-    public function allowsResultSubmission(): bool { return in_array($this->status, ['active', 'results_pending']); }
+    public function isClosed(): bool { return in_array($this->status, ['certified', 'archived']); }
+
+    /**
+     * Whether this election is currently accepting new result submissions.
+     *
+     * Submissions are accepted during any "open" phase of the election:
+     *   - active:          Normal open state
+     *   - results_pending: Chairman has published results publicly; still accepting submissions
+     *   - certifying:      Intermediate certification phase; still accepting submissions
+     *
+     * Submissions are BLOCKED when the Chairman explicitly closes the election:
+     *   - certified: Explicitly closed by Chairman via "Close Election" action
+     *   - archived:  Archived by administrator
+     */
+    public function allowsResultSubmission(): bool
+    {
+        return in_array($this->status, ['active', 'results_pending', 'certifying']);
+    }
+
     public function allowsPublicDisplay(): bool {
         return $this->allow_provisional_public_display
             && in_array($this->status, ['results_pending', 'certifying', 'certified']);

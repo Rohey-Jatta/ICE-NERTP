@@ -21,12 +21,26 @@ Route::middleware(['auth', 'role:polling-officer'])
 
     // ── Dashboard ─────────────────────────────────────────────────────────────
     Route::get('/dashboard', function () {
-        $user           = Auth::user();
-        $station        = PollingStation::where('assigned_officer_id', $user->id)->first();
-        $activeElection = Election::whereIn('status', ['active', 'results_pending'])->latest()->first();
+        $user = Auth::user();
+        $station = PollingStation::where('assigned_officer_id', $user->id)->first();
+
+        // Accept submissions while election is active, publishing results, or in certifying stage.
+        // Only 'certified' (explicitly closed by Chairman) or 'archived' blocks submissions.
+        $activeElection = Election::whereIn('status', ['active', 'results_pending', 'certifying'])
+            ->latest()
+            ->first();
+
+        // If no open election, check for a recently closed one to show status
+        $closedElection = !$activeElection
+            ? Election::where('status', 'certified')->latest()->first()
+            : null;
+
+        $electionForDisplay = $activeElection ?? $closedElection;
+        $electionStatus     = $electionForDisplay?->status;
+        $electionClosed     = $closedElection !== null && $activeElection === null;
 
         $submissionStats = Result::where('submitted_by', $user->id)
-            ->when($activeElection, fn($q) => $q->where('election_id', $activeElection->id))
+            ->when($activeElection, fn ($q) => $q->where('election_id', $activeElection->id))
             ->selectRaw(
                 'COUNT(*) as total, '
                 . 'SUM(CASE WHEN certification_status IN (?, ?, ?) THEN 1 ELSE 0 END) as pending, '
@@ -48,10 +62,6 @@ Route::middleware(['auth', 'role:polling-officer'])
             )
             ->first();
 
-        $pendingCount = (int) $submissionStats->pending;
-        $certifiedCount = (int) $submissionStats->certified;
-        $rejectedCount = (int) $submissionStats->rejected;
-
         $hasSubmitted = $station && $activeElection
             ? Result::where('polling_station_id', $station->id)
                 ->where('election_id', $activeElection->id)
@@ -60,31 +70,36 @@ Route::middleware(['auth', 'role:polling-officer'])
             : false;
 
         return Inertia::render('Officer/Dashboard', [
-            'auth'    => ['user' => $user],
-            'station' => $station ? [
+            'auth'           => ['user' => $user],
+            'station'        => $station ? [
                 'id'                => $station->id,
                 'name'              => $station->name,
                 'code'              => $station->code,
                 'registered_voters' => $station->registered_voters,
-                'election_name'     => $activeElection->name ?? 'N/A',
+                'election_name'     => $electionForDisplay->name ?? 'N/A',
             ] : null,
             'statistics' => [
-                'totalSubmissions' => (int) $submissionStats->total,
-                'pending'          => $pendingCount,
-                'certified'        => $certifiedCount,
-                'rejected'         => $rejectedCount,
+                'totalSubmissions' => (int) ($submissionStats->total ?? 0),
+                'pending'          => (int) ($submissionStats->pending ?? 0),
+                'certified'        => (int) ($submissionStats->certified ?? 0),
+                'rejected'         => (int) ($submissionStats->rejected ?? 0),
             ],
-            'hasSubmitted' => $hasSubmitted,
-            'canSubmit'    => $station !== null && $activeElection !== null && !$hasSubmitted,
+            'hasSubmitted'   => $hasSubmitted,
+            'canSubmit'      => $station !== null && $activeElection !== null && !$hasSubmitted,
+            'electionStatus' => $electionStatus,
+            'electionClosed' => $electionClosed,
         ]);
     })->name('dashboard');
 
     // ── Result Submission Form ────────────────────────────────────────────────
     Route::get('/results/submit', function () {
-        $user           = Auth::user();
-        $station        = PollingStation::where('assigned_officer_id', $user->id)->first();
-        // FIXED: Always find the current election that still accepts station submissions.
-        $election       = Election::whereIn('status', ['active', 'results_pending'])->latest()->first();
+        $user    = Auth::user();
+        $station = PollingStation::where('assigned_officer_id', $user->id)->first();
+
+        // Accept submissions while election is open (active, results_pending, certifying)
+        $election = Election::whereIn('status', ['active', 'results_pending', 'certifying'])
+            ->latest()
+            ->first();
 
         if (!$station) {
             return redirect()->route('officer.dashboard')
@@ -92,11 +107,17 @@ Route::middleware(['auth', 'role:polling-officer'])
         }
 
         if (!$election) {
+            // Check if there's a closed election to give a helpful message
+            $closedElection = Election::where('status', 'certified')->latest()->first();
+            if ($closedElection) {
+                return redirect()->route('officer.dashboard')
+                    ->with('error', 'The election has been officially closed. Result submissions are no longer accepted.');
+            }
             return redirect()->route('officer.dashboard')
                 ->with('error', 'No active election found. Contact the administrator.');
         }
 
-        // A result that is NOT editable (already in pipeline for THIS active election)
+        // A result that is NOT editable (already in pipeline for this active election)
         $existingResult = Result::where('polling_station_id', $station->id)
             ->where('election_id', $election->id)
             ->where('rejection_count', 0)
@@ -116,7 +137,7 @@ Route::middleware(['auth', 'role:polling-officer'])
             ->with('politicalParty')
             ->where('is_active', true)
             ->get()
-            ->map(fn($c) => [
+            ->map(fn ($c) => [
                 'id'          => $c->id,
                 'name'        => $c->name ?? $c->full_name,
                 'party_name'  => $c->politicalParty->name ?? 'Independent',
@@ -171,13 +192,27 @@ Route::middleware(['auth', 'role:polling-officer'])
             'candidate_votes'   => 'required|array|min:1',
         ]);
 
-        // Ensure the election being submitted to is still active
+        // Allow submissions while election is open: active, results_pending, or certifying.
+        // 'certified' means the Chairman has explicitly closed the election — block submissions.
         $election = Election::where('id', $request->election_id)
-            ->where('status', 'active')
+            ->whereIn('status', ['active', 'results_pending', 'certifying'])
             ->first();
 
         if (!$election) {
-            return back()->withErrors(['error' => 'The selected election is no longer active.']);
+            // Give a helpful, specific error depending on whether the election is closed vs missing
+            $closedElection = Election::where('id', $request->election_id)
+                ->whereIn('status', ['certified', 'archived'])
+                ->first();
+
+            if ($closedElection) {
+                return back()->withErrors([
+                    'error' => 'This election has been officially closed by the IEC Chairman. Result submissions are no longer accepted.',
+                ])->withInput();
+            }
+
+            return back()->withErrors([
+                'error' => 'The selected election is no longer accepting submissions.',
+            ])->withInput();
         }
 
         $totalVotesCast   = (int) $request->total_votes_cast;
@@ -296,16 +331,19 @@ Route::middleware(['auth', 'role:polling-officer'])
 
     // ── My Submissions ────────────────────────────────────────────────────────
     Route::get('/submissions', function () {
-        $user           = Auth::user();
-        $station        = PollingStation::where('assigned_officer_id', $user->id)->first();
-        $activeElection = Election::whereIn('status', ['active', 'results_pending'])->latest()->first();
+        $user    = Auth::user();
+        $station = PollingStation::where('assigned_officer_id', $user->id)->first();
+
+        $activeElection = Election::whereIn('status', ['active', 'results_pending', 'certifying', 'certified'])
+            ->latest()
+            ->first();
 
         $results = Result::where('submitted_by', $user->id)
-            ->when($activeElection, fn($q) => $q->where('election_id', $activeElection->id))
+            ->when($activeElection, fn ($q) => $q->where('election_id', $activeElection->id))
             ->with(['pollingStation', 'candidateVotes.candidate.politicalParty'])
             ->latest('submitted_at')
             ->get()
-            ->map(fn($r) => [
+            ->map(fn ($r) => [
                 'id'                      => $r->id,
                 'polling_station_name'    => $r->pollingStation->name ?? 'Unknown Station',
                 'polling_station_code'    => $r->pollingStation->code ?? '—',
@@ -323,7 +361,7 @@ Route::middleware(['auth', 'role:polling-officer'])
                     : null,
                 'is_editable'             => $r->certification_status === Result::STATUS_SUBMITTED
                     && $r->rejection_count > 0,
-                'candidate_votes'         => $r->candidateVotes->map(fn($cv) => [
+                'candidate_votes'         => $r->candidateVotes->map(fn ($cv) => [
                     'candidate_name' => $cv->candidate->name ?? $cv->candidate->full_name ?? 'Unknown',
                     'party_abbr'     => $cv->candidate->politicalParty->abbreviation ?? 'IND',
                     'party_color'    => $cv->candidate->politicalParty->color ?? '#6b7280',

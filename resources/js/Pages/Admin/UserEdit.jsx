@@ -2,6 +2,7 @@ import { Button, Field, PageHeader, Panel, inputClass, roleLabel } from '@/Compo
 import AppLayout from '@/Layouts/AppLayout';
 import { useForm } from '@inertiajs/react';
 import { useState } from 'react';
+import SearchableSelect from '@/Components/SearchableSelect';
 
 export default function UserEdit({ auth, user, roles, pollingStations, wards, constituencies, adminAreas }) {
     const { data, setData, put, processing, errors } = useForm({
@@ -37,12 +38,13 @@ export default function UserEdit({ auth, user, roles, pollingStations, wards, co
         if (selectedRole === 'polling-officer') {
             return (
                 <Field label="Assign to Polling Station">
-                    <select value={data.polling_station_id} onChange={(event) => setData('polling_station_id', event.target.value)} className={inputClass}>
-                        <option value="">Select polling station</option>
-                        {pollingStations.map((station) => (
-                            <option key={station.id} value={station.id}>{station.code} - {station.name}</option>
-                        ))}
-                    </select>
+                    <SearchableSelect
+                        value={String(data.polling_station_id)}
+                        onChange={(val) => setData('polling_station_id', val)}
+                        options={[{ value: '', label: 'Select polling station' }, ...pollingStations.map((station) => ({ value: String(station.id), label: `${station.code} - ${station.name}` }))]}
+                        placeholder="Select polling station"
+                        className="w-full"
+                    />
                 </Field>
             );
         }
@@ -50,10 +52,13 @@ export default function UserEdit({ auth, user, roles, pollingStations, wards, co
         if (selectedRole === 'ward-approver') {
             return (
                 <Field label="Assign to Ward">
-                    <select value={data.ward_id} onChange={(event) => setData('ward_id', event.target.value)} className={inputClass}>
-                        <option value="">Select ward</option>
-                        {wards.map((ward) => <option key={ward.id} value={ward.id}>{ward.name}</option>)}
-                    </select>
+                    <SearchableSelect
+                        value={String(data.ward_id)}
+                        onChange={(val) => setData('ward_id', val)}
+                        options={[{ value: '', label: 'Select ward' }, ...wards.map((ward) => ({ value: String(ward.id), label: ward.name }))]}
+                        placeholder="Select ward"
+                        className="w-full"
+                    />
                 </Field>
             );
         }
@@ -61,10 +66,13 @@ export default function UserEdit({ auth, user, roles, pollingStations, wards, co
         if (selectedRole === 'constituency-approver') {
             return (
                 <Field label="Assign to Constituency">
-                    <select value={data.constituency_id} onChange={(event) => setData('constituency_id', event.target.value)} className={inputClass}>
-                        <option value="">Select constituency</option>
-                        {constituencies.map((constituency) => <option key={constituency.id} value={constituency.id}>{constituency.name}</option>)}
-                    </select>
+                    <SearchableSelect
+                        value={String(data.constituency_id)}
+                        onChange={(val) => setData('constituency_id', val)}
+                        options={[{ value: '', label: 'Select constituency' }, ...constituencies.map((constituency) => ({ value: String(constituency.id), label: constituency.name }))]}
+                        placeholder="Select constituency"
+                        className="w-full"
+                    />
                 </Field>
             );
         }
@@ -72,10 +80,13 @@ export default function UserEdit({ auth, user, roles, pollingStations, wards, co
         if (selectedRole === 'admin-area-approver') {
             return (
                 <Field label="Assign to Administrative Area">
-                    <select value={data.admin_area_id} onChange={(event) => setData('admin_area_id', event.target.value)} className={inputClass}>
-                        <option value="">Select administrative area</option>
-                        {adminAreas.map((area) => <option key={area.id} value={area.id}>{area.name}</option>)}
-                    </select>
+                    <SearchableSelect
+                        value={String(data.admin_area_id)}
+                        onChange={(val) => setData('admin_area_id', val)}
+                        options={[{ value: '', label: 'Select administrative area' }, ...adminAreas.map((area) => ({ value: String(area.id), label: area.name }))]}
+                        placeholder="Select administrative area"
+                        className="w-full"
+                    />
                 </Field>
             );
         }
@@ -113,18 +124,28 @@ export default function UserEdit({ auth, user, roles, pollingStations, wards, co
 
                         <div className="ws-form-grid">
                             <Field label="Status">
-                                <select value={data.status} onChange={(event) => setData('status', event.target.value)} className={inputClass}>
-                                    <option value="active">Active</option>
-                                    <option value="inactive">Inactive</option>
-                                    <option value="suspended">Suspended</option>
-                                </select>
+                                <SearchableSelect
+                                    value={data.status}
+                                    onChange={(val) => setData('status', val)}
+                                    options={[
+                                        { value: 'active', label: 'Active' },
+                                        { value: 'inactive', label: 'Inactive' },
+                                        { value: 'suspended', label: 'Suspended' }
+                                    ]}
+                                    placeholder="Status"
+                                    className="w-full"
+                                />
                                 {errors.status && <p className="mt-1 text-sm text-rose-600">{errors.status}</p>}
                             </Field>
 
                             <Field label="Role">
-                                <select value={data.role} onChange={(event) => handleRoleChange(event.target.value)} className={inputClass}>
-                                    {roles.map((role) => <option key={role} value={role}>{roleLabel(role)}</option>)}
-                                </select>
+                                <SearchableSelect
+                                    value={data.role}
+                                    onChange={(val) => handleRoleChange(val)}
+                                    options={roles.map((role) => ({ value: role, label: roleLabel(role) }))}
+                                    placeholder="Select role"
+                                    className="w-full"
+                                />
                                 {errors.role && <p className="mt-1 text-sm text-rose-600">{errors.role}</p>}
                             </Field>
                         </div>

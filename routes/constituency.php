@@ -37,7 +37,7 @@ Route::middleware(['auth', 'role:constituency-approver'])
 
                 $statusCounts = $base->selectRaw(
                     'SUM(CASE WHEN certification_status = ? THEN 1 ELSE 0 END) as pending, '
-                    . 'SUM(CASE WHEN certification_status IN (?, ?, ?, ?) THEN 1 ELSE 0 END) as certified, '
+                    . 'SUM(CASE WHEN certification_status IN (?, ?, ?, ?, ?) THEN 1 ELSE 0 END) as certified, '
                     . 'SUM(CASE WHEN certification_status = ? AND rejection_count > 0 THEN 1 ELSE 0 END) as rejected, '
                     . 'COUNT(*) as total',
                     [
@@ -46,6 +46,7 @@ Route::middleware(['auth', 'role:constituency-approver'])
                         Result::STATUS_PENDING_ADMIN_AREA,
                         Result::STATUS_ADMIN_AREA_CERTIFIED,
                         Result::STATUS_PENDING_NATIONAL,
+                        Result::STATUS_NATIONALLY_CERTIFIED,
                         Result::STATUS_PENDING_WARD,
                     ]
                 )->first();

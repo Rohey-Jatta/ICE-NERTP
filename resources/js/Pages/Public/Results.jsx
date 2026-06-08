@@ -2,6 +2,7 @@ import AppLayout from '@/Layouts/AppLayout';
 import { Link, router, usePage } from '@inertiajs/react';
 import { useState } from 'react';
 import useInertiaPrefetch from '@/Hooks/useInertiaPrefetch';
+import SearchableSelect from '@/Components/SearchableSelect';
 import { electionTypeLabel, publicElectionTitle } from '@/Utils/publicElection';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -284,15 +285,13 @@ function HomeResultsPage({ election, elections, selectedElectionId, stats, pipel
                             {elections.length > 1 && (
                                 <div className="min-w-0 lg:w-80">
                                     <p className="mb-1 text-[10.5px] font-semibold uppercase tracking-[0.08em] text-[#5f6773]">Select election</p>
-                                    <select
-                                        value={selectedElectionId || ''}
-                                        onChange={(event) => router.get(basePath, { election: event.target.value }, { preserveScroll: false })}
-                                        className="w-full rounded-[10px] border border-[#e6e8ec] bg-white px-4 py-3 text-sm font-semibold text-[#0e1014] outline-none transition focus:border-[#e61a6e] focus:ring-4 focus:ring-[#e61a6e]/10"
-                                    >
-                                        {elections.map((item) => (
-                                            <option key={item.id} value={item.id}>{publicElectionTitle(item)}</option>
-                                        ))}
-                                    </select>
+                                    <SearchableSelect
+                                        value={String(selectedElectionId || '')}
+                                        onChange={(val) => router.get(basePath, { election: val }, { preserveScroll: false })}
+                                        options={elections.map((el) => ({ value: String(el.id), label: publicElectionTitle(el) }))}
+                                        placeholder="Select election"
+                                        className="w-full text-sm"
+                                    />
                                 </div>
                             )}
                         </div>

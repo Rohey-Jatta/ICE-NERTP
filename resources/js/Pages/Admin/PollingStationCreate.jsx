@@ -2,6 +2,7 @@ import { Button, Field, PageHeader, Panel, inputClass } from '@/Components/Admin
 import AppLayout from '@/Layouts/AppLayout';
 import { Link, useForm } from '@inertiajs/react';
 import { useState } from 'react';
+import SearchableSelect from '@/Components/SearchableSelect';
 
 export default function PollingStationCreate({ auth, wards = [], officers = [], election, hasActiveElection = true }) {
     const { data, setData, post, processing, errors } = useForm({
@@ -102,10 +103,13 @@ export default function PollingStationCreate({ auth, wards = [], officers = [], 
                             {wards.length === 0 ? (
                                 <div className="ws-alert ws-alert-warning mb-0">No wards found. Configure the administrative hierarchy first.</div>
                             ) : (
-                                <select value={data.ward_id} onChange={(event) => setData('ward_id', event.target.value)} className={inputClass} required>
-                                    <option value="">Select a ward</option>
-                                    {wards.map((ward) => <option key={ward.id} value={ward.id}>{ward.name}</option>)}
-                                </select>
+                                <SearchableSelect
+                                    value={String(data.ward_id)}
+                                    onChange={(val) => setData('ward_id', val)}
+                                    options={[{ value: '', label: 'Select a ward' }, ...wards.map((ward) => ({ value: String(ward.id), label: ward.name }))]}
+                                    placeholder="Select ward"
+                                    className="w-full"
+                                />
                             )}
                             {errors.ward_id && <p className="mt-1 text-sm text-rose-600">{errors.ward_id}</p>}
                         </Field>
@@ -136,10 +140,13 @@ export default function PollingStationCreate({ auth, wards = [], officers = [], 
                                 {errors.registered_voters && <p className="mt-1 text-sm text-rose-600">{errors.registered_voters}</p>}
                             </Field>
                             <Field label="Assigned Polling Officer">
-                                <select value={data.assigned_officer_id} onChange={(event) => setData('assigned_officer_id', event.target.value)} className={inputClass}>
-                                    <option value="">No officer assigned yet</option>
-                                    {officers.map((officer) => <option key={officer.id} value={officer.id}>{officer.name} ({officer.email})</option>)}
-                                </select>
+                                <SearchableSelect
+                                    value={String(data.assigned_officer_id)}
+                                    onChange={(val) => setData('assigned_officer_id', val)}
+                                    options={[{ value: '', label: 'No officer assigned yet' }, ...officers.map((officer) => ({ value: String(officer.id), label: `${officer.name} (${officer.email})` }))]}
+                                    placeholder="Select officer"
+                                    className="w-full"
+                                />
                                 {officers.length === 0 && (
                                     <p className="mt-1 text-xs text-slate-500">
                                         No polling officers found. <Link href="/admin/users/create" className="text-iec-pink underline">Create a polling officer</Link> first.

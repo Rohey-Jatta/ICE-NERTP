@@ -22,14 +22,14 @@ export default function AdminAreaDashboard({ auth, adminArea, pendingResults, st
 
                 {/* Pending alert — only show when results are actually in THIS queue */}
                 {pendingResults > 0 && (
-                    <div className="mb-4 p-4 bg-amber-500/10 border border-amber-500/40 rounded-xl flex items-center gap-3">
-                        <div className="w-3 h-3 bg-amber-400 rounded-full animate-pulse flex-shrink-0" />
-                        <p className="text-amber-300">
-                            <strong>{pendingResults} result{pendingResults !== 1 ? 's' : ''}</strong> are ready and awaiting your admin-area certification
+                    <div className="mb-4 p-4 bg-pink-500/10 border border-pink-500/40 rounded-xl flex items-center gap-3">
+                        <div className="w-3 h-3 bg-pink-400 rounded-full animate-pulse flex-shrink-0" />
+                        <p className="text-pink-600">
+                            <strong>{pendingResults} result{pendingResults !== 1 ? 's' : ''}</strong> are ready and awaiting your administrative area certification
                         </p>
                         <Link
                             href="/admin-area/approval-queue"
-                            className="ml-auto px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-bold rounded-lg whitespace-nowrap"
+                            className="ml-auto px-4 py-2 bg-pink-500 hover:bg-pink-600 text-white text-sm font-bold rounded-lg whitespace-nowrap"
                         >
                             Review Now →
                         </Link>
@@ -49,7 +49,7 @@ export default function AdminAreaDashboard({ auth, adminArea, pendingResults, st
                 {/* Stats */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
                     <div className="bg-white rounded-xl p-5 border border-slate-200">
-                        <div className="text-3xl font-bold text-amber-300">{pendingResults || 0}</div>
+                        <div className="text-3xl font-bold text-amber-500">{pendingResults || 0}</div>
                         <div className="text-slate-500 text-sm mt-1">Ready for Review</div>
                         <div className="text-slate-500 text-xs mt-0.5">Pending your decision</div>
                     </div>
@@ -81,7 +81,7 @@ export default function AdminAreaDashboard({ auth, adminArea, pendingResults, st
                             className="group p-5 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 rounded-xl transition-all"
                         >
                             <div className="flex items-center gap-3 mb-2">
-                                <div className="w-8 h-8 bg-amber-500/20 rounded-lg flex items-center justify-center text-amber-400">⏳</div>
+                                <div className="w-8 h-8 bg-amber-500/20 rounded-lg flex items-center justify-center text-amber-600">⏳</div>
                                 <div className="text-lg font-bold text-iec-navy">Approval Queue</div>
                             </div>
                             <div className="text-amber-300 text-sm">

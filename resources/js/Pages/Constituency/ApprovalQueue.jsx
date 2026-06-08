@@ -54,14 +54,14 @@ export default function ConstituencyApprovalQueue({
     const [flash, setFlash]                   = useState(null);
 
     const filterTabs = [
-        { key: 'pending',   label: 'Pending',   count: counts.pending   || 0, color: 'amber' },
+        { key: 'pending',   label: 'Pending',   count: counts.pending   || 0, color: 'pink' },
         { key: 'certified', label: 'Certified', count: counts.certified || 0, color: 'teal'  },
         { key: 'rejected',  label: 'Rejected',  count: counts.rejected  || 0, color: 'red'   },
         { key: 'all',       label: 'All',       count: counts.all       || 0, color: 'slate' },
     ];
 
     const tabColors = {
-        amber: { active: 'bg-amber-500 text-white', dot: 'bg-amber-400' },
+        pink:  { active: 'bg-iec-pink-500 text-white', dot: 'bg-pink-400' },
         teal:  { active: 'bg-iec-pink-500 text-white',  dot: 'bg-teal-400' },
         red:   { active: 'bg-red-500 text-white',   dot: 'bg-red-400' },
         slate: { active: 'bg-slate-500 text-iec-navy', dot: 'bg-slate-400' },
@@ -179,7 +179,7 @@ export default function ConstituencyApprovalQueue({
 
                             return (
                                 <div key={result.id} className={`bg-white rounded-xl border transition-all ${
-                                    isPending ? (anomalies.length > 0 ? 'border-orange-500/50' : 'border-amber-500/30') : 'border-slate-200'
+                                    isPending ? (anomalies.length > 0 ? 'border-pink-500/50' : 'border-pink-500/30') : 'border-slate-200'
                                 }`}>
                                     {/* Header */}
                                     <div className="p-5 flex flex-wrap gap-4 justify-between items-start">
@@ -190,12 +190,12 @@ export default function ConstituencyApprovalQueue({
                                                 <span className="text-xs text-slate-500 bg-slate-100 px-2 py-0.5 rounded">Ward: {result.ward_name}</span>
                                                 <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${statusCfg.badgeClass}`}>{statusCfg.label}</span>
                                                 {result.rejection_count > 0 && (
-                                                    <span className="px-2 py-0.5 rounded-full text-xs bg-orange-500/20 text-orange-300">
+                                                    <span className="px-2 py-0.5 rounded-full text-xs bg-pink-500/20 text-pink-300">
                                                         Rejected {result.rejection_count}×
                                                     </span>
                                                 )}
                                                 {anomalies.length > 0 && (
-                                                    <span className="px-2 py-0.5 rounded-full text-xs bg-orange-500/20 text-orange-300">⚠ Anomaly</span>
+                                                    <span className="px-2 py-0.5 rounded-full text-xs bg-pink-500/20 text-pink-300">⚠ Anomaly</span>
                                                 )}
                                             </div>
                                             <p className="text-slate-500 text-sm">Submitted: {result.submitted_at}</p>
@@ -205,7 +205,7 @@ export default function ConstituencyApprovalQueue({
                                             <div className={`font-semibold ${
                                                 result.party_acceptances.length === 0 ? 'text-slate-500' :
                                                 result.party_acceptances.every(p => ['accepted','accepted_with_reservation'].includes(p.status))
-                                                    ? 'text-green-300' : 'text-amber-300'
+                                                    ? 'text-green-300' : 'text-pink-300'
                                             }`}>
                                                 {result.party_acceptances.length === 0 ? 'N/A' :
                                                     `${result.party_acceptances.filter(p => p.status !== 'pending').length}/${result.party_acceptances.length} Responded`}
@@ -215,9 +215,9 @@ export default function ConstituencyApprovalQueue({
 
                                     {/* Anomaly Banner */}
                                     {anomalies.length > 0 && (
-                                        <div className="mx-5 mb-4 p-3 bg-orange-500/10 border border-orange-500/30 rounded-lg">
-                                            <div className="text-xs text-orange-400 font-semibold mb-1">⚠ Anomalies Detected</div>
-                                            {anomalies.map((a, i) => <div key={i} className="text-orange-300 text-sm">{a}</div>)}
+                                        <div className="mx-5 mb-4 p-3 bg-orange-500/10 border border-pink-500/30 rounded-lg">
+                                            <div className="text-xs text-pink-400 font-semibold mb-1">⚠ Anomalies Detected</div>
+                                            {anomalies.map((a, i) => <div key={i} className="text-pink-300 text-sm">{a}</div>)}
                                         </div>
                                     )}
 

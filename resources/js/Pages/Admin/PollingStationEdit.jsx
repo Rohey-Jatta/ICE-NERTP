@@ -1,6 +1,7 @@
 import AppLayout from '@/Layouts/AppLayout';
 import { useForm, Link } from '@inertiajs/react';
 import { useState } from 'react';
+import SearchableSelect from '@/Components/SearchableSelect';
 
 export default function PollingStationEdit({ auth, station, wards = [], officers = [], election }) {
     const { data, setData, put, processing, errors } = useForm({
@@ -101,15 +102,13 @@ export default function PollingStationEdit({ auth, station, wards = [], officers
                                     <p className="text-amber-300 text-sm">No wards found. Please configure the administrative hierarchy first.</p>
                                 </div>
                             ) : (
-                                <select value={data.ward_id}
-                                    onChange={(e) => setData('ward_id', e.target.value)}
-                                    className="w-full px-4 py-3 bg-white border border-slate-200 rounded-lg text-iec-navy"
-                                    required>
-                                    <option value="">— Select a Ward —</option>
-                                    {wards.map((ward) => (
-                                        <option key={ward.id} value={ward.id}>{ward.name}</option>
-                                    ))}
-                                </select>
+                                <SearchableSelect
+                                    value={String(data.ward_id)}
+                                    onChange={(val) => setData('ward_id', val)}
+                                    options={[{ value: '', label: '— Select a Ward —' }, ...wards.map((ward) => ({ value: String(ward.id), label: ward.name }))]}
+                                    placeholder="Select ward"
+                                    className="w-full"
+                                />
                             )}
                             {errors.ward_id && <p className="text-red-400 text-sm mt-1">{errors.ward_id}</p>}
                         </div>
@@ -160,16 +159,13 @@ export default function PollingStationEdit({ auth, station, wards = [], officers
                         {/* Assigned Officer */}
                         <div>
                             <label className="block text-slate-600 mb-2 font-semibold">Assigned Polling Officer</label>
-                            <select value={data.assigned_officer_id}
-                                onChange={(e) => setData('assigned_officer_id', e.target.value)}
-                                className="w-full px-4 py-3 bg-white border border-slate-200 rounded-lg text-iec-navy">
-                                <option value="">— No officer assigned —</option>
-                                {officers.map((officer) => (
-                                    <option key={officer.id} value={officer.id}>
-                                        {officer.name} ({officer.email})
-                                    </option>
-                                ))}
-                            </select>
+                            <SearchableSelect
+                                value={String(data.assigned_officer_id)}
+                                onChange={(val) => setData('assigned_officer_id', val)}
+                                options={[{ value: '', label: '— No officer assigned —' }, ...officers.map((officer) => ({ value: String(officer.id), label: `${officer.name} (${officer.email})` }))]}
+                                placeholder="Select officer"
+                                className="w-full"
+                            />
                             {errors.assigned_officer_id && <p className="text-red-400 text-sm mt-1">{errors.assigned_officer_id}</p>}
                         </div>
 

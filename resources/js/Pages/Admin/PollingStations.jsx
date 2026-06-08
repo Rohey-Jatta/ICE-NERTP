@@ -2,6 +2,7 @@ import AppLayout from '@/Layouts/AppLayout';
 import { router } from '@inertiajs/react';
 import { Button, DataTable, Field, PageHeader, Panel, Toolbar, inputClass } from '@/Components/AdminUI';
 import { useMemo, useState } from 'react';
+import SearchableSelect from '@/Components/SearchableSelect';
 
 const PAGE_SIZE = 25;
 
@@ -101,10 +102,13 @@ export default function PollingStations({ auth, stations = [] }) {
                         />
                     </Field>
                     <Field label="Ward">
-                        <select value={ward} onChange={(event) => { setWard(event.target.value); setPage(1); }} className={inputClass}>
-                            <option value="">All wards</option>
-                            {wards.map((wardName) => <option key={wardName} value={wardName}>{wardName}</option>)}
-                        </select>
+                        <SearchableSelect
+                            value={ward}
+                            onChange={(val) => { setWard(val); setPage(1); }}
+                            options={[{ value: '', label: 'All wards' }, ...wards.map((wardName) => ({ value: wardName, label: wardName }))]}
+                            placeholder="Select ward"
+                            className="w-full"
+                        />
                     </Field>
                     <div className="flex flex-col justify-end">
                         <span className="ws-label">Current page</span>

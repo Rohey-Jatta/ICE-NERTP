@@ -1,6 +1,7 @@
 import AppLayout from '@/Layouts/AppLayout';
 import { useForm, Link } from '@inertiajs/react';
 import { useState } from 'react';
+import SearchableSelect from '@/Components/SearchableSelect';
 
 export default function ElectionMonitorCreate({ auth, users, pollingStations, hasElection = true }) {
     const { data, setData, post, processing, errors } = useForm({
@@ -78,23 +79,14 @@ export default function ElectionMonitorCreate({ auth, users, pollingStations, ha
                                 <label className="block text-slate-600 mb-2 font-semibold">
                                     Select Election Monitor User <span className="text-red-400">*</span>
                                 </label>
-                                <select
-                                    value={data.user_id}
-                                    onChange={(e) => setData('user_id', e.target.value)}
-                                    className="w-full px-4 py-3 bg-white border border-slate-200 rounded-lg text-iec-navy"
-                                    required
-                                >
-                                    <option value="">— Choose a user —</option>
-                                    {users.length > 0 ? (
-                                        users.map((user) => (
-                                            <option key={user.id} value={user.id}>
-                                                {user.name} ({user.email})
-                                            </option>
-                                        ))
-                                    ) : (
-                                        <option disabled>No users with election-monitor role found</option>
-                                    )}
-                                </select>
+                                <SearchableSelect
+                                    value={String(data.user_id)}
+                                    onChange={(val) => setData('user_id', val)}
+                                    options={[{ value: '', label: '— Choose a user —' }, ...users.map((user) => ({ value: String(user.id), label: `${user.name} (${user.email})` }))]}
+                                    placeholder="Select user"
+                                    className="w-full"
+                                    emptyLabel={users.length === 0 ? 'No users with election-monitor role found' : 'No results found'}
+                                />
                                 {errors.user_id && <p className="text-red-400 text-sm mt-1">{errors.user_id}</p>}
                                 {users.length === 0 && (
                                     <p className="text-amber-600 text-xs mt-1">
@@ -123,15 +115,17 @@ export default function ElectionMonitorCreate({ auth, users, pollingStations, ha
                         {/* Monitor Type */}
                         <div>
                             <label className="block text-slate-600 mb-2 font-semibold">Monitor Type</label>
-                            <select
+                            <SearchableSelect
                                 value={data.type}
-                                onChange={(e) => setData('type', e.target.value)}
-                                className="w-full px-4 py-3 bg-white border border-slate-200 rounded-lg text-iec-navy"
-                            >
-                                <option value="domestic">Domestic</option>
-                                <option value="international">International</option>
-                                <option value="civil_society">Civil Society</option>
-                            </select>
+                                onChange={(val) => setData('type', val)}
+                                options={[
+                                    { value: 'domestic', label: 'Domestic' },
+                                    { value: 'international', label: 'International' },
+                                    { value: 'civil_society', label: 'Civil Society' }
+                                ]}
+                                placeholder="Select monitor type"
+                                className="w-full"
+                            />
                             {errors.type && <p className="text-red-400 text-sm mt-1">{errors.type}</p>}
                         </div>
 

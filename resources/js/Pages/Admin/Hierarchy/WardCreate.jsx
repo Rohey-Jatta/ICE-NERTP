@@ -1,6 +1,7 @@
 import AppLayout from '@/Layouts/AppLayout';
 import { useForm, Link } from '@inertiajs/react';
 import { useState } from 'react';
+import SearchableSelect from '@/Components/SearchableSelect';
 
 export default function WardCreate({ auth, constituencies = [] }) {
     const { data, setData, post, processing, errors } = useForm({
@@ -44,19 +45,14 @@ export default function WardCreate({ auth, constituencies = [] }) {
                                     </p>
                                 </div>
                             ) : (
-                                <select
-                                    value={data.parent_id}
-                                    onChange={(e) => setData('parent_id', e.target.value)}
-                                    className="w-full px-4 py-3 bg-white border border-slate-200 rounded-lg text-iec-navy"
+                                <SearchableSelect
+                                    value={String(data.parent_id)}
+                                    onChange={(val) => setData('parent_id', val)}
+                                    options={[{ value: '', label: '— Select Constituency —' }, ...constituencies.map((c) => ({ value: String(c.id), label: `${c.name}${c.parent_name ? ` (${c.parent_name})` : ''}` }))]}
+                                    placeholder="Select constituency"
+                                    className="w-full"
                                     required
-                                >
-                                    <option value="">— Select Constituency —</option>
-                                    {constituencies.map((c) => (
-                                        <option key={c.id} value={c.id}>
-                                            {c.name}{c.parent_name ? ` (${c.parent_name})` : ''}
-                                        </option>
-                                    ))}
-                                </select>
+                                />
                             )}
                             {errors.parent_id && <p className="text-red-400 text-sm mt-1">{errors.parent_id}</p>}
                         </div>

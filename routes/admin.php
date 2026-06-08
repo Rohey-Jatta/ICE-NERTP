@@ -494,7 +494,9 @@ Route::middleware(['auth', 'role:iec-administrator'])
     })->name('elections.create')->middleware('permission:create-election');
 
     Route::post('/elections', function (Request $request) {
-        $request->validate([
+        \Log::info('Election creation attempt', $request->all());
+
+        $validated = $request->validate([
             'name'        => 'required|string|max:255',
             'type'        => 'required|string|in:presidential,parliamentary,local,referendum',
             'date'        => 'required|date',
@@ -502,10 +504,33 @@ Route::middleware(['auth', 'role:iec-administrator'])
             'party_ids'   => 'nullable|array',
             'party_ids.*' => 'exists:political_parties,id',
         ]);
+
+        \Log::info('Validation passed', $validated);
+
         try {
             $typeMap = ['local' => 'local_government', 'referendum' => 'by_election'];
+
+            $slug = Str::slug($request->name);
+            $existingElection = Election::where('slug', $slug)
+                ->withTrashed()
+                ->first();
+
+            if ($existingElection) {
+                \Log::warning('Duplicate election slug detected', ['slug' => $slug]);
+                return back()->withErrors([
+                    'error' => 'An election with the name "' . $request->name . '" already exists. Please use a different name.'
+                ]);
+            }
+
+            \Log::info('Creating election', [
+                'name' => $request->name,
+                'type' => $typeMap[$request->type] ?? $request->type,
+                'slug' => $slug,
+            ]);
+
             $election = Election::create([
                 'name'       => $request->name,
+                'slug'       => $slug,
                 'type'       => $typeMap[$request->type] ?? $request->type,
                 'start_date' => $request->date,
                 'end_date'   => $request->date,
@@ -514,15 +539,24 @@ Route::middleware(['auth', 'role:iec-administrator'])
                 'created_by' => Auth::id(),
             ]);
 
-            if ($request->party_ids) {
+            \Log::info('Election created successfully', ['election_id' => $election->id, 'name' => $election->name]);
+
+            if ($request->party_ids && count($request->party_ids) > 0) {
                 $election->participatingParties()->sync($request->party_ids);
+                \Log::info('Parties synced', ['count' => count($request->party_ids)]);
             }
 
             AuditLog::record(action: 'election.created', event: 'created', module: 'ElectionManagement', auditable: $election);
+
+            \Log::info('Redirecting to elections list');
             return redirect()->route('admin.elections')->with('success', 'Election created successfully!');
         } catch (\Exception $e) {
-            Log::error('Election creation failed', ['error' => $e->getMessage()]);
-            return back()->withErrors(['error' => 'Failed to create election: '.$e->getMessage()]);
+            \Log::error('Election creation failed', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'request' => $request->all(),
+            ]);
+            return back()->withErrors(['error' => 'Failed to create election: ' . $e->getMessage()]);
         }
     })->name('elections.store')->middleware('permission:create-election');
 

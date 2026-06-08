@@ -1,6 +1,7 @@
 import AppLayout from '@/Layouts/AppLayout';
 import { useForm, Link } from '@inertiajs/react';
 import { useState } from 'react';
+import SearchableSelect from '@/Components/SearchableSelect';
 
 export default function PartyRepresentativeEdit({ auth, representative, parties, pollingStations }) {
     const assignedIds = representative.polling_stations?.map(s => s.id) || [];
@@ -56,17 +57,14 @@ export default function PartyRepresentativeEdit({ auth, representative, parties,
                         {/* Party */}
                         <div>
                             <label className="block text-slate-600 mb-2 font-semibold">Political Party</label>
-                            <select
-                                value={data.political_party_id}
-                                onChange={(e) => setData('political_party_id', e.target.value)}
-                                className="w-full px-4 py-3 bg-white border border-slate-200 rounded-lg text-iec-navy"
+                            <SearchableSelect
+                                value={String(data.political_party_id)}
+                                onChange={(val) => setData('political_party_id', val)}
+                                options={[{ value: '', label: '— Choose a party —' }, ...parties.map((party) => ({ value: String(party.id), label: party.name }))]}
+                                placeholder="Select party"
+                                className="w-full"
                                 required
-                            >
-                                <option value="">— Choose a party —</option>
-                                {parties.map((party) => (
-                                    <option key={party.id} value={party.id}>{party.name}</option>
-                                ))}
-                            </select>
+                            />
                             {errors.political_party_id && <p className="text-red-400 text-sm mt-1">{errors.political_party_id}</p>}
                         </div>
 

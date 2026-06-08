@@ -2,7 +2,15 @@ import AppLayout from '@/Layouts/AppLayout';
 import { Link } from '@inertiajs/react';
 import { ACTIVE_CERTIFICATION_PIPELINE } from '@/Utils/resultStatus';
 
-export default function OfficerDashboard({ auth, station, statistics = {}, hasSubmitted, canSubmit }) {
+export default function OfficerDashboard({
+    auth,
+    station,
+    statistics = {},
+    hasSubmitted,
+    canSubmit,
+    electionStatus = null,
+    electionClosed = false,
+}) {
     return (
         <AppLayout user={auth.user}>
             <div className="container mx-auto px-4 py-8">
@@ -14,6 +22,32 @@ export default function OfficerDashboard({ auth, station, statistics = {}, hasSu
                         Your role: <strong className="text-iec-navy">Submit and manage election results</strong> from your assigned polling station.
                     </p>
                 </div>
+
+                {/* ── Election Closed Banner ─────────────────────────────────── */}
+                {electionClosed && (
+                    <div className="mb-6 p-5 bg-red-50 border border-red-200 rounded-xl">
+                        <div className="flex items-start gap-3">
+                            <span className="text-2xl flex-shrink-0">🔒</span>
+                            <div>
+                                <h2 className="text-red-800 font-bold text-lg">Election is Officially Closed</h2>
+                                <p className="text-red-700 text-sm mt-1">
+                                    The IEC Chairman has officially closed this election. Result submissions are no longer accepted.
+                                    All previously submitted results remain in the certification pipeline.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* ── Results Published Banner (election open but results published) ── */}
+                {!electionClosed && electionStatus === 'results_pending' && (
+                    <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-xl flex items-center gap-3">
+                        <span className="w-3 h-3 bg-amber-500 rounded-full flex-shrink-0" />
+                        <p className="text-amber-800 text-sm">
+                            <strong>Results are being published.</strong> The election remains open — you can still submit results for your station.
+                        </p>
+                    </div>
+                )}
 
                 {/* No station assigned warning */}
                 {!station && (
@@ -45,12 +79,16 @@ export default function OfficerDashboard({ auth, station, statistics = {}, hasSu
                             </div>
 
                             {/* Submission status */}
-                            {hasSubmitted ? (
+                            {electionClosed ? (
+                                <div className="px-4 py-2 bg-red-100 border border-red-300 rounded-xl text-red-800 text-sm font-semibold">
+                                    🔒 Election Closed
+                                </div>
+                            ) : hasSubmitted ? (
                                 <div className="px-4 py-2 bg-iec-pink-500/20 border border-teal-500/40 rounded-xl text-iec-pink-600 text-sm font-semibold">
                                     ✓ Results Submitted
                                 </div>
                             ) : (
-                                <div className="px-4 py-2 bg-pink-500/20 border border-pink-500/40 rounded-xl text-pink-600 text-sm font-semibold">
+                                <div className="px-4 py-2 bg-amber-100 border border-amber-300 rounded-xl text-amber-800 text-sm font-semibold">
                                     Results Not Yet Submitted
                                 </div>
                             )}
@@ -59,7 +97,7 @@ export default function OfficerDashboard({ auth, station, statistics = {}, hasSu
                 )}
 
                 {/* Rejection alert */}
-                {statistics.rejected > 0 && (
+                {statistics.rejected > 0 && !electionClosed && (
                     <div className="mb-6 p-4 bg-red-500/10 border border-red-500/40 rounded-xl flex items-center gap-3">
                         <span className="w-3 h-3 bg-red-400 rounded-full animate-pulse flex-shrink-0" />
                         <p className="text-red-300 flex-1">
@@ -91,36 +129,52 @@ export default function OfficerDashboard({ auth, station, statistics = {}, hasSu
                 {/* Quick Actions */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
                     {/* Submit Results */}
-                    <Link
-                        href="/officer/results/submit"
-                        className={`group p-6 rounded-xl border transition-all ${
-                            canSubmit
-                                ? 'bg-iec-slate-600/20 hover:bg-iec-slate-700/30 border-iec-slate-200'
-                                : statistics.rejected > 0
-                                ? 'bg-red-600/15 hover:bg-red-600/25 border-red-500/30'
-                                : 'bg-slate-100 border-slate-200 opacity-60 pointer-events-none'
-                        }`}
-                    >
-                        <div className="flex items-start gap-3">
-                            <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-xl ${
-                                canSubmit ? 'bg-iec-pink-500/20' : statistics.rejected > 0 ? 'bg-red-500/20' : 'bg-slate-100/20'
-                            }`}>
-                                {statistics.rejected > 0 ? '↩' : '📋'}
-                            </div>
-                            <div>
-                                <div className="font-bold text-iec-navy text-lg">
-                                    {statistics.rejected > 0 ? 'Resubmit Results' : 'Submit Results'}
+                    {electionClosed ? (
+                        <div className="group p-6 bg-red-50 border border-red-200 rounded-xl">
+                            <div className="flex items-start gap-3">
+                                <div className="w-10 h-10 bg-red-100 rounded-xl flex items-center justify-center text-xl">
+                                    🔒
                                 </div>
-                                <div className="text-slate-500 text-sm mt-0.5">
-                                    {canSubmit
-                                        ? 'Enter vote counts, upload result sheet photo'
-                                        : statistics.rejected > 0
-                                        ? 'Correct and resubmit your rejected result'
-                                        : 'Results already submitted for this station'}
+                                <div>
+                                    <div className="font-bold text-red-800 text-lg">Submissions Closed</div>
+                                    <div className="text-red-600 text-sm mt-0.5">
+                                        The election has been officially closed by the IEC Chairman. No new results can be submitted.
+                                    </div>
                                 </div>
                             </div>
                         </div>
-                    </Link>
+                    ) : (
+                        <Link
+                            href="/officer/results/submit"
+                            className={`group p-6 rounded-xl border transition-all ${
+                                canSubmit
+                                    ? 'bg-iec-slate-600/20 hover:bg-iec-slate-700/30 border-iec-slate-200'
+                                    : statistics.rejected > 0
+                                    ? 'bg-red-600/15 hover:bg-red-600/25 border-red-500/30'
+                                    : 'bg-slate-100 border-slate-200 opacity-60 pointer-events-none'
+                            }`}
+                        >
+                            <div className="flex items-start gap-3">
+                                <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-xl ${
+                                    canSubmit ? 'bg-iec-pink-500/20' : statistics.rejected > 0 ? 'bg-red-500/20' : 'bg-slate-100/20'
+                                }`}>
+                                    {statistics.rejected > 0 ? '↩' : '📋'}
+                                </div>
+                                <div>
+                                    <div className="font-bold text-iec-navy text-lg">
+                                        {statistics.rejected > 0 ? 'Resubmit Results' : 'Submit Results'}
+                                    </div>
+                                    <div className="text-slate-500 text-sm mt-0.5">
+                                        {canSubmit
+                                            ? 'Enter vote counts and upload result sheet photo'
+                                            : statistics.rejected > 0
+                                            ? 'Correct and resubmit your rejected result'
+                                            : 'Results already submitted for this station'}
+                                    </div>
+                                </div>
+                            </div>
+                        </Link>
+                    )}
 
                     {/* View Submissions */}
                     <Link
@@ -156,7 +210,7 @@ export default function OfficerDashboard({ auth, station, statistics = {}, hasSu
                         ))}
                     </div>
                     <p className="text-slate-500 text-xs mt-3">
-                        Party representatives review in parallel; their response is visible to approvers but does not block this certification path.
+                        Party representatives review in parallel; their response does not block this certification path.
                     </p>
                 </div>
             </div>
