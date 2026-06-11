@@ -19,9 +19,7 @@ function initials(name = '') {
 
 const STATUS_FILTERS = [
     { key: 'all',          label: 'All',          color: '#64748b' },
-    { key: 'not_reported', label: 'Not Reported', color: RESULT_STATUS_MAP_COLORS[RESULT_STATUS.NOT_REPORTED] },
-    { key: 'submitted',    label: 'Submitted',    color: RESULT_STATUS_MAP_COLORS[RESULT_STATUS.SUBMITTED] },
-    { key: 'in_progress',  label: 'Under Review', color: '#f59e0b' },
+    { key: 'not_reported', label: 'Not Published', color: RESULT_STATUS_MAP_COLORS[RESULT_STATUS.NOT_REPORTED] },
     { key: 'certified',    label: 'Certified',    color: RESULT_STATUS_MAP_COLORS[RESULT_STATUS.NATIONALLY_CERTIFIED] },
 ];
 

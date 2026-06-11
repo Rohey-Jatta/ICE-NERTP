@@ -84,6 +84,12 @@ class TwoFactorController extends Controller
             extra: ['outcome' => 'success']
         );
 
+        // First login with a default password (or admin reset): force a change
+        // before reaching any dashboard.
+        if ($user->must_change_password) {
+            return redirect()->route('password.change');
+        }
+
         // Redirect based on role
         return $this->redirectByRole($user);
     }

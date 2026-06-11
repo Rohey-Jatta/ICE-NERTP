@@ -19,7 +19,7 @@ Route::middleware(['auth', 'role:ward-approver'])
     // ── Dashboard ────────────────────────────────────────────────────────────
     Route::get('/dashboard', function () {
         $user           = Auth::user();
-        $activeElection = Election::where('status', 'active')->latest()->first();
+        $activeElection = Election::current();
 
         $ward = AdministrativeHierarchy::where('assigned_approver_id', $user->id)
             ->where('level', 'ward')
@@ -45,7 +45,7 @@ Route::middleware(['auth', 'role:ward-approver'])
             $stationIds = PollingStation::where('ward_id', $ward->id)->pluck('id');
 
             $baseQuery = fn() => Result::whereIn('polling_station_id', $stationIds)
-                ->when($activeElection, fn($q) => $q->where('election_id', $activeElection->id));
+                ->where('election_id', $activeElection?->id ?? 0);
 
             // Parallel workflow: pending includes both pending_ward and legacy pending_party_acceptance
             $pendingCount = $baseQuery()
@@ -97,7 +97,7 @@ Route::middleware(['auth', 'role:ward-approver'])
     // ── Approval Queue ────────────────────────────────────────────────────────
     Route::get('/approval-queue', function (Request $request) {
         $user           = Auth::user();
-        $activeElection = Election::where('status', 'active')->latest()->first();
+        $activeElection = Election::current();
         $ward           = AdministrativeHierarchy::where('assigned_approver_id', $user->id)
             ->where('level', 'ward')->first();
         $filter         = $request->get('filter', 'pending');
@@ -109,7 +109,7 @@ Route::middleware(['auth', 'role:ward-approver'])
             $stationIds = PollingStation::where('ward_id', $ward->id)->pluck('id');
 
             $base = fn() => Result::whereIn('polling_station_id', $stationIds)
-                ->when($activeElection, fn($q) => $q->where('election_id', $activeElection->id));
+                ->where('election_id', $activeElection?->id ?? 0);
 
             // Parallel workflow: pending_ward + legacy pending_party_acceptance = actionable by ward approver
             $counts['pending']  = $base()->whereIn('certification_status', [
@@ -273,7 +273,7 @@ Route::middleware(['auth', 'role:ward-approver'])
     // ── Analytics ─────────────────────────────────────────────────────────────
     Route::get('/analytics', function () {
         $user           = Auth::user();
-        $activeElection = Election::where('status', 'active')->latest()->first();
+        $activeElection = Election::current();
         $ward           = AdministrativeHierarchy::where('assigned_approver_id', $user->id)
             ->where('level', 'ward')->first();
 

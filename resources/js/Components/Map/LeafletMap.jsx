@@ -33,7 +33,10 @@ function buildPopupHtml(station) {
     const status      = station.status || 'not_reported';
     const statusLabel = RESULT_STATUS_MAP_LABELS[status] || status;
     const color       = RESULT_STATUS_MAP_COLORS[status] || '#64748b';
-    const hasResult   = station.total_votes_cast != null && station.total_votes_cast > 0;
+    const isPublished = status === 'nationally_certified';
+    const isReported  = status !== 'not_reported';
+    // Vote totals are only present for published results (public access rule).
+    const hasResult   = isPublished && station.total_votes_cast != null && station.total_votes_cast > 0;
 
     const turnout = hasResult && station.registered_voters > 0
         ? ((station.total_votes_cast / station.registered_voters) * 100).toFixed(1)
@@ -97,7 +100,9 @@ function buildPopupHtml(station) {
         </div>` : `
         <div style="padding:10px 14px;">
             <div style="background:#f8fafc;border-radius:6px;padding:10px;text-align:center;color:#64748b;font-size:12px;">
-                No results submitted yet<br/>
+                ${isReported
+                    ? 'Published result'
+                    : 'Result not published yet'}<br/>
                 <span style="font-size:11px;color:#94a3b8;">${Number(station.registered_voters || 0).toLocaleString()} registered voters</span>
             </div>
         </div>`;
@@ -106,6 +111,43 @@ function buildPopupHtml(station) {
         <div style="border-top:1px solid #f1f5f9;padding:10px 14px 12px;">
             <div style="font-size:10px;color:#94a3b8;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px;font-weight:600;">Candidate Results</div>
             ${candidateRows}
+        </div>` : '';
+
+    // Result sheet photo — only present once the result has been published.
+    const photoSection = (isPublished && station.photo_url) ? `
+        <div style="border-top:1px solid #f1f5f9;padding:10px 14px 12px;">
+            <div style="font-size:10px;color:#94a3b8;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px;font-weight:600;">Result Sheet</div>
+            <a href="${station.photo_url}" target="_blank" rel="noopener">
+                <img src="${station.photo_url}" alt="Result sheet" style="width:100%;max-height:160px;object-fit:cover;border-radius:8px;border:1px solid #e2e8f0;" />
+            </a>
+        </div>` : '';
+
+    // Party representatives' reactions / sign-offs (published only).
+    let acceptances = [];
+    if (isPublished && station.party_acceptances) {
+        try {
+            acceptances = typeof station.party_acceptances === 'string'
+                ? JSON.parse(station.party_acceptances)
+                : Array.isArray(station.party_acceptances) ? station.party_acceptances : [];
+        } catch { acceptances = []; }
+    }
+    const reactionsSection = acceptances.length > 0 ? `
+        <div style="border-top:1px solid #f1f5f9;padding:10px 14px 12px;">
+            <div style="font-size:10px;color:#94a3b8;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px;font-weight:600;">Party Reactions</div>
+            ${acceptances.map((pa) => {
+                const ok = String(pa.status || '').startsWith('accepted');
+                const rejected = pa.status === 'rejected';
+                const chipBg = ok ? '#dcfce7' : rejected ? '#fee2e2' : '#f1f5f9';
+                const chipColor = ok ? '#15803d' : rejected ? '#b91c1c' : '#64748b';
+                return `
+                <div style="margin-bottom:7px;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+                        <span style="font-size:12px;font-weight:600;color:#0f172a;">${pa.party_abbr || pa.party_name || '?'}</span>
+                        <span style="flex-shrink:0;padding:1px 7px;border-radius:8px;font-size:10px;font-weight:600;background:${chipBg};color:${chipColor};text-transform:capitalize;">${String(pa.status || '').replaceAll('_', ' ')}</span>
+                    </div>
+                    ${pa.comments ? `<div style="font-size:11px;color:#64748b;margin-top:2px;background:#f8fafc;border-radius:6px;padding:5px 7px;">“${pa.comments}”</div>` : ''}
+                </div>`;
+            }).join('')}
         </div>` : '';
 
     return `
@@ -123,6 +165,8 @@ function buildPopupHtml(station) {
             </div>
             ${statsGrid}
             ${candidatesSection}
+            ${photoSection}
+            ${reactionsSection}
         </div>`;
 }
 
@@ -357,7 +401,7 @@ function renderMarkers(L, map, layer, stations, fit = true) {
         const marker = L.circleMarker([lat, lng], {
             radius: 6, fillColor: color, color: '#fff', weight: 1.5, opacity: 1, fillOpacity: 0.9,
         });
-        marker.bindPopup(buildPopupHtml(station), { maxWidth: 340, minWidth: 270, className: 'station-popup-leaflet' });
+        marker.bindPopup(buildPopupHtml(station), { maxWidth: 340, minWidth: 270, maxHeight: 440, className: 'station-popup-leaflet' });
         marker.addTo(layer);
         marker.bringToFront();
         bounds.push([lat, lng]);

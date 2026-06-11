@@ -21,17 +21,22 @@ if (!function_exists('bustPublicCachesForElection')) {
     function bustPublicCachesForElection(int $electionId): void
     {
         foreach (['draft', 'active', 'certifying', 'results_pending', 'certified', 'archived'] as $status) {
+            Cache::forget("results_summary_v8_{$electionId}_{$status}");
             Cache::forget("results_summary_v7_{$electionId}_{$status}");
             Cache::forget("results_summary_v3_{$electionId}_{$status}");
         }
         Cache::forget("results_summary_v2_{$electionId}");
         Cache::forget("results_map_{$electionId}");
+        Cache::forget("results_map_v2_{$electionId}");
         Cache::forget("results_map_agg_v3_{$electionId}");
+        Cache::forget("results_map_agg_v4_{$electionId}");
         Cache::forget("results_stations_{$electionId}_pub");
         Cache::forget("results_stations_{$electionId}_prov");
+        Cache::forget("results_stations_v2_{$electionId}");
         Cache::forget("stations_filters_{$electionId}");
         Cache::forget('public_results_data');
         Cache::forget('chairman_dashboard_stats');
+        Cache::forget("chairman_dashboard_stats_{$electionId}");
     }
 }
 
@@ -42,7 +47,11 @@ Route::middleware(['auth', 'role:iec-chairman'])
 
     // ── Dashboard ─────────────────────────────────────────────────────────────
     Route::get('/dashboard', function () {
-        $cacheKey = 'chairman_dashboard_stats';
+        // Scope every statistic to the current election only — without this the
+        // dashboard aggregates results from historical elections too.
+        $activeElection = Election::current();
+
+        $cacheKey = 'chairman_dashboard_stats_' . ($activeElection?->id ?? 'none');
         $pendingNational     = 0;
         $nationallyCertified = 0;
         $totalStations       = 0;
@@ -52,16 +61,18 @@ Route::middleware(['auth', 'role:iec-chairman'])
 
         $statistics = Cache::remember($cacheKey, 30, function () use (
             &$pendingNational, &$nationallyCertified, &$totalStations,
-            &$totalVoters, &$nationalProgress, &$pipelineCounts
+            &$totalVoters, &$nationalProgress, &$pipelineCounts, $activeElection
         ) {
-            $statusCounts = Result::selectRaw('certification_status, COUNT(*) as cnt')
+            $statusCounts = Result::where('election_id', $activeElection?->id ?? 0)
+                ->selectRaw('certification_status, COUNT(*) as cnt')
                 ->groupBy('certification_status')
                 ->pluck('cnt', 'certification_status');
 
             $pendingNational     = (int) ($statusCounts[Result::STATUS_PENDING_NATIONAL] ?? 0);
             $nationallyCertified = (int) ($statusCounts[Result::STATUS_NATIONALLY_CERTIFIED] ?? 0);
 
-            $stationAgg    = PollingStation::selectRaw('COUNT(*) as total, COALESCE(SUM(registered_voters), 0) as total_voters')->first();
+            $stationAgg    = PollingStation::where('election_id', $activeElection?->id ?? 0)
+                ->selectRaw('COUNT(*) as total, COALESCE(SUM(registered_voters), 0) as total_voters')->first();
             $totalStations = (int) ($stationAgg->total ?? 0);
             $totalVoters   = (int) ($stationAgg->total_voters ?? 0);
 
@@ -115,7 +126,10 @@ Route::middleware(['auth', 'role:iec-chairman'])
 
     // ── National Certification Queue ──────────────────────────────────────────
     Route::get('/national-queue', function () {
-        $results = Result::where('certification_status', Result::STATUS_PENDING_NATIONAL)
+        $activeElection = Election::current();
+
+        $results = Result::where('election_id', $activeElection?->id ?? 0)
+            ->where('certification_status', Result::STATUS_PENDING_NATIONAL)
             ->with([
                 'pollingStation.ward',
                 'candidateVotes.candidate.politicalParty',
@@ -190,9 +204,7 @@ Route::middleware(['auth', 'role:iec-chairman'])
         $user   = Auth::user();
         $filter = $request->get('filter', 'all');
 
-        $activeElection = Election::whereIn('status', ['active', 'certifying', 'results_pending', 'certified'])
-            ->latest()
-            ->first();
+        $activeElection = Election::current();
 
         $counts  = ['all' => 0, 'pending_national' => 0, 'in_pipeline' => 0, 'nationally_certified' => 0];
         $results = collect();
@@ -256,9 +268,7 @@ Route::middleware(['auth', 'role:iec-chairman'])
     Route::get('/analytics', function () {
         $user = Auth::user();
 
-        $activeElection = Election::whereIn('status', ['active', 'certifying', 'results_pending', 'certified'])
-            ->latest()
-            ->first();
+        $activeElection = Election::current();
 
         $nationalStats     = [
             'totalStations' => 0, 'registeredVoters' => 0, 'votesCast' => 0,
@@ -359,9 +369,7 @@ Route::middleware(['auth', 'role:iec-chairman'])
     Route::get('/publish', function () {
         $user = Auth::user();
 
-        $election = Election::whereIn('status', ['active', 'certifying', 'results_pending', 'certified'])
-            ->latest()
-            ->first();
+        $election = Election::current();
 
         $summary        = [
             'total' => 0, 'certified' => 0, 'pendingNational' => 0,
@@ -475,7 +483,8 @@ Route::middleware(['auth', 'role:iec-chairman'])
     // submissions.
     Route::post('/publish-results', function () {
         $election = Election::whereIn('status', ['active', 'certifying'])
-            ->latest()
+            ->orderByDesc('start_date')
+            ->orderByDesc('id')
             ->first();
 
         if (!$election) {
@@ -510,7 +519,8 @@ Route::middleware(['auth', 'role:iec-chairman'])
     //   - Publicly certified results remain visible
     Route::post('/close-election', function () {
         $election = Election::whereIn('status', ['active', 'certifying', 'results_pending'])
-            ->latest()
+            ->orderByDesc('start_date')
+            ->orderByDesc('id')
             ->first();
 
         if (!$election) {

@@ -113,6 +113,9 @@ Route::middleware(['auth', 'role:iec-administrator'])
                 'phone'    => $request->phone,
                 'password' => bcrypt($request->password),
                 'status'   => 'active',
+                // Account starts on an admin-assigned default password; the
+                // user must set their own on first login.
+                'must_change_password' => true,
             ]);
             $user->assignRole($request->role);
 
@@ -189,6 +192,32 @@ Route::middleware(['auth', 'role:iec-administrator'])
             return back()->withErrors(['error' => 'Failed to update user: ' . $e->getMessage()]);
         }
     })->name('users.update')->middleware(['permission:manage-users', 'permission:assign-roles']);
+
+    // ── Reset a user's password back to an admin-assigned default ────────────
+    // Fallback for locked-out / forgotten-password users. Forces the user to
+    // pick a new password at their next login.
+    Route::post('/users/{user}/reset-password', function (Request $request, User $user) {
+        $request->validate(['password' => 'required|string|min:8']);
+
+        try {
+            $user->forceFill([
+                'password'             => bcrypt($request->password),
+                'must_change_password' => true,
+            ])->save();
+
+            AuditLog::record(
+                action: 'user.password_reset',
+                event: 'updated',
+                module: 'UserManagement',
+                auditable: $user,
+                extra: ['outcome' => 'success']
+            );
+
+            return back()->with('success', "Password for {$user->name} has been reset to the default. They must change it at next login.");
+        } catch (\Exception $e) {
+            return back()->withErrors(['error' => 'Failed to reset password: ' . $e->getMessage()]);
+        }
+    })->name('users.reset-password')->middleware(['permission:manage-users']);
 
     Route::delete('/users/{user}', function (User $user) {
         try {

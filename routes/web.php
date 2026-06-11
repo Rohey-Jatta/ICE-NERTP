@@ -5,8 +5,8 @@ use Inertia\Inertia;
 use App\Http\Controllers\Public\ResultsSummaryController;
 use App\Http\Controllers\Public\ResultsMapController;
 use App\Http\Controllers\Public\ResultsStationsController;
+use App\Http\Controllers\Auth\ForcePasswordChangeController;
 use App\Http\Controllers\Auth\TwoFactorController;
-use App\Http\Controllers\ReportController;
 
 // ─── Home — Public Results Page ───────────────────────────────────────────────
 Route::get('/', [ResultsSummaryController::class, 'index'])->name('home');
@@ -31,6 +31,14 @@ Route::middleware('guest')->group(function () {
     Route::post('/auth/two-factor/resend', [TwoFactorController::class, 'resend'])->name('two-factor.resend');
 });
 
+// ─── Forced Password Change (auth required) ──────────────────────────────────
+// Users created with a default password (or reset by an admin) are redirected
+// here by the EnsurePasswordChanged middleware until they set their own.
+Route::middleware('auth')->group(function () {
+    Route::get('/auth/change-password', [ForcePasswordChangeController::class, 'show'])->name('password.change');
+    Route::post('/auth/change-password', [ForcePasswordChangeController::class, 'update'])->name('password.change.store');
+});
+
 // ─── Device Registration (auth required) ─────────────────────────────────────
 require __DIR__.'/device.php';
 
@@ -43,6 +51,3 @@ require __DIR__.'/chairman.php';
 require __DIR__.'/admin.php';
 require __DIR__.'/party.php';
 require __DIR__.'/monitor.php';
-
-// ─── Reports ──────────────────────────────────────────────────────────────────
-Route::get('/constituency/reports/download/{id}', [ReportController::class, 'download']);

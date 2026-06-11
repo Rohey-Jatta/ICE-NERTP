@@ -18,7 +18,7 @@ Route::middleware(['auth', 'role:constituency-approver'])
     // ── Dashboard ─────────────────────────────────────────────────────────────
     Route::get('/dashboard', function () {
         $user           = Auth::user();
-        $activeElection = Election::where('status', 'active')->latest()->first();
+        $activeElection = Election::current();
         $constituency   = AdministrativeHierarchy::where('assigned_approver_id', $user->id)
             ->where('level', 'constituency')->first();
 
@@ -74,7 +74,7 @@ Route::middleware(['auth', 'role:constituency-approver'])
     // ── Approval Queue ────────────────────────────────────────────────────────
     Route::get('/approval-queue', function (Request $request) {
         $user           = Auth::user();
-        $activeElection = Election::where('status', 'active')->latest()->first();
+        $activeElection = Election::current();
         $constituency   = AdministrativeHierarchy::where('assigned_approver_id', $user->id)
             ->where('level', 'constituency')->first();
 
@@ -237,7 +237,7 @@ Route::middleware(['auth', 'role:constituency-approver'])
     // ── Ward Breakdowns ───────────────────────────────────────────────────────
     Route::get('/ward-breakdowns', function () {
         $user           = Auth::user();
-        $activeElection = Election::where('status', 'active')->latest()->first();
+        $activeElection = Election::current();
         $constituency   = AdministrativeHierarchy::where('assigned_approver_id', $user->id)
             ->where('level', 'constituency')->first();
 
@@ -306,7 +306,7 @@ Route::middleware(['auth', 'role:constituency-approver'])
     // ── Reports ───────────────────────────────────────────────────────────────
     Route::get('/reports', function () {
         $user           = Auth::user();
-        $activeElection = Election::where('status', 'active')->latest()->first();
+        $activeElection = Election::current();
         $constituency   = AdministrativeHierarchy::where('assigned_approver_id', $user->id)
             ->where('level', 'constituency')->first();
 
@@ -317,7 +317,16 @@ Route::middleware(['auth', 'role:constituency-approver'])
 
             $results = Result::where('election_id', $activeElection->id)
                 ->whereHas('pollingStation', fn($q) => $q->whereIn('ward_id', $wardIds))
-                ->get();
+                ->get()
+                ->groupBy('polling_station_id')
+                ->map(fn($group) => $group
+                    ->sortByDesc(fn($result) => [
+                        $result->certification_status === Result::STATUS_NATIONALLY_CERTIFIED ? 1 : 0,
+                        $result->submitted_at?->timestamp ?? 0,
+                        $result->id,
+                    ])
+                    ->first())
+                ->values();
 
             $reportData = [
                 'total_stations'    => $results->count(),
@@ -331,6 +340,7 @@ Route::middleware(['auth', 'role:constituency-approver'])
                     Result::STATUS_CONSTITUENCY_CERTIFIED,
                     Result::STATUS_PENDING_ADMIN_AREA,
                     Result::STATUS_ADMIN_AREA_CERTIFIED,
+                    Result::STATUS_PENDING_NATIONAL,
                     Result::STATUS_NATIONALLY_CERTIFIED,
                 ])->count(),
             ];
@@ -342,4 +352,11 @@ Route::middleware(['auth', 'role:constituency-approver'])
             'reportData'   => $reportData,
         ]);
     })->name('reports')->middleware('permission:generate-constituency-report');
+
+    // ── Report Export (PDF / Excel) ───────────────────────────────────────────
+    Route::get('/reports/export/{report}/{format}', [\App\Http\Controllers\ReportController::class, 'export'])
+        ->whereIn('report', ['full', 'ward-summary', 'turnout', 'certification'])
+        ->whereIn('format', ['pdf', 'excel'])
+        ->name('reports.export')
+        ->middleware('permission:generate-constituency-report');
 });

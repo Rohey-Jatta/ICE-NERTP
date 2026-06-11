@@ -6,6 +6,7 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 use App\Models\AdministrativeHierarchy;
+use App\Models\Election;
 use App\Models\Result;
 use App\Services\CertificationWorkflowService;
 
@@ -16,7 +17,8 @@ Route::middleware(['auth', 'role:admin-area-approver'])
 
     // ── Dashboard ─────────────────────────────────────────────────────────────
     Route::get('/dashboard', function () {
-        $user      = Auth::user();
+        $user           = Auth::user();
+        $activeElection = Election::current();
         $adminArea = AdministrativeHierarchy::where('assigned_approver_id', $user->id)
             ->where('level', 'admin_area')->first();
 
@@ -29,14 +31,16 @@ Route::middleware(['auth', 'role:admin-area-approver'])
         ];
 
         if ($adminArea) {
-            $cacheKey = "admin_area_dashboard_{$user->id}_{$adminArea->id}";
+            $cacheKey = "admin_area_dashboard_{$user->id}_{$adminArea->id}_" . ($activeElection?->id ?? 'none');
 
-            $dashboardData = Cache::remember($cacheKey, 30, function () use ($adminArea) {
+            $dashboardData = Cache::remember($cacheKey, 30, function () use ($adminArea, $activeElection) {
                 $areaScope = fn($q) => $q->whereHas('pollingStation.ward', fn($q2) =>
                     $q2->whereHas('parent', fn($q3) => $q3->where('parent_id', $adminArea->id))
                 );
 
-                $statusCounts = $areaScope(Result::query())
+                // Restrict every count to the current election so historical
+                // results never inflate the dashboard.
+                $statusCounts = $areaScope(Result::where('election_id', $activeElection?->id ?? 0))
                     ->selectRaw('certification_status, COUNT(*) as count')
                     ->groupBy('certification_status')
                     ->pluck('count', 'certification_status');
@@ -83,7 +87,8 @@ Route::middleware(['auth', 'role:admin-area-approver'])
 
     // ── Approval Queue ────────────────────────────────────────────────────────
     Route::get('/approval-queue', function (Request $request) {
-        $user      = Auth::user();
+        $user           = Auth::user();
+        $activeElection = Election::current();
         $adminArea = AdministrativeHierarchy::where('assigned_approver_id', $user->id)
             ->where('level', 'admin_area')->first();
         $filter    = $request->get('filter', 'pending');
@@ -92,11 +97,13 @@ Route::middleware(['auth', 'role:admin-area-approver'])
         $counts  = ['pending' => 0, 'approved' => 0, 'rejected' => 0, 'all' => 0];
 
         if ($adminArea) {
-            $areaScope = fn($q) => $q->whereHas('pollingStation.ward', fn($q2) =>
-                $q2->whereHas('parent', fn($q3) => $q3->where('parent_id', $adminArea->id))
-            );
+            $electionId = $activeElection?->id ?? 0;
+            $areaScope = fn($q) => $q->where('election_id', $electionId)
+                ->whereHas('pollingStation.ward', fn($q2) =>
+                    $q2->whereHas('parent', fn($q3) => $q3->where('parent_id', $adminArea->id))
+                );
 
-            $countsCacheKey = "admin_area_queue_counts_{$user->id}_{$adminArea->id}_{$filter}";
+            $countsCacheKey = "admin_area_queue_counts_{$user->id}_{$adminArea->id}_{$electionId}_{$filter}";
             $counts = Cache::remember($countsCacheKey, 15, function () use ($areaScope) {
                 $baseCounts = $areaScope(Result::query())
                     ->selectRaw(
@@ -266,7 +273,8 @@ Route::middleware(['auth', 'role:admin-area-approver'])
 
     // ── Constituency Breakdowns ───────────────────────────────────────────────
     Route::get('/constituency-breakdowns', function () {
-        $user      = Auth::user();
+        $user           = Auth::user();
+        $activeElection = Election::current();
         $adminArea = AdministrativeHierarchy::where('assigned_approver_id', $user->id)
             ->where('level', 'admin_area')->first();
 
@@ -284,11 +292,12 @@ Route::middleware(['auth', 'role:admin-area-approver'])
             $awaitingCount     = 0;
 
             $constituencies = $constituencyNodes->map(function ($constituency) use (
-                &$totalVotesCounted, &$certifiedCount, &$pendingCount, &$awaitingCount
+                &$totalVotesCounted, &$certifiedCount, &$pendingCount, &$awaitingCount, $activeElection
             ) {
-                $allResults = Result::whereHas('pollingStation.ward', fn($q) =>
-                    $q->where('parent_id', $constituency->id)
-                )->get();
+                $allResults = Result::where('election_id', $activeElection?->id ?? 0)
+                    ->whereHas('pollingStation.ward', fn($q) =>
+                        $q->where('parent_id', $constituency->id)
+                    )->get();
 
                 $atAdminLevel = $allResults->whereIn('certification_status', [
                     Result::STATUS_PENDING_ADMIN_AREA,
@@ -384,7 +393,8 @@ Route::middleware(['auth', 'role:admin-area-approver'])
 
     // ── Analytics ─────────────────────────────────────────────────────────────
     Route::get('/analytics', function () {
-        $user      = Auth::user();
+        $user           = Auth::user();
+        $activeElection = Election::current();
         $adminArea = AdministrativeHierarchy::where('assigned_approver_id', $user->id)
             ->where('level', 'admin_area')->first();
 
@@ -398,9 +408,10 @@ Route::middleware(['auth', 'role:admin-area-approver'])
             $totalWards = AdministrativeHierarchy::where('level', 'ward')
                 ->whereIn('parent_id', $constituencyNodes->pluck('id'))->count();
 
-            $allResults = Result::whereHas('pollingStation.ward', fn($q) =>
-                $q->whereHas('parent', fn($q2) => $q2->where('parent_id', $adminArea->id))
-            )->get();
+            $allResults = Result::where('election_id', $activeElection?->id ?? 0)
+                ->whereHas('pollingStation.ward', fn($q) =>
+                    $q->whereHas('parent', fn($q2) => $q2->where('parent_id', $adminArea->id))
+                )->get();
 
             $totalVotes      = $allResults->sum('total_votes_cast');
             $totalRegistered = $allResults->sum('total_registered_voters');
@@ -422,10 +433,11 @@ Route::middleware(['auth', 'role:admin-area-approver'])
             ];
 
             $turnoutValues  = [];
-            $constituencies = $constituencyNodes->map(function ($constituency) use (&$turnoutValues) {
-                $results    = Result::whereHas('pollingStation.ward', fn($q) =>
-                    $q->where('parent_id', $constituency->id)
-                )->get();
+            $constituencies = $constituencyNodes->map(function ($constituency) use (&$turnoutValues, $activeElection) {
+                $results    = Result::where('election_id', $activeElection?->id ?? 0)
+                    ->whereHas('pollingStation.ward', fn($q) =>
+                        $q->where('parent_id', $constituency->id)
+                    )->get();
 
                 $votes      = $results->sum('total_votes_cast');
                 $registered = $results->sum('total_registered_voters');

@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Public;
 
 use App\Http\Controllers\Controller;
 use App\Models\Election;
+use App\Support\PublicResultsQuery;
+use Illuminate\Database\Query\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -29,6 +31,24 @@ class ResultsMapController extends Controller
             return $databaseColor;
         }
         return self::PARTY_COLOR_FALLBACKS[strtoupper((string) $abbreviation)] ?? '#6B7280';
+    }
+
+    /**
+     * Stations belonging to this election: either created for it, or carrying
+     * results submitted for it. Keeps the region aggregates consistent with
+     * the per-station dataset (stations created under an earlier election
+     * record would otherwise vanish from the Region view).
+     */
+    private function scopeStationsToElection($query, Election $election)
+    {
+        return $query->where(function ($q) use ($election) {
+            $q->where('ps.election_id', $election->id)
+              ->orWhereIn('ps.id', function (Builder $sub) use ($election) {
+                  $sub->select('polling_station_id')
+                      ->from('results')
+                      ->where('election_id', $election->id);
+              });
+        });
     }
 
     // ── Full map page ─────────────────────────────────────────────────────────
@@ -61,10 +81,10 @@ class ResultsMapController extends Controller
             ]);
         }
 
-        $cacheKey = "results_map_{$election->id}";
+        $cacheKey = "results_map_v2_{$election->id}";
         $stations = Cache::remember($cacheKey, 30, fn() => $this->computeStationsData($election));
 
-        $aggKey = "results_map_agg_v3_{$election->id}";
+        $aggKey = "results_map_agg_v4_{$election->id}";
         $agg    = Cache::remember($aggKey, 300, fn() => $this->computeRegionAggregates($election));
 
         return Inertia::render('Public/ResultsMap', [
@@ -98,7 +118,7 @@ class ResultsMapController extends Controller
             return response()->json(['stations' => []]);
         }
 
-        $cacheKey = "results_map_{$election->id}";
+        $cacheKey = "results_map_v2_{$election->id}";
         $stations = Cache::remember($cacheKey, 30, fn() => $this->computeStationsData($election));
 
         return response()->json(['stations' => $stations]);
@@ -136,21 +156,14 @@ class ResultsMapController extends Controller
 
     /**
      * Build the stations array for the Leaflet map.
-     * Includes all stations with their current pipeline status and candidate votes.
+     *
+     * Every station appears on the map, but PUBLIC ACCESS RULE:
+     * station-level result existence/status/details remain private until that
+     * station's result is nationally certified by the IEC Chairman.
      */
     private function computeStationsData(Election $election): array
     {
-        $latestResults = <<<SQL
-SELECT DISTINCT ON (polling_station_id)
-    *
-FROM results
-WHERE election_id = {$election->id}
-ORDER BY polling_station_id,
-    CASE WHEN certification_status = 'nationally_certified' THEN 0 ELSE 1 END,
-    nationally_certified_at DESC NULLS LAST,
-    submitted_at DESC,
-    id DESC
-SQL;
+        $latestResults = PublicResultsQuery::latestResultsSql($election->id);
 
         $stationsRaw = DB::table('polling_stations as ps')
             ->selectRaw("
@@ -161,28 +174,26 @@ SQL;
                 w.name   AS ward_name,
                 COALESCE(r.certification_status, 'not_reported') AS status,
                 r.id AS result_id,
-                r.total_votes_cast, r.valid_votes, r.rejected_votes
+                r.total_votes_cast, r.valid_votes, r.rejected_votes,
+                r.result_sheet_photo_path
             ")
             ->leftJoin('administrative_hierarchy as w',   'w.id',   '=', 'ps.ward_id')
             ->leftJoin('administrative_hierarchy as cst', 'cst.id', '=', 'w.parent_id')
             ->leftJoin('administrative_hierarchy as aa',  'aa.id',  '=', 'cst.parent_id')
             ->leftJoin(DB::raw("({$latestResults}) as r"), 'r.polling_station_id', '=', 'ps.id')
-            ->where(function ($query) use ($election) {
-                $query->where('ps.election_id', $election->id)
-                      ->orWhereIn('ps.id', function ($query) use ($election) {
-                          $query->select('polling_station_id')
-                                ->from('results')
-                                ->where('election_id', $election->id);
-                      });
-            })
+            ->tap(fn($q) => $this->scopeStationsToElection($q, $election))
             ->whereNotNull('ps.latitude')
             ->whereNotNull('ps.longitude')
             ->get();
 
-        $resultIds = $stationsRaw->pluck('result_id')->filter()->unique()->values()->all();
+        // Only published results may expose votes / photo / reactions publicly.
+        $publishedResultIds = $stationsRaw
+            ->filter(fn($s) => $s->status === 'nationally_certified' && $s->result_id)
+            ->pluck('result_id')->unique()->values()->all();
 
-        $votesByResult = collect();
-        if (!empty($resultIds)) {
+        $votesByResult       = collect();
+        $acceptancesByResult = collect();
+        if (!empty($publishedResultIds)) {
             $votesByResult = DB::table('result_candidate_votes as rcv')
                 ->selectRaw("
                     rcv.result_id,
@@ -193,20 +204,62 @@ SQL;
                 ")
                 ->join('candidates as c', 'c.id', '=', 'rcv.candidate_id')
                 ->leftJoin('political_parties as pp', 'pp.id', '=', 'c.political_party_id')
-                ->whereIn('rcv.result_id', $resultIds)
+                ->whereIn('rcv.result_id', $publishedResultIds)
                 ->orderByDesc('rcv.votes')
+                ->get()
+                ->groupBy('result_id');
+
+            // Party representatives' reactions / sign-offs for published results
+            $acceptancesByResult = DB::table('party_acceptances as pa')
+                ->selectRaw("
+                    pa.result_id,
+                    pp.name         AS party_name,
+                    COALESCE(pp.abbreviation, '?') AS party_abbr,
+                    pp.color        AS party_color,
+                    pa.status,
+                    pa.comments
+                ")
+                ->join('political_parties as pp', 'pp.id', '=', 'pa.political_party_id')
+                ->whereIn('pa.result_id', $publishedResultIds)
                 ->get()
                 ->groupBy('result_id');
         }
 
-        return $stationsRaw->map(function ($station) use ($votesByResult) {
-            $votes = $votesByResult->get($station->result_id, collect());
+        return $stationsRaw->map(function ($station) use ($votesByResult, $acceptancesByResult) {
+            $isPublished = $station->status === 'nationally_certified';
+
+            $votes = $isPublished ? $votesByResult->get($station->result_id, collect()) : collect();
             $station->candidate_votes = $votes->map(fn($v) => [
                 'name'  => $v->name,
                 'party' => $v->party,
                 'color' => $this->partyColor($v->party, $v->color),
                 'votes' => $v->votes,
             ])->values()->all();
+
+            $station->is_published = $isPublished;
+            $station->photo_url    = ($isPublished && $station->result_sheet_photo_path)
+                ? asset('storage/' . $station->result_sheet_photo_path)
+                : null;
+
+            $acceptances = $isPublished ? $acceptancesByResult->get($station->result_id, collect()) : collect();
+            $station->party_acceptances = $acceptances->map(fn($pa) => [
+                'party_name' => $pa->party_name,
+                'party_abbr' => $pa->party_abbr,
+                'color'      => $this->partyColor($pa->party_abbr, $pa->party_color),
+                'status'     => $pa->status,
+                'comments'   => $pa->comments,
+            ])->values()->all();
+
+            // Never leak provisional totals to the public payload.
+            if (!$isPublished) {
+                $station->status           = 'not_reported';
+                $station->result_id        = null;
+                $station->total_votes_cast = null;
+                $station->valid_votes      = null;
+                $station->rejected_votes   = null;
+            }
+            unset($station->result_sheet_photo_path);
+
             return $station;
         })->toArray();
     }
@@ -215,25 +268,23 @@ SQL;
      * Per-region (admin_area) leading candidate + candidate breakdown, plus a
      * national scorecard. Powers the CNN-style choropleth and header.
      *
-     * Unlike the public summary, the live map reflects ALL reported results
-     * regardless of certification level (provisional + certified), matching the
-     * existing per-station map behaviour.
+     * PUBLIC ACCESS RULE: aggregates are computed exclusively from published
+     * (nationally certified) results — provisional submissions are excluded.
      */
     private function computeRegionAggregates(Election $election): array
     {
-        // Candidate votes per admin_area (any reported result).
+        $published = PublicResultsQuery::latestPublishedResultsSql($election->id);
+
+        // Candidate votes per admin_area (published results only).
         $voteRows = DB::table('polling_stations as ps')
             ->join('administrative_hierarchy as w',   'ps.ward_id',    '=', 'w.id')
             ->join('administrative_hierarchy as con', 'w.parent_id',   '=', 'con.id')
             ->join('administrative_hierarchy as aa',  'con.parent_id', '=', 'aa.id')
-            ->join('results as r', function ($join) use ($election) {
-                $join->on('r.polling_station_id', '=', 'ps.id')
-                     ->where('r.election_id', $election->id);
-            })
+            ->join(DB::raw("({$published}) as r"), 'r.polling_station_id', '=', 'ps.id')
             ->join('result_candidate_votes as rcv', 'rcv.result_id', '=', 'r.id')
             ->join('candidates as c', 'c.id', '=', 'rcv.candidate_id')
             ->leftJoin('political_parties as pp', 'pp.id', '=', 'c.political_party_id')
-            ->where('ps.election_id', $election->id)
+            ->tap(fn($q) => $this->scopeStationsToElection($q, $election))
             ->groupBy('aa.name', 'c.id', 'c.name', 'c.photo_path', 'pp.leader_photo_path', 'pp.abbreviation', 'pp.color')
             ->selectRaw("
                 aa.name                          AS region_name,
@@ -246,16 +297,13 @@ SQL;
             ")
             ->get();
 
-        // Station counts per admin_area (total + reported).
+        // Station counts per admin_area (total + published).
         $countRows = DB::table('polling_stations as ps')
             ->join('administrative_hierarchy as w',   'ps.ward_id',    '=', 'w.id')
             ->join('administrative_hierarchy as con', 'w.parent_id',   '=', 'con.id')
             ->join('administrative_hierarchy as aa',  'con.parent_id', '=', 'aa.id')
-            ->leftJoin('results as r', function ($join) use ($election) {
-                $join->on('r.polling_station_id', '=', 'ps.id')
-                     ->where('r.election_id', $election->id);
-            })
-            ->where('ps.election_id', $election->id)
+            ->leftJoin(DB::raw("({$published}) as r"), 'r.polling_station_id', '=', 'ps.id')
+            ->tap(fn($q) => $this->scopeStationsToElection($q, $election))
             ->groupBy('aa.name')
             ->selectRaw('
                 aa.name                AS region_name,
@@ -347,23 +395,23 @@ SQL;
     /**
      * Per-constituency leader + totals, keyed by parent region (admin_area)
      * name. Powers the region drill-down breakdown panel.
+     * Published results only.
      *
      * @return array<string, array<int, array<string, mixed>>>
      */
     private function computeConstituencies(Election $election): array
     {
+        $published = PublicResultsQuery::latestPublishedResultsSql($election->id);
+
         $voteRows = DB::table('polling_stations as ps')
             ->join('administrative_hierarchy as w',   'ps.ward_id',    '=', 'w.id')
             ->join('administrative_hierarchy as con', 'w.parent_id',   '=', 'con.id')
             ->join('administrative_hierarchy as aa',  'con.parent_id', '=', 'aa.id')
-            ->join('results as r', function ($join) use ($election) {
-                $join->on('r.polling_station_id', '=', 'ps.id')
-                     ->where('r.election_id', $election->id);
-            })
+            ->join(DB::raw("({$published}) as r"), 'r.polling_station_id', '=', 'ps.id')
             ->join('result_candidate_votes as rcv', 'rcv.result_id', '=', 'r.id')
             ->join('candidates as c', 'c.id', '=', 'rcv.candidate_id')
             ->leftJoin('political_parties as pp', 'pp.id', '=', 'c.political_party_id')
-            ->where('ps.election_id', $election->id)
+            ->tap(fn($q) => $this->scopeStationsToElection($q, $election))
             ->groupBy('aa.name', 'con.name', 'c.name', 'pp.abbreviation', 'pp.color')
             ->selectRaw("
                 aa.name                          AS region_name,
@@ -379,11 +427,8 @@ SQL;
             ->join('administrative_hierarchy as w',   'ps.ward_id',    '=', 'w.id')
             ->join('administrative_hierarchy as con', 'w.parent_id',   '=', 'con.id')
             ->join('administrative_hierarchy as aa',  'con.parent_id', '=', 'aa.id')
-            ->leftJoin('results as r', function ($join) use ($election) {
-                $join->on('r.polling_station_id', '=', 'ps.id')
-                     ->where('r.election_id', $election->id);
-            })
-            ->where('ps.election_id', $election->id)
+            ->leftJoin(DB::raw("({$published}) as r"), 'r.polling_station_id', '=', 'ps.id')
+            ->tap(fn($q) => $this->scopeStationsToElection($q, $election))
             ->groupBy('aa.name', 'con.name')
             ->selectRaw('
                 aa.name                AS region_name,
@@ -442,21 +487,21 @@ SQL;
     /**
      * Per-ward leader + totals, keyed by [region_name][constituency_name].
      * Powers the constituency → ward drill-down panel.
+     * Published results only.
      */
     private function computeWards(Election $election): array
     {
+        $published = PublicResultsQuery::latestPublishedResultsSql($election->id);
+
         $voteRows = DB::table('polling_stations as ps')
             ->join('administrative_hierarchy as w',   'ps.ward_id',    '=', 'w.id')
             ->join('administrative_hierarchy as con', 'w.parent_id',   '=', 'con.id')
             ->join('administrative_hierarchy as aa',  'con.parent_id', '=', 'aa.id')
-            ->join('results as r', function ($join) use ($election) {
-                $join->on('r.polling_station_id', '=', 'ps.id')
-                     ->where('r.election_id', $election->id);
-            })
+            ->join(DB::raw("({$published}) as r"), 'r.polling_station_id', '=', 'ps.id')
             ->join('result_candidate_votes as rcv', 'rcv.result_id', '=', 'r.id')
             ->join('candidates as c', 'c.id', '=', 'rcv.candidate_id')
             ->leftJoin('political_parties as pp', 'pp.id', '=', 'c.political_party_id')
-            ->where('ps.election_id', $election->id)
+            ->tap(fn($q) => $this->scopeStationsToElection($q, $election))
             ->groupBy('aa.name', 'con.name', 'w.name', 'c.name', 'pp.abbreviation', 'pp.color')
             ->selectRaw("
                 aa.name                          AS region_name,
@@ -473,11 +518,8 @@ SQL;
             ->join('administrative_hierarchy as w',   'ps.ward_id',    '=', 'w.id')
             ->join('administrative_hierarchy as con', 'w.parent_id',   '=', 'con.id')
             ->join('administrative_hierarchy as aa',  'con.parent_id', '=', 'aa.id')
-            ->leftJoin('results as r', function ($join) use ($election) {
-                $join->on('r.polling_station_id', '=', 'ps.id')
-                     ->where('r.election_id', $election->id);
-            })
-            ->where('ps.election_id', $election->id)
+            ->leftJoin(DB::raw("({$published}) as r"), 'r.polling_station_id', '=', 'ps.id')
+            ->tap(fn($q) => $this->scopeStationsToElection($q, $election))
             ->groupBy('aa.name', 'con.name', 'w.name')
             ->selectRaw('
                 aa.name                AS region_name,

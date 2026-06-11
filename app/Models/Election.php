@@ -62,15 +62,19 @@ class Election extends Model
         ]));
 
         foreach ($statuses as $publicStatus) {
+            Cache::forget("results_summary_v8_{$electionId}_{$publicStatus}");
             Cache::forget("results_summary_v7_{$electionId}_{$publicStatus}");
             Cache::forget("results_summary_v3_{$electionId}_{$publicStatus}");
         }
 
         Cache::forget("results_summary_v2_{$electionId}");
         Cache::forget("results_map_{$electionId}");
+        Cache::forget("results_map_v2_{$electionId}");
         Cache::forget("results_map_agg_v3_{$electionId}");
+        Cache::forget("results_map_agg_v4_{$electionId}");
         Cache::forget("results_stations_{$electionId}_pub");
         Cache::forget("results_stations_{$electionId}_prov");
+        Cache::forget("results_stations_v2_{$electionId}");
         Cache::forget("stations_filters_{$electionId}");
     }
 
@@ -82,16 +86,21 @@ class Election extends Model
     public function bustPublicCaches(): void
     {
         foreach (['draft', 'active', 'certifying', 'results_pending', 'certified', 'archived'] as $status) {
+            Cache::forget("results_summary_v8_{$this->id}_{$status}");
             Cache::forget("results_summary_v7_{$this->id}_{$status}");
             Cache::forget("results_summary_v3_{$this->id}_{$status}");
         }
         Cache::forget("results_map_{$this->id}");
+        Cache::forget("results_map_v2_{$this->id}");
         Cache::forget("results_map_agg_v3_{$this->id}");
+        Cache::forget("results_map_agg_v4_{$this->id}");
         Cache::forget("results_stations_{$this->id}_pub");
         Cache::forget("results_stations_{$this->id}_prov");
+        Cache::forget("results_stations_v2_{$this->id}");
         Cache::forget("stations_filters_{$this->id}");
         Cache::forget('public_results_data');
         Cache::forget('chairman_dashboard_stats');
+        Cache::forget("chairman_dashboard_stats_{$this->id}");
     }
 
     public function createdBy(): BelongsTo { return $this->belongsTo(User::class, 'created_by'); }
@@ -107,6 +116,26 @@ class Election extends Model
     public function partyRepresentatives(): HasMany { return $this->hasMany(PartyRepresentative::class); }
     public function electionMonitors(): HasMany { return $this->hasMany(ElectionMonitor::class); }
     public function aggregatedResults(): HasMany { return $this->hasMany(AggregatedResult::class); }
+
+    /**
+     * The single "current" election all dashboards and reports must be scoped
+     * to. Prefers an open election (active → certifying → results_pending) by
+     * most recent start date, falling back to the most recently closed one.
+     *
+     * NOTE: ordering by start_date (not created_at) matters — historical
+     * elections seeded later would otherwise be picked by latest().
+     */
+    public static function current(): ?self
+    {
+        return static::whereIn('status', ['active', 'certifying', 'results_pending'])
+            ->orderByDesc('start_date')
+            ->orderByDesc('id')
+            ->first()
+            ?? static::where('status', 'certified')
+                ->orderByDesc('start_date')
+                ->orderByDesc('id')
+                ->first();
+    }
 
     public function scopeActive($query) { return $query->where('status', 'active'); }
     public function isActive(): bool { return $this->status === 'active'; }

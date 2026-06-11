@@ -1,4 +1,5 @@
 import AppLayout from '@/Layouts/AppLayout';
+import PhotoCapture from '@/Components/PhotoCapture';
 import { useForm, Link } from '@inertiajs/react';
 import { useState, useEffect } from 'react';
 
@@ -17,7 +18,8 @@ export default function ResultSubmit({ auth, station, election, candidates = [],
         ),
     });
 
-    const [photoPreview, setPhotoPreview]     = useState(null);
+    const hasExistingPhoto = Boolean(editableResult?.photo_url);
+    const hasRequiredPhoto = Boolean(data.photo) || hasExistingPhoto;
     const [totalsError, setTotalsError]       = useState(null);
     const [candidateError, setCandidateError] = useState(null);
 
@@ -43,15 +45,6 @@ export default function ResultSubmit({ auth, station, election, candidates = [],
             setCandidateError(null);
         }
     }, [data.total_votes_cast, data.valid_votes, data.rejected_votes, data.registered_voters, data.candidate_votes]);
-
-    const handlePhotoChange = (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-        setData('photo', file);
-        const reader = new FileReader();
-        reader.onloadend = () => setPhotoPreview(reader.result);
-        reader.readAsDataURL(file);
-    };
 
     /**
      * BUG FIX: Removed `window.axios.defaults.headers...` from here.
@@ -79,7 +72,8 @@ export default function ResultSubmit({ auth, station, election, candidates = [],
 
     const canSubmit = !totalsError && !candidateError && !processing
         && data.total_votes_cast !== '' && data.valid_votes !== '' && data.rejected_votes !== ''
-        && candidateSum > 0;
+        && candidateSum > 0
+        && hasRequiredPhoto;
 
     if (alreadySubmitted && !isResubmission) {
         return (
@@ -283,35 +277,25 @@ export default function ResultSubmit({ auth, station, election, candidates = [],
                     <div className="bg-white rounded-xl p-6 border border-slate-200">
                         <h2 className="text-iec-navy font-bold text-lg mb-1">Result Sheet Photo</h2>
                         <p className="text-slate-500 text-xs mb-4">
-                            Upload a clear photo of the official result tally sheet. Max 10MB.
-                            {isResubmission && ' You may upload a new photo or keep the existing one.'}
+                            Capture or upload a clear photo of the official result tally sheet. Max 10MB.
+                            {hasExistingPhoto && ' The existing photo will be kept unless you capture or upload a replacement.'}
                         </p>
 
-                        <label className="block cursor-pointer">
-                            <div className={`border-2 border-dashed rounded-xl p-8 text-center transition-colors ${
-                                photoPreview
-                                    ? 'border-teal-500/50 bg-iec-pink-500/5'
-                                    : 'border-slate-200 hover:border-slate-500 bg-slate-50'
-                            }`}>
-                                {photoPreview ? (
-                                    <div>
-                                        <img src={photoPreview} alt="Preview"
-                                            className="max-h-48 mx-auto rounded-lg mb-3 object-contain" />
-                                        <p className="text-iec-pink-600 text-sm">✓ Photo selected — click to change</p>
-                                    </div>
-                                ) : (
-                                    <div>
-                                        <div className="text-4xl mb-2">📷</div>
-                                        <p className="text-slate-600 font-semibold text-sm">Click to upload result sheet photo</p>
-                                        <p className="text-slate-500 text-xs mt-1">PNG, JPG up to 10MB</p>
-                                        {isResubmission && (
-                                            <p className="text-slate-600 text-xs mt-1">Previous photo will be kept if none selected</p>
-                                        )}
-                                    </div>
-                                )}
-                            </div>
-                            <input type="file" accept="image/*" onChange={handlePhotoChange} className="hidden" />
-                        </label>
+                        {hasExistingPhoto && (
+                            <a
+                                href={editableResult.photo_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="mb-4 inline-flex text-sm font-semibold text-iec-pink-600 hover:text-iec-pink-700"
+                            >
+                                View existing result sheet photo
+                            </a>
+                        )}
+
+                        <PhotoCapture
+                            required={!hasExistingPhoto}
+                            onPhotoCapture={(captured) => setData('photo', captured?.file || null)}
+                        />
                         {errors.photo && <p className="text-red-400 text-xs mt-1">{errors.photo}</p>}
                     </div>
 

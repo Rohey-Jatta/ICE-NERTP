@@ -14,11 +14,10 @@ function firstColor(value, fallback = '#6b7280') {
     return (value || fallback).split(',')[0].trim();
 }
 
-// Collapse the fine-grained certification_status into the three public buckets.
+// Public users only get two station-level states: published or not public yet.
 function stationBucket(station) {
     if (station.status === RESULT_STATUS.NATIONALLY_CERTIFIED) return 'certified';
-    if (station.status === RESULT_STATUS.NOT_REPORTED || station.total_votes_cast == null) return 'pending';
-    return 'provisional';
+    return 'pending';
 }
 
 function stationTurnout(station) {
@@ -56,8 +55,7 @@ function buildRegionOptions(stations) {
 
 const BUCKET_CHIP = {
     certified: { label: 'Certified', cls: 'bg-[#e2f2ea] text-[#0e8c5a]', dot: 'bg-[#0e8c5a]' },
-    provisional: { label: 'Provisional', cls: 'bg-[#fef3c7] text-[#b45309]', dot: 'bg-[#b45309]' },
-    pending: { label: 'Pending', cls: 'bg-[#f5f6f8] text-[#5f6773]', dot: 'bg-[#8b95a3]' },
+    pending: { label: 'Not Published', cls: 'bg-[#f5f6f8] text-[#5f6773]', dot: 'bg-[#8b95a3]' },
 };
 
 function StatusChip({ bucket }) {
@@ -118,7 +116,7 @@ function StationItem({ station, isActive, onSelect }) {
             </div>
 
             <div className="hidden min-w-0 items-center gap-2 text-[13px] sm:flex">
-                {bucket === 'pending' || !leader ? (
+                {bucket !== 'certified' || !leader ? (
                     <span className="text-[12px] text-[#5f6773]">—</span>
                 ) : (
                     <>
@@ -132,7 +130,7 @@ function StationItem({ station, isActive, onSelect }) {
             </div>
 
             <div className="hidden text-[12px] tabular-nums text-[#5f6773] sm:block">
-                {bucket === 'pending' ? '—' : `${numeric(station.valid_votes).toLocaleString()} valid`}
+                {bucket !== 'certified' ? '—' : `${numeric(station.valid_votes).toLocaleString()} valid`}
             </div>
 
             <div className="flex justify-end">
@@ -145,9 +143,9 @@ function StationItem({ station, isActive, onSelect }) {
 // ── Detail panel ──────────────────────────────────────────────────────────────
 function CertificationTimeline({ bucket }) {
     const steps = [
-        { title: 'Results submitted', sub: 'Polling officer files the count', state: bucket !== 'pending' ? 'done' : 'pending' },
-        { title: 'Validation passed', sub: 'System checks math and signatures', state: bucket !== 'pending' ? 'done' : 'pending' },
-        { title: 'Regional review', sub: 'Returning officers compare and sign', state: bucket === 'certified' ? 'done' : bucket === 'provisional' ? 'active' : 'pending' },
+        { title: 'Results submitted', sub: 'Private until official publication', state: bucket === 'certified' ? 'done' : 'pending' },
+        { title: 'Validation passed', sub: 'Private until official publication', state: bucket === 'certified' ? 'done' : 'pending' },
+        { title: 'Regional review', sub: 'Private until official publication', state: bucket === 'certified' ? 'done' : 'pending' },
         { title: 'Nationally certified', sub: 'IEC certifies and publishes', state: bucket === 'certified' ? 'done' : 'pending' },
     ];
 
@@ -170,8 +168,11 @@ function CertificationTimeline({ bucket }) {
     );
 }
 
-function StationDetail({ station, isPublished }) {
+function StationDetail({ station }) {
     const bucket = stationBucket(station);
+    // A station's details go public the moment its own result is published
+    // (nationally certified) — independent of the overall election status.
+    const isPublished = bucket === 'certified';
     const turnout = stationTurnout(station);
     const hierarchy = stationHierarchy(station);
     const validVotes = numeric(station.valid_votes);
@@ -191,7 +192,9 @@ function StationDetail({ station, isPublished }) {
                 </div>
                 <div className="mt-3.5 flex flex-wrap items-center gap-2.5">
                     <StatusChip bucket={bucket} />
-                    <span className="text-[12px] text-[#5f6773]">{RESULT_STATUS_PUBLIC_LABELS[station.status] || 'Status unavailable'}</span>
+                    <span className="text-[12px] text-[#5f6773]">
+                        {isPublished ? (RESULT_STATUS_PUBLIC_LABELS[station.status] || 'Published') : 'Not published'}
+                    </span>
                 </div>
             </div>
 
@@ -214,7 +217,7 @@ function StationDetail({ station, isPublished }) {
                                 <path d="m21 16-5-5-7 7" />
                             </svg>
                             <div className="mt-2 text-[12px] font-medium">
-                                {isPublished ? 'No photo on file' : 'Available once published'}
+                                {isPublished ? 'No photo on file' : 'Available once published by the IEC Chairman'}
                             </div>
                         </div>
                     </div>
@@ -232,13 +235,13 @@ function StationDetail({ station, isPublished }) {
                     </div>
                     <div>
                         <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-[#5f6773]">Cast</div>
-                        <div className="font-serif text-[22px] font-bold leading-none tracking-tight tabular-nums text-[#0e1014]">{bucket === 'pending' ? '—' : numeric(station.total_votes_cast).toLocaleString()}</div>
-                        <div className="mt-1 text-[11.5px] text-[#5f6773]">{turnout ? `${turnout}% turnout` : 'Not reported'}</div>
+                        <div className="font-serif text-[22px] font-bold leading-none tracking-tight tabular-nums text-[#0e1014]">{!isPublished ? '—' : numeric(station.total_votes_cast).toLocaleString()}</div>
+                        <div className="mt-1 text-[11.5px] text-[#5f6773]">{isPublished && turnout ? `${turnout}% turnout` : 'Not published'}</div>
                     </div>
                     <div>
                         <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-[#5f6773]">Valid</div>
-                        <div className="font-serif text-[22px] font-bold leading-none tracking-tight tabular-nums text-[#0e8c5a]">{bucket === 'pending' ? '—' : validVotes.toLocaleString()}</div>
-                        <div className="mt-1 text-[11.5px] text-[#5f6773]">{bucket === 'pending' ? '' : `${numeric(station.rejected_votes).toLocaleString()} rejected`}</div>
+                        <div className="font-serif text-[22px] font-bold leading-none tracking-tight tabular-nums text-[#0e8c5a]">{!isPublished ? '—' : validVotes.toLocaleString()}</div>
+                        <div className="mt-1 text-[11.5px] text-[#5f6773]">{!isPublished ? '' : `${numeric(station.rejected_votes).toLocaleString()} rejected`}</div>
                     </div>
                 </div>
             </div>
@@ -248,7 +251,7 @@ function StationDetail({ station, isPublished }) {
                 <h4 className="mb-3.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-[#5f6773]">Candidate Breakdown</h4>
                 {candidates.length === 0 ? (
                     <p className="m-0 text-[13px] leading-6 text-[#5f6773]">
-                        This station has not yet reported results. Candidate totals will appear once results are submitted and validated.
+                        Candidate totals are not public for this station until the IEC Chairman publishes the result.
                     </p>
                 ) : (
                     candidates.map((c, idx) => {
@@ -275,19 +278,26 @@ function StationDetail({ station, isPublished }) {
                 )}
             </div>
 
-            {/* Party acceptances (published only) */}
+            {/* Party representatives' reactions & sign-offs (published only) */}
             {isPublished && station.party_acceptances?.length > 0 && (
                 <div className="border-b border-[#e6e8ec] px-7 py-5">
-                    <h4 className="mb-3.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-[#5f6773]">Party Acceptances</h4>
-                    <div className="flex flex-col gap-2">
+                    <h4 className="mb-3.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-[#5f6773]">Party Reactions &amp; Sign-offs</h4>
+                    <div className="flex flex-col gap-3">
                         {station.party_acceptances.map((pa, idx) => (
-                            <div key={`${pa.party_abbr}-${idx}`} className="flex items-center justify-between gap-3 text-[13px]">
-                                <span className="truncate font-semibold text-[#1f2329]">{pa.party_abbr} <span className="font-normal text-[#5f6773]">· {pa.party_name}</span></span>
-                                <span className={`flex-shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold capitalize ${
-                                    pa.status === 'accepted' ? 'bg-[#e2f2ea] text-[#0e8c5a]' : pa.status === 'rejected' ? 'bg-[#fde8e8] text-[#b91c1c]' : 'bg-[#f5f6f8] text-[#5f6773]'
-                                }`}>
-                                    {pa.status}
-                                </span>
+                            <div key={`${pa.party_abbr}-${idx}`}>
+                                <div className="flex items-center justify-between gap-3 text-[13px]">
+                                    <span className="truncate font-semibold text-[#1f2329]">{pa.party_abbr} <span className="font-normal text-[#5f6773]">· {pa.party_name}</span></span>
+                                    <span className={`flex-shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold capitalize ${
+                                        pa.status?.startsWith('accepted') ? 'bg-[#e2f2ea] text-[#0e8c5a]' : pa.status === 'rejected' ? 'bg-[#fde8e8] text-[#b91c1c]' : 'bg-[#f5f6f8] text-[#5f6773]'
+                                    }`}>
+                                        {String(pa.status || '').replaceAll('_', ' ')}
+                                    </span>
+                                </div>
+                                {pa.comments && (
+                                    <p className="mt-1 rounded-lg bg-[#f8f9fb] px-3 py-2 text-[12.5px] leading-5 text-[#5f6773]">
+                                        “{pa.comments}”
+                                    </p>
+                                )}
                             </div>
                         ))}
                     </div>
@@ -304,7 +314,7 @@ function StationDetail({ station, isPublished }) {
 }
 
 // ── Page ──────────────────────────────────────────────────────────────────────
-export default function ResultsStations({ election, elections = [], selectedElectionId, stations, isPublished = false }) {
+export default function ResultsStations({ election, elections = [], selectedElectionId, stations, electionClosed = false }) {
     const param = selectedElectionId ? `?election=${selectedElectionId}` : '';
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState('all');
@@ -324,7 +334,7 @@ export default function ResultsStations({ election, elections = [], selectedElec
     }, [stationList, regionFilter]);
 
     const counts = useMemo(() => {
-        const acc = { all: regionScoped.length, certified: 0, provisional: 0, pending: 0 };
+        const acc = { all: regionScoped.length, certified: 0, pending: 0 };
         regionScoped.forEach((s) => { acc[stationBucket(s)] += 1; });
         return acc;
     }, [regionScoped]);
@@ -393,9 +403,9 @@ export default function ResultsStations({ election, elections = [], selectedElec
                     </div>
                 </div>
 
-                {!isPublished && (
+                {!electionClosed && (
                     <div className="border-b border-[#fde8c2] bg-[#fffaf0] px-7 py-2.5 text-center text-[13px] font-medium text-[#b45309]">
-                        Displaying provisional station status. Result-sheet photos and party decisions appear once results are officially published.
+                        Certification in progress. Vote totals, result-sheet photos and party decisions appear per station once the IEC Chairman publishes that station's result.
                     </div>
                 )}
 
@@ -417,8 +427,7 @@ export default function ResultsStations({ election, elections = [], selectedElec
                             </div>
                             <FilterPill active={statusFilter === 'all'} onClick={() => handleStatus('all')} count={counts.all}>All</FilterPill>
                             <FilterPill active={statusFilter === 'certified'} onClick={() => handleStatus('certified')} count={counts.certified}>Certified</FilterPill>
-                            <FilterPill active={statusFilter === 'provisional'} onClick={() => handleStatus('provisional')} count={counts.provisional}>Provisional</FilterPill>
-                            <FilterPill active={statusFilter === 'pending'} onClick={() => handleStatus('pending')} count={counts.pending}>Pending</FilterPill>
+                            <FilterPill active={statusFilter === 'pending'} onClick={() => handleStatus('pending')} count={counts.pending}>Not Published</FilterPill>
                         </div>
 
                         {regionOptions.length > 0 && (
@@ -473,7 +482,7 @@ export default function ResultsStations({ election, elections = [], selectedElec
                     {/* ── Detail pane ───────────────────────────────────────── */}
                     <aside className="bg-[#fafafb] lg:h-[calc(100vh-68px)] lg:overflow-y-auto">
                         {selected ? (
-                            <StationDetail station={selected} isPublished={isPublished} />
+                            <StationDetail station={selected} />
                         ) : (
                             <div className="grid h-full place-items-center px-8 py-16 text-center text-[#5f6773]">
                                 <p className="text-sm">Select a station to view its full breakdown.</p>

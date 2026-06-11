@@ -20,6 +20,8 @@ class User extends Authenticatable
         'status',
         'two_factor_enabled',
         'two_factor_secret',
+        'must_change_password',
+        'password_changed_at',
     ];
 
     protected $hidden = [
@@ -32,6 +34,8 @@ class User extends Authenticatable
         'email_verified_at' => 'datetime',
         'password' => 'hashed',
         'two_factor_enabled' => 'boolean',
+        'must_change_password' => 'boolean',
+        'password_changed_at' => 'datetime',
     ];
 
     // Relationships

@@ -5,13 +5,13 @@ import { useState } from 'react';
 export default function ConstituencyReports({ auth, constituency, reportData }) {
     const [generating, setGenerating] = useState(null);
 
-    const handleDownload = (reportType) => {
-        setGenerating(reportType);
-        // In production this would call a real export endpoint
-        setTimeout(() => {
-            alert(`${reportType} report generation would download here. Connect a PDF/Excel export endpoint.`);
-            setGenerating(null);
-        }, 800);
+    // Navigating directly to the export endpoint triggers the file download.
+    const handleDownload = (reportId, format) => {
+        const key = `${reportId}-${format}`;
+        setGenerating(key);
+        window.location.href = `/constituency/reports/export/${reportId}/${format}`;
+        // The browser stays on this page during a download; just clear the spinner.
+        setTimeout(() => setGenerating(null), 2500);
     };
 
     const reports = [
@@ -19,39 +19,38 @@ export default function ConstituencyReports({ auth, constituency, reportData }) 
             id: 'full',
             name: 'Full Constituency Results',
             description: 'Complete results with all wards and polling stations, candidate votes, and certification status.',
-            format: 'PDF',
             color: 'border-blue-500/30 bg-iec-pink-500/10',
-            btnColor: 'bg-iec-pink-600 hover:bg-iec-pink-700',
             icon: '📋',
         },
         {
             id: 'ward-summary',
             name: 'Ward Summary Report',
             description: 'Summary of each ward with aggregated vote totals, turnout statistics, and certification progress.',
-            format: 'PDF',
             color: 'border-teal-500/30 bg-iec-pink-500/10',
-            btnColor: 'bg-iec-pink-600 hover:bg-iec-pink-700',
             icon: '📊',
         },
         {
             id: 'turnout',
             name: 'Turnout Analysis',
             description: 'Detailed turnout statistics by ward and polling station with comparisons.',
-            format: 'PDF',
             color: 'border-iec-pink-100 bg-iec-pink-50',
-            btnColor: 'bg-iec-pink-600 hover:bg-iec-pink-700',
             icon: '📈',
         },
         {
             id: 'certification',
             name: 'Certification Status Report',
             description: 'Audit trail of certification decisions including approvals, reservations, and rejections.',
-            format: 'PDF',
             color: 'border-amber-500/30 bg-amber-500/10',
-            btnColor: 'bg-amber-600 hover:bg-amber-700',
             icon: '✅',
         },
     ];
+
+    const Spinner = () => (
+        <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+        </svg>
+    );
 
     return (
         <AppLayout user={auth?.user}>
@@ -104,26 +103,25 @@ export default function ConstituencyReports({ auth, constituency, reportData }) 
                                     </div>
                                 </div>
                                 <span className="px-2 py-1 bg-white text-slate-600 rounded text-xs font-mono flex-shrink-0 ml-2">
-                                    {report.format}
+                                    PDF · XLSX
                                 </span>
                             </div>
-                            <button
-                                onClick={() => handleDownload(report.name)}
-                                disabled={generating === report.name}
-                                className={`w-full px-4 py-3 ${report.btnColor} disabled:opacity-50 text-white font-bold rounded-lg transition-colors flex items-center justify-center gap-2`}
-                            >
-                                {generating === report.name ? (
-                                    <>
-                                        <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
-                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
-                                        </svg>
-                                        Generating…
-                                    </>
-                                ) : (
-                                    <>⬇ Download Report</>
-                                )}
-                            </button>
+                            <div className="flex gap-3">
+                                <button
+                                    onClick={() => handleDownload(report.id, 'pdf')}
+                                    disabled={generating === `${report.id}-pdf`}
+                                    className="flex-1 px-4 py-3 bg-iec-pink-600 hover:bg-iec-pink-700 disabled:opacity-50 text-white font-bold rounded-lg transition-colors flex items-center justify-center gap-2"
+                                >
+                                    {generating === `${report.id}-pdf` ? <><Spinner /> Generating…</> : <>⬇ PDF</>}
+                                </button>
+                                <button
+                                    onClick={() => handleDownload(report.id, 'excel')}
+                                    disabled={generating === `${report.id}-excel`}
+                                    className="flex-1 px-4 py-3 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold rounded-lg transition-colors flex items-center justify-center gap-2"
+                                >
+                                    {generating === `${report.id}-excel` ? <><Spinner /> Generating…</> : <>⬇ Excel</>}
+                                </button>
+                            </div>
                         </div>
                     ))}
                 </div>

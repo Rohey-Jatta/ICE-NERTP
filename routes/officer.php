@@ -169,6 +169,9 @@ Route::middleware(['auth', 'role:polling-officer'])
                 'rejected_votes'          => $editableResult->rejected_votes,
                 'last_rejection_reason'   => $editableResult->last_rejection_reason,
                 'rejection_count'         => $editableResult->rejection_count,
+                'photo_url'               => $editableResult->result_sheet_photo_path
+                    ? asset('storage/' . $editableResult->result_sheet_photo_path)
+                    : null,
             ] : null,
             'alreadySubmitted' => $existingResult !== null,
         ]);
@@ -252,6 +255,12 @@ Route::middleware(['auth', 'role:polling-officer'])
             ->where('rejection_count', '>', 0)
             ->latest('submitted_at')
             ->first();
+
+        if (!$request->hasFile('photo') && (!$existingResult || !$existingResult->result_sheet_photo_path)) {
+            return back()->withErrors([
+                'photo' => 'A clear result sheet photo is required before submitting results.',
+            ])->withInput();
+        }
 
         $photoPath = null;
         if ($request->hasFile('photo')) {

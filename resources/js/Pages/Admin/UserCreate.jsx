@@ -17,6 +17,17 @@ export default function UserCreate({ auth, pollingStations = [], wards = [], con
     });
 
     const [selectedRole, setSelectedRole] = useState('polling-officer');
+    const [showPassword, setShowPassword] = useState(false);
+
+    // Generate a random, readable default password (e.g. "Xk7mPq2rTn4w").
+    const generatePassword = () => {
+        const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
+        const bytes = new Uint32Array(12);
+        window.crypto.getRandomValues(bytes);
+        const generated = Array.from(bytes, (b) => chars[b % chars.length]).join('');
+        setData('password', generated);
+        setShowPassword(true);
+    };
 
     const handleRoleChange = (role) => {
         setSelectedRole(role);
@@ -193,16 +204,36 @@ export default function UserCreate({ auth, pollingStations = [], wards = [], con
                         </div>
 
                         <div>
-                            <label className="block text-slate-600 mb-2 font-semibold">Password <span className="text-red-400">*</span></label>
-                            <input
-                                type="password"
-                                value={data.password}
-                                onChange={(e) => setData('password', e.target.value)}
-                                autoComplete="new-password"
-                                className="w-full px-4 py-3 bg-white border border-slate-200 rounded-lg text-iec-navy"
-                                placeholder="••••••••"
-                                required
-                            />
+                            <label className="block text-slate-600 mb-2 font-semibold">Default Password <span className="text-red-400">*</span></label>
+                            <div className="flex gap-2">
+                                <input
+                                    type={showPassword ? 'text' : 'password'}
+                                    value={data.password}
+                                    onChange={(e) => setData('password', e.target.value)}
+                                    autoComplete="new-password"
+                                    className="flex-1 px-4 py-3 bg-white border border-slate-200 rounded-lg text-iec-navy"
+                                    placeholder="Set a default password (min 8 characters)"
+                                    minLength={8}
+                                    required
+                                />
+                                <button
+                                    type="button"
+                                    onClick={generatePassword}
+                                    className="px-4 py-3 bg-slate-100 hover:bg-slate-200 text-iec-navy font-semibold rounded-lg whitespace-nowrap"
+                                    title="Generate a random default password"
+                                >
+                                    ⚡ Generate
+                                </button>
+                            </div>
+                            <div className="flex items-center justify-between mt-1">
+                                <p className="text-slate-500 text-xs">
+                                    Share this default password with the user — they will be required to change it at first login.
+                                </p>
+                                <label className="flex items-center gap-1.5 text-xs text-slate-500 flex-shrink-0 ml-3">
+                                    <input type="checkbox" checked={showPassword} onChange={(e) => setShowPassword(e.target.checked)} />
+                                    Show
+                                </label>
+                            </div>
                             {errors.password && <p className="text-red-400 text-sm mt-1">{errors.password}</p>}
                         </div>
 

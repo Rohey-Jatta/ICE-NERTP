@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Public;
 
 use App\Http\Controllers\Controller;
 use App\Models\Election;
+use App\Support\PublicResultsQuery;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -73,7 +74,7 @@ class ResultsSummaryController extends Controller
         // ── 3. Compute / fetch cached summary data ────────────────────────────
         // Cache key includes election status so that when an election is published
         // (status: active → certified) the key changes and is always fresh.
-        $cacheKey = "results_summary_v7_{$electionModel->id}_{$electionModel->status}";
+        $cacheKey = "results_summary_v8_{$electionModel->id}_{$electionModel->status}";
         $data     = Cache::remember($cacheKey, 30, fn() => $this->computeSummary($electionModel));
 
         return Inertia::render('Public/Results', array_merge($data, [
@@ -84,9 +85,6 @@ class ResultsSummaryController extends Controller
 
     private function computeSummary(Election $election): array
     {
-        // ── PUBLIC RULE: Only nationally_certified results appear in totals ────
-        $publicStatuses = ['nationally_certified'];
-
         $electionPayload = [
             'id'         => $election->id,
             'name'       => $election->name,
@@ -98,14 +96,7 @@ class ResultsSummaryController extends Controller
         // ── Certified aggregate ────────────────────────────────────────────────
         // Use the latest nationally certified result per polling station.
         // This avoids stale/duplicate rows from older result versions.
-        $latestCertifiedResults = <<<SQL
-SELECT DISTINCT ON (polling_station_id)
-    id, polling_station_id, total_votes_cast, valid_votes, rejected_votes
-FROM results
-WHERE election_id = {$election->id}
-  AND certification_status = 'nationally_certified'
-ORDER BY polling_station_id, nationally_certified_at DESC NULLS LAST, id DESC
-SQL;
+        $latestCertifiedResults = PublicResultsQuery::latestPublishedResultsSql($election->id);
 
         $stats = DB::table('polling_stations as ps')
             ->selectRaw('
@@ -139,17 +130,7 @@ SQL;
         }
 
         // ── Pipeline breakdown — gives the public visibility into progression ──
-        $latestResults = <<<SQL
-SELECT DISTINCT ON (polling_station_id)
-    polling_station_id, certification_status
-FROM results
-WHERE election_id = {$election->id}
-ORDER BY polling_station_id,
-    CASE WHEN certification_status = 'nationally_certified' THEN 0 ELSE 1 END,
-    nationally_certified_at DESC NULLS LAST,
-    submitted_at DESC,
-    id DESC
-SQL;
+        $latestResults = PublicResultsQuery::latestResultsSql($election->id);
 
         $pipelineRaw = DB::table(DB::raw("({$latestResults}) as r"))
             ->selectRaw("\n                SUM(CASE WHEN certification_status = 'submitted'             THEN 1 ELSE 0 END) AS submitted,\n                SUM(CASE WHEN certification_status NOT IN ('submitted','nationally_certified') THEN 1 ELSE 0 END) AS under_review,\n                SUM(CASE WHEN certification_status = 'nationally_certified'  THEN 1 ELSE 0 END) AS certified\n            ")
@@ -162,14 +143,7 @@ SQL;
         ];
 
         // ── Candidate results: only from nationally_certified results ──────────
-        $latestCertifiedResultIds = <<<SQL
-    SELECT DISTINCT ON (polling_station_id)
-        id
-    FROM results
-    WHERE election_id = {$election->id}
-      AND certification_status = 'nationally_certified'
-    ORDER BY polling_station_id, nationally_certified_at DESC NULLS LAST, id DESC
-    SQL;
+        $latestCertifiedResultIds = PublicResultsQuery::latestPublishedResultsSql($election->id);
 
         $candidates = DB::table('candidates as c')
             ->selectRaw("
@@ -227,22 +201,26 @@ SQL;
      */
     private function computeRegions(Election $election): array
     {
-        $publicStatuses = ['nationally_certified'];
+        $latestPublishedResults = PublicResultsQuery::latestPublishedResultsSql($election->id);
 
-        // Votes per admin_area per candidate (certified only).
+        // Votes per admin_area per candidate, using only the latest published
+        // result per station so resubmissions never double-count.
         $voteRows = DB::table('polling_stations as ps')
             ->join('administrative_hierarchy as w',   'ps.ward_id',    '=', 'w.id')
             ->join('administrative_hierarchy as con', 'w.parent_id',   '=', 'con.id')
             ->join('administrative_hierarchy as aa',  'con.parent_id', '=', 'aa.id')
-            ->join('results as r', function ($join) use ($election, $publicStatuses) {
-                $join->on('r.polling_station_id', '=', 'ps.id')
-                     ->where('r.election_id', $election->id)
-                     ->whereIn('r.certification_status', $publicStatuses);
-            })
+            ->join(DB::raw("({$latestPublishedResults}) as r"), 'r.polling_station_id', '=', 'ps.id')
             ->join('result_candidate_votes as rcv', 'rcv.result_id', '=', 'r.id')
             ->join('candidates as c', 'c.id', '=', 'rcv.candidate_id')
             ->leftJoin('political_parties as pp', 'pp.id', '=', 'c.political_party_id')
-            ->where('ps.election_id', $election->id)
+            ->where(function ($query) use ($election) {
+                $query->where('ps.election_id', $election->id)
+                      ->orWhereIn('ps.id', function ($query) use ($election) {
+                          $query->select('polling_station_id')
+                                ->from('results')
+                                ->where('election_id', $election->id);
+                      });
+            })
             ->groupBy('aa.id', 'aa.name', 'c.id', 'c.name', 'pp.abbreviation', 'pp.color')
             ->selectRaw("
                 aa.id                            AS region_id,
@@ -254,17 +232,21 @@ SQL;
             ")
             ->get();
 
-        // Station counts per admin_area (total + nationally certified).
+        // Station counts per admin_area (total scoped to this election context
+        // + latest nationally certified result count).
         $countRows = DB::table('polling_stations as ps')
             ->join('administrative_hierarchy as w',   'ps.ward_id',    '=', 'w.id')
             ->join('administrative_hierarchy as con', 'w.parent_id',   '=', 'con.id')
             ->join('administrative_hierarchy as aa',  'con.parent_id', '=', 'aa.id')
-            ->leftJoin('results as r', function ($join) use ($election, $publicStatuses) {
-                $join->on('r.polling_station_id', '=', 'ps.id')
-                     ->where('r.election_id', $election->id)
-                     ->whereIn('r.certification_status', $publicStatuses);
+            ->leftJoin(DB::raw("({$latestPublishedResults}) as r"), 'r.polling_station_id', '=', 'ps.id')
+            ->where(function ($query) use ($election) {
+                $query->where('ps.election_id', $election->id)
+                      ->orWhereIn('ps.id', function ($query) use ($election) {
+                          $query->select('polling_station_id')
+                                ->from('results')
+                                ->where('election_id', $election->id);
+                      });
             })
-            ->where('ps.election_id', $election->id)
             ->groupBy('aa.id', 'aa.name')
             ->selectRaw('
                 aa.id                  AS region_id,

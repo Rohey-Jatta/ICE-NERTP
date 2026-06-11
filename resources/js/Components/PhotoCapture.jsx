@@ -198,7 +198,7 @@ export default function PhotoCapture({ onPhotoCapture, required = true }) {
             )}
             
             <p className="text-xs text-slate-500">
-                ��� Photo will be compressed automatically • Image quality: High • Max size: 10MB
+                Photo will be compressed automatically. Image quality: High. Max size: 10MB.
             </p>
         </div>
     );
