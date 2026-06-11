@@ -1,0 +1,286 @@
+{
+  "meta": {
+    "name": "IEC NERTP",
+    "fullName": "National Elections Results & Transparency Platform",
+    "owner": "Independent Electoral Commission (IEC), The Gambia",
+    "description": "Offline-capable PWA for capturing, certifying through a sequential hierarchy, aggregating, and publicly publishing election results. Built as an Inertia monolith (server-driven SPA) — no separate client API for the staff app; a thin Sanctum API exists for result submission, party acceptance and the public read API.",
+    "generatedFrom": "Source code in this repository (routes/, app/, resources/js/). Supersedes the aspirational IEC_NERTP_Architecture.md where they differ.",
+    "generatedOn": "2026-06-03"
+  },
+  "stats": {
+    "models": 16,
+    "roles": 8,
+    "certificationLevels": 4,
+    "resultStatuses": 12,
+    "reactPages": 73,
+    "controllers": 11,
+    "services": 8,
+    "customMiddleware": 4,
+    "routeFiles": 13,
+    "migrations": 28
+  },
+  "techStack": {
+    "Backend": [
+      { "name": "Laravel 12 (PHP 8.3)", "role": "Application framework" },
+      { "name": "Inertia.js (Laravel adapter v2)", "role": "Server-driven SPA bridge — controllers/routes return Inertia::render() of React pages" },
+      { "name": "Laravel Sanctum", "role": "API + session auth (auth:sanctum for /api)" },
+      { "name": "Spatie laravel-permission", "role": "RBAC — 8 roles, granular permissions, role:/permission: middleware" },
+      { "name": "Laravel Horizon + Redis/Predis", "role": "Queue management for jobs (ProcessResultSubmission, aggregation)" },
+      { "name": "Spatie laravel-activitylog", "role": "Activity log backing the audit trail" },
+      { "name": "Spatie laravel-backup", "role": "DB/file backups (admin Backups page)" },
+      { "name": "Laravel Telescope", "role": "Local debugging / request inspection" },
+      { "name": "Twilio SDK + AfricasTalking", "role": "SMS delivery for 2FA codes (SmsService)" },
+      { "name": "brick/geo + intervention/image", "role": "GPS distance math; result-sheet photo processing" },
+      { "name": "tightenco/ziggy", "role": "Exposes named Laravel routes to JS" }
+    ],
+    "Frontend": [
+      { "name": "React 19", "role": "UI library" },
+      { "name": "@inertiajs/react v2", "role": "Page components + client navigation, shared props" },
+      { "name": "Vite 7 + laravel-vite-plugin", "role": "Build / dev server / HMR" },
+      { "name": "Tailwind CSS 3", "role": "Styling" },
+      { "name": "Leaflet + react-leaflet, mapbox-gl", "role": "Interactive results map" },
+      { "name": "Chart.js + react-chartjs-2, recharts", "role": "Analytics charts" },
+      { "name": "react-hook-form + zod", "role": "Form state and validation" },
+      { "name": "vite-plugin-pwa + Workbox", "role": "Service worker / PWA / offline" },
+      { "name": "dayjs, lodash, clsx", "role": "Date, utility, classname helpers" }
+    ],
+    "Data & Infra": [
+      { "name": "SQLite (default) / configurable to PostgreSQL", "role": "Primary datastore (database/database.sqlite present; config/database.php supports pgsql/mysql)" },
+      { "name": "Redis", "role": "Cache + queue backend" },
+      { "name": "S3 / flysystem-aws-s3", "role": "Photo + backup storage (PhotoStorageService)" },
+      { "name": "Docker / docker-compose", "role": "Local containerized stack (nginx, php, db, redis)" },
+      { "name": "Vercel (api/index.php, api/lambda.php)", "role": "Serverless deploy target with /tmp writable-path handling" }
+    ]
+  },
+  "layers": [
+    {
+      "name": "Client Layer",
+      "items": ["React 19 pages (Inertia)", "Service Worker / Workbox (PWA)", "OfflineSync + SyncQueue (IndexedDB)", "Leaflet / Mapbox maps", "useGeolocation hook"]
+    },
+    {
+      "name": "HTTP / Routing Layer",
+      "items": ["web.php (Inertia pages, per-role route files)", "api.php (Sanctum-protected + public read API)", "Middleware: HandleInertiaRequests, AuditRequestMiddleware, role/permission, gps.validate, device.bound"]
+    },
+    {
+      "name": "Application Layer",
+      "items": ["Controllers (Auth, Public, Api, Approval, Acceptance, Report)", "Route closures (role dashboards & actions)", "Services (Certification, Aggregation, Validation, GPS, 2FA, SMS, Photo, DeviceBinding)", "Jobs (ProcessResultSubmission)", "Observers (AuditTrailObserver)"]
+    },
+    {
+      "name": "Domain / Data Layer",
+      "items": ["16 Eloquent models", "Result certification state machine", "AdministrativeHierarchy tree (national→admin_area→constituency→ward)", "AggregatedResult roll-ups"]
+    },
+    {
+      "name": "Persistence & External",
+      "items": ["SQLite/PostgreSQL", "Redis (cache/queue)", "S3 storage", "Twilio / AfricasTalking SMS", "Activity log / audit"]
+    }
+  ],
+  "roles": [
+    {
+      "key": "iec-administrator",
+      "label": "IEC Administrator",
+      "routeFile": "routes/admin.php",
+      "dashboard": "/admin/dashboard",
+      "purpose": "System setup: users, roles, elections, hierarchy, polling stations, parties/candidates, party reps, monitors, audit logs, settings, system health, backups.",
+      "keyPermissions": ["manage-users", "assign-roles", "create-election", "edit-election", "manage-polling-stations", "register-parties", "register-candidates", "manage-election-monitors", "configure-workflow", "view-audit-logs", "system-settings"],
+      "nav": ["Dashboard", "Users", "Elections", "Polling Stations", "Parties", "Audit Logs", "Settings"]
+    },
+    {
+      "key": "polling-officer",
+      "label": "Polling Officer",
+      "routeFile": "routes/officer.php",
+      "dashboard": "/officer/dashboard",
+      "purpose": "Captures and submits the result for their assigned polling station, with GPS validation and result-sheet photo upload. Entry point of the workflow.",
+      "keyPermissions": ["submit-result", "edit-pending-result", "upload-photo", "view-own-result", "view-own-polling-station"],
+      "nav": ["Dashboard", "Submit Result", "Submissions"]
+    },
+    {
+      "key": "ward-approver",
+      "label": "Ward Approver",
+      "routeFile": "routes/ward.php",
+      "dashboard": "/ward/dashboard",
+      "purpose": "First certification tier. Reviews submitted results pending at ward level; approves, approves-with-reservation, or rejects.",
+      "keyPermissions": ["approve-ward-result", "reject-ward-result", "reject-ward-result-with-reservation", "add-certification-comment", "view-ward-queue"],
+      "nav": ["Dashboard", "Approval Queue", "Analytics"]
+    },
+    {
+      "key": "constituency-approver",
+      "label": "Constituency Approver",
+      "routeFile": "routes/constituency.php",
+      "dashboard": "/constituency/dashboard",
+      "purpose": "Second tier. Reviews ward-certified results pending at constituency level, sees ward breakdowns, generates constituency reports.",
+      "keyPermissions": ["approve-constituency-result", "reject-constituency-result", "view-constituency-queue", "view-constituency-breakdowns", "generate-constituency-report"],
+      "nav": ["Dashboard", "Approval Queue", "Reports", "Ward Breakdowns"]
+    },
+    {
+      "key": "admin-area-approver",
+      "label": "Admin Area Approver",
+      "routeFile": "routes/admin-area.php",
+      "dashboard": "/admin-area/dashboard",
+      "purpose": "Third tier. Reviews constituency-certified results pending at admin-area level, sees constituency breakdowns and analytics.",
+      "keyPermissions": ["approve-admin-area-result", "reject-admin-area-result", "view-admin-area-queue", "generate-admin-area-report", "access-analytics"],
+      "nav": ["Dashboard", "Approval Queue", "Analytics"]
+    },
+    {
+      "key": "iec-chairman",
+      "label": "IEC Chairman",
+      "routeFile": "routes/chairman.php",
+      "dashboard": "/chairman/dashboard",
+      "purpose": "Final tier. National certification of admin-area-certified results, then publishes results publicly (per polling station) and can close the election.",
+      "keyPermissions": ["national-certification", "final-approval", "publish-results", "view-national-queue", "view-all-results", "access-full-analytics", "generate-national-report", "override-rejection"],
+      "nav": ["Dashboard", "National Queue", "All Results", "Analytics", "Publish"]
+    },
+    {
+      "key": "party-representative",
+      "label": "Party Representative",
+      "routeFile": "routes/party.php",
+      "dashboard": "/party/dashboard",
+      "purpose": "Reviews results for assigned stations and records the party's decision (accept / accept-with-reservation / reject) before/alongside certification.",
+      "keyPermissions": ["view-party-dashboard", "view-assigned-stations", "accept-result", "add-acceptance-comment", "view-own-result"],
+      "nav": ["Dashboard", "Stations", "Pending Acceptance"]
+    },
+    {
+      "key": "election-monitor",
+      "label": "Election Monitor / Observer",
+      "routeFile": "routes/monitor.php",
+      "dashboard": "/monitor/dashboard",
+      "purpose": "Independent observer. Records observations at assigned stations, views results, exports observation history.",
+      "keyPermissions": ["submit-observation", "view-observation-history", "export-observations", "view-assigned-stations"],
+      "nav": ["Dashboard", "Stations", "Observations", "Results", "Submit Observation"]
+    }
+  ],
+  "resultStatuses": [
+    { "const": "STATUS_SUBMITTED", "value": "submitted", "stage": "entry", "label": "Submitted" },
+    { "const": "STATUS_PENDING_PARTY_ACCEPTANCE", "value": "pending_party_acceptance", "stage": "party", "label": "Pending Party Acceptance" },
+    { "const": "STATUS_PENDING_WARD", "value": "pending_ward", "stage": "ward", "label": "Pending Ward" },
+    { "const": "STATUS_WARD_CERTIFIED", "value": "ward_certified", "stage": "ward", "label": "Ward Certified" },
+    { "const": "STATUS_PENDING_CONSTITUENCY", "value": "pending_constituency", "stage": "constituency", "label": "Pending Constituency" },
+    { "const": "STATUS_CONSTITUENCY_CERTIFIED", "value": "constituency_certified", "stage": "constituency", "label": "Constituency Certified" },
+    { "const": "STATUS_PENDING_ADMIN_AREA", "value": "pending_admin_area", "stage": "admin_area", "label": "Pending Admin Area" },
+    { "const": "STATUS_ADMIN_AREA_CERTIFIED", "value": "admin_area_certified", "stage": "admin_area", "label": "Admin Area Certified" },
+    { "const": "STATUS_PENDING_NATIONAL", "value": "pending_national", "stage": "national", "label": "Pending National" },
+    { "const": "STATUS_NATIONALLY_CERTIFIED", "value": "nationally_certified", "stage": "national", "label": "Nationally Certified (publishable)" },
+    { "const": "STATUS_REJECTED", "value": "rejected", "stage": "terminal", "label": "Rejected" },
+    { "const": "STATUS_NOT_REPORTED", "value": "not_reported", "stage": "terminal", "label": "Not Reported" }
+  ],
+  "workflowTransitions": [
+    { "from": "submitted", "to": "pending_party_acceptance", "trigger": "Validation passed" },
+    { "from": "pending_party_acceptance", "to": "pending_ward", "trigger": "Party acceptance recorded" },
+    { "from": "pending_ward", "to": "ward_certified", "trigger": "Ward approves" },
+    { "from": "pending_ward", "to": "rejected", "trigger": "Ward rejects → back to officer" },
+    { "from": "ward_certified", "to": "pending_constituency", "trigger": "Auto-promote (promoteToNextLevel)" },
+    { "from": "pending_constituency", "to": "constituency_certified", "trigger": "Constituency approves" },
+    { "from": "pending_constituency", "to": "pending_ward", "trigger": "Constituency rejects" },
+    { "from": "constituency_certified", "to": "pending_admin_area", "trigger": "Auto-promote" },
+    { "from": "pending_admin_area", "to": "admin_area_certified", "trigger": "Admin area approves" },
+    { "from": "pending_admin_area", "to": "pending_constituency", "trigger": "Admin area rejects" },
+    { "from": "admin_area_certified", "to": "pending_national", "trigger": "Auto-promote" },
+    { "from": "pending_national", "to": "nationally_certified", "trigger": "Chairman certifies" },
+    { "from": "pending_national", "to": "pending_admin_area", "trigger": "Chairman rejects" },
+    { "from": "nationally_certified", "to": "published", "trigger": "Chairman publishes (per polling station) → visible to public" }
+  ],
+  "certificationLevels": [
+    { "level": "ward", "approverRole": "ward-approver", "pendingStatus": "pending_ward", "certifiedStatus": "ward_certified" },
+    { "level": "constituency", "approverRole": "constituency-approver", "pendingStatus": "pending_constituency", "certifiedStatus": "constituency_certified" },
+    { "level": "admin_area", "approverRole": "admin-area-approver", "pendingStatus": "pending_admin_area", "certifiedStatus": "admin_area_certified" },
+    { "level": "national", "approverRole": "iec-chairman", "pendingStatus": "pending_national", "certifiedStatus": "nationally_certified" }
+  ],
+  "models": [
+    { "name": "Election", "table": "elections", "purpose": "Top-level election; status drives submission/certification/publish gates.", "relations": ["hasMany AdministrativeHierarchy", "hasMany PollingStation", "hasMany PoliticalParty", "belongsToMany PoliticalParty (participating)", "hasMany Candidate", "hasMany Result", "hasMany PartyRepresentative", "hasMany ElectionMonitor", "hasMany AggregatedResult", "belongsTo User (createdBy)"], "notable": ["status: active|results_pending|certifying|certified", "allowsResultSubmission(), allowsPublicDisplay(), bustPublicCaches()"] },
+    { "name": "AdministrativeHierarchy", "table": "administrative_hierarchy", "purpose": "Self-referential geographic tree: national → admin_area → constituency → ward.", "relations": ["belongsTo Election", "belongsTo parent (self)", "hasMany children (self)", "belongsTo User (assignedApprover)", "hasMany PollingStation (ward_id)", "hasMany ResultCertification (hierarchy_node_id)"], "notable": ["level: national|admin_area|constituency|ward", "materialized path + getAncestorIds()"] },
+    { "name": "PollingStation", "table": "polling_stations", "purpose": "Physical station with GPS coords and assigned officer.", "relations": ["belongsTo Election", "belongsTo AdministrativeHierarchy (ward)", "belongsTo User (assignedOfficer)", "hasMany Result", "hasOne latestResult"], "notable": ["isWithinGpsRadius(), getDistanceInMeters() — GPS validation", "scopes: active, forElection, assignedTo"] },
+    { "name": "Result", "table": "results", "purpose": "Per-station result record; carries the certification_status state machine.", "relations": ["belongsTo PollingStation", "belongsTo Election", "belongsTo User (submittedBy)", "hasMany ResultCandidateVote", "hasMany ResultCertification", "hasMany ResultVersion", "hasMany PartyAcceptance", "hasOne latestCertification"], "notable": ["12 status constants + pipeline arrays", "getNextStatus(), isEditable(), isPubliclyVisible(), getTurnoutPercentage()"] },
+    { "name": "ResultCandidateVote", "table": "result_candidate_votes", "purpose": "Vote count for each candidate within a result.", "relations": ["belongsTo Result", "belongsTo Candidate", "belongsTo Election"], "notable": [] },
+    { "name": "ResultCertification", "table": "result_certifications", "purpose": "Audit row per approval step (who, what level, status, comments).", "relations": ["belongsTo Result", "belongsTo User (approver)", "belongsTo AdministrativeHierarchy (hierarchyNode)"], "notable": ["status: pending|approved|rejected", "isExceedingSLA() > 24h", "no updated_at (append-only)"] },
+    { "name": "ResultVersion", "table": "result_versions", "purpose": "Immutable snapshot of a result on each change (versioning).", "relations": ["belongsTo Result", "belongsTo User (changedBy)"], "notable": ["append-only (no updated_at)"] },
+    { "name": "PartyAcceptance", "table": "party_acceptances", "purpose": "A party's accept / accept-with-reservation / reject decision on a result.", "relations": ["belongsTo Result", "belongsTo PoliticalParty", "belongsTo User (representative)"], "notable": [] },
+    { "name": "PoliticalParty", "table": "political_parties", "purpose": "Registered party; tied to elections via pivot.", "relations": ["belongsTo Election", "hasMany Candidate", "hasMany PartyRepresentative", "hasMany PartyAcceptance", "belongsToMany Election (election_political_party)"], "notable": ["colors / primary_color accessors"] },
+    { "name": "Candidate", "table": "candidates", "purpose": "Candidate standing for a party in an election.", "relations": ["belongsTo Election", "belongsTo PoliticalParty", "hasMany ResultCandidateVote"], "notable": ["soft deletes (deleted_at)", "full_name accessor"] },
+    { "name": "PartyRepresentative", "table": "party_representatives", "purpose": "Links a user to a party + election + assigned stations.", "relations": ["belongsTo User", "belongsTo PoliticalParty", "belongsTo Election", "belongsToMany PollingStation"], "notable": [] },
+    { "name": "ElectionMonitor", "table": "election_monitors", "purpose": "Observer assigned to an election and stations.", "relations": ["belongsTo User", "belongsTo Election", "belongsToMany PollingStation (election_monitor_polling_station)"], "notable": [] },
+    { "name": "AggregatedResult", "table": "aggregated_results", "purpose": "Pre-computed vote roll-ups per hierarchy node / candidate / party for fast public + analytics reads.", "relations": ["belongsTo Election", "belongsTo Candidate", "belongsTo PoliticalParty", "belongsTo AdministrativeHierarchy (hierarchyNode)"], "notable": ["written by ResultAggregationService"] },
+    { "name": "User", "table": "users", "purpose": "All actors; role via Spatie. Helper accessors expose role-aware dashboard URL.", "relations": ["hasMany Device", "hasMany AuditLog", "hasOne PartyRepresentative", "hasOne ElectionMonitor", "hasOne assignedStation (PollingStation)"], "notable": ["getDashboardUrlAttribute(), permission_names accessor", "Spatie roles/permissions"] },
+    { "name": "Device", "table": "devices", "purpose": "Trusted device binding for sensitive roles (2FA-adjacent).", "relations": ["belongsTo User"], "notable": ["ROLES_REQUIRING_DEVICE_BINDING", "verify(), recordUsage(), revoke(); scopes trusted/verified"] },
+    { "name": "AuditLog", "table": "audit_logs", "purpose": "Immutable audit trail (action, model, old/new values, ip).", "relations": ["belongsTo User"], "notable": ["append-only (no updated_at)", "fed by AuditTrailObserver + AuditRequestMiddleware"] }
+  ],
+  "controllers": [
+    { "name": "Auth/AuthenticatedSessionController", "path": "app/Http/Controllers/Auth/AuthenticatedSessionController.php", "purpose": "Login (create/store) + logout." },
+    { "name": "Auth/LoginController", "path": "app/Http/Controllers/Auth/LoginController.php", "purpose": "Login support logic." },
+    { "name": "Auth/TwoFactorController", "path": "app/Http/Controllers/Auth/TwoFactorController.php", "purpose": "2FA show/verify/resend (SMS codes)." },
+    { "name": "Api/ResultSubmissionController", "path": "app/Http/Controllers/Api/ResultSubmissionController.php", "purpose": "POST /api/results/submit (polling-officer, gps.validate); my-submissions." },
+    { "name": "Api/PublicResultsController", "path": "app/Http/Controllers/Api/PublicResultsController.php", "purpose": "Public read API: elections, national, ward, constituency, station, map." },
+    { "name": "AcceptanceController", "path": "app/Http/Controllers/AcceptanceController.php", "purpose": "Party acceptance submit/pending (api)." },
+    { "name": "ApprovalController", "path": "app/Http/Controllers/ApprovalController.php", "purpose": "Generic approval API: index/approve/reject/show for all tiers." },
+    { "name": "Public/ResultsSummaryController", "path": "app/Http/Controllers/Public/ResultsSummaryController.php", "purpose": "Home + /results public summary page (Inertia)." },
+    { "name": "Public/ResultsMapController", "path": "app/Http/Controllers/Public/ResultsMapController.php", "purpose": "/results/map page + /api/public/map-stations JSON." },
+    { "name": "Public/ResultsStationsController", "path": "app/Http/Controllers/Public/ResultsStationsController.php", "purpose": "/results/stations public listing." },
+    { "name": "ReportController", "path": "app/Http/Controllers/ReportController.php", "purpose": "Constituency report download." }
+  ],
+  "services": [
+    { "name": "CertificationWorkflowService", "purpose": "Core state machine: approve(), reject(), promoteToNextLevel(), getApprovalQueue(), getPendingStatus/RejectionTargetStatus(), createVersionSnapshot(), cache busting." },
+    { "name": "ResultAggregationService", "purpose": "Rolls per-station votes up the hierarchy into AggregatedResult rows." },
+    { "name": "ResultValidationService", "purpose": "Validates vote totals / turnout / completeness on submission." },
+    { "name": "GPSValidationService", "purpose": "Verifies officer location is within the station's GPS radius (gps.validate middleware)." },
+    { "name": "TwoFactorAuthService", "purpose": "Generates/verifies 2FA codes." },
+    { "name": "SmsService", "purpose": "Sends SMS via Twilio / AfricasTalking." },
+    { "name": "PhotoStorageService", "purpose": "Stores/processes result-sheet photos (intervention/image, S3)." },
+    { "name": "DeviceBindingService", "purpose": "Registers/verifies trusted devices for sensitive roles." }
+  ],
+  "jobs": [
+    { "name": "ProcessResultSubmission", "purpose": "Async processing of a submitted result (validation, aggregation trigger) via Horizon queue." }
+  ],
+  "observers": [
+    { "name": "AuditTrailObserver", "purpose": "Writes AuditLog entries on model events." }
+  ],
+  "middleware": [
+    { "name": "HandleInertiaRequests", "type": "web (append)", "purpose": "Shares auth.user (with role + permission_names + dashboard_url), flash, ziggy to every Inertia page." },
+    { "name": "AuditRequestMiddleware", "type": "web + api (append)", "purpose": "Records request-level audit data." },
+    { "name": "EnsureGpsValid (gps.validate)", "type": "alias", "purpose": "Blocks result submission when GPS is outside station radius." },
+    { "name": "EnsureDeviceBound (device.bound)", "type": "alias", "purpose": "Requires a verified device for bound roles." },
+    { "name": "RoleMiddleware (role:)", "type": "alias (Spatie)", "purpose": "Restricts routes to a role." },
+    { "name": "PermissionMiddleware (permission:)", "type": "alias (Spatie)", "purpose": "Restricts routes to a permission." }
+  ],
+  "routeGroups": [
+    { "file": "routes/web.php", "guard": "public/mixed", "lines": 48, "summary": "Home + public results pages, public map JSON, includes auth.php and every role file." },
+    { "file": "routes/auth.php", "guard": "guest/auth", "lines": 16, "summary": "GET/POST /auth/login, POST /logout." },
+    { "file": "routes/device.php", "guard": "auth", "lines": 47, "summary": "Device verify page + register." },
+    { "file": "routes/officer.php", "guard": "role:polling-officer", "lines": 344, "summary": "dashboard, results/submit (GET form + POST), submissions." },
+    { "file": "routes/ward.php", "guard": "role:ward-approver", "lines": 352, "summary": "dashboard, approval-queue, approve / approve-with-reservation / reject, analytics." },
+    { "file": "routes/constituency.php", "guard": "role:constituency-approver", "lines": 344, "summary": "dashboard, approval-queue, approve / reject, ward-breakdowns, reports." },
+    { "file": "routes/admin-area.php", "guard": "role:admin-area-approver", "lines": 464, "summary": "dashboard, approval-queue, approve / reject, constituency-breakdowns, analytics." },
+    { "file": "routes/chairman.php", "guard": "role:iec-chairman", "lines": 292, "summary": "dashboard, national-queue, certify, reject, close-election, publish." },
+    { "file": "routes/admin.php", "guard": "role:iec-administrator", "lines": 1438, "summary": "Full CRUD: users, roles, elections, polling stations, parties, candidates, party reps, monitors, hierarchy (admin-areas/constituencies/wards), audit logs, settings, system-health, backups." },
+    { "file": "routes/party.php", "guard": "role:party-representative", "lines": 446, "summary": "dashboard, stations, pending-acceptance, result detail, result decide." },
+    { "file": "routes/monitor.php", "guard": "role:election-monitor", "lines": 450, "summary": "dashboard, stations, submit-observation, observations (+export), results." },
+    { "file": "routes/api.php", "guard": "auth:sanctum / public", "lines": 91, "summary": "results/submit + my-submissions, acceptance, approval API, public/results/* read API." },
+    { "file": "routes/console.php", "guard": "cli", "lines": 8, "summary": "Artisan console closures." }
+  ],
+  "publicApi": [
+    { "method": "GET", "path": "/api/public/results/elections", "desc": "List elections with public results" },
+    { "method": "GET", "path": "/api/public/results/{election}", "desc": "National totals" },
+    { "method": "GET", "path": "/api/public/results/{election}/ward/{ward}", "desc": "Ward results" },
+    { "method": "GET", "path": "/api/public/results/{election}/constituency/{constituency}", "desc": "Constituency results" },
+    { "method": "GET", "path": "/api/public/results/{election}/station/{station}", "desc": "Station results" },
+    { "method": "GET", "path": "/api/public/results/{election}/map", "desc": "Map GeoJSON-ish data" },
+    { "method": "GET", "path": "/api/public/map-stations", "desc": "Homepage embedded-map station markers (web.php)" }
+  ],
+  "frontend": {
+    "layouts": ["AppLayout.jsx — role-aware sidebar nav, public top-nav, social links"],
+    "hooks": ["useGeolocation.js — GPS capture for officers", "useInertiaPrefetch.jsx — link prefetch"],
+    "services": ["OfflineSync.js + SyncQueue.js — IndexedDB queue + background sync for offline submission"],
+    "utils": ["permissions.js — client permission checks", "resultStatus.js — status → label/colour", "publicElection.js — active-election helpers"],
+    "components": ["Map/LeafletMap.jsx", "ResultsMap.jsx", "PhotoCapture.jsx", "PublicElectionHeader.jsx", "RichTextEditor.jsx", "SearchableSelect.jsx", "AdminUI.jsx"],
+    "pageAreas": [
+      { "area": "Public", "pages": ["Public/Results", "Public/ResultsMap", "Public/ResultsStations", "Welcome"] },
+      { "area": "Auth", "pages": ["Auth/Login", "Auth/TwoFactor", "Auth/DeviceVerification"] },
+      { "area": "Officer", "pages": ["Officer/Dashboard", "Officer/ResultSubmit", "Officer/Submissions", "PollingOfficer/ResultEntry"] },
+      { "area": "Ward", "pages": ["Ward/Dashboard", "Ward/ApprovalQueue", "Ward/Analytics"] },
+      { "area": "Constituency", "pages": ["Constituency/Dashboard", "Constituency/ApprovalQueue", "Constituency/WardBreakdowns", "Constituency/Reports"] },
+      { "area": "AdminArea", "pages": ["AdminArea/Dashboard", "AdminArea/ApprovalQueue", "AdminArea/ConstituencyBreakdowns", "AdminArea/Analytics"] },
+      { "area": "Chairman", "pages": ["Chairman/Dashboard", "Chairman/NationalQueue", "Chairman/AllResults", "Chairman/Analytics", "Chairman/Publish"] },
+      { "area": "Party", "pages": ["Party/Dashboard", "Party/DashboardOverview", "Party/Stations", "Party/PendingAcceptance", "Party/ResultDetail"] },
+      { "area": "Monitor", "pages": ["Monitor/Dashboard", "Monitor/Stations", "Monitor/Observations", "Monitor/SubmitObservation", "Monitor/Results"] },
+      { "area": "Admin", "pages": ["Admin/Dashboard", "Admin/Users(+Create/Edit)", "Admin/Elections(+Create)", "Admin/PollingStations(+Create/Edit)", "Admin/Parties(+Create/Edit)", "Admin/PartyRepresentatives", "Admin/ElectionMonitors", "Admin/Roles", "Admin/AuditLogs", "Admin/Settings", "Admin/SystemHealth", "Admin/Backups", "Admin/Hierarchy/*"] },
+      { "area": "IEC", "pages": ["IEC/ApprovalQueue"] }
+    ]
+  }
+}

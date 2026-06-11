@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IEC NERTP — Architecture Map</title>
+<style>
+  :root{
+    --bg:#0b1020; --panel:#121931; --panel2:#0f1528; --line:#243056;
+    --txt:#e7ecf7; --muted:#94a3c4; --accent:#4f8cff; --accent2:#22c98a;
+    --warn:#f6b73c; --danger:#ef5d6b; --chip:#1b2b4a;
+    --r:14px; --shadow:0 6px 24px rgba(0,0,0,.35);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    background:radial-gradient(1200px 600px at 70% -10%,#16204a 0%,var(--bg) 55%);
+    color:var(--txt);line-height:1.5;-webkit-font-smoothing:antialiased;
+  }
+  a{color:var(--accent);text-decoration:none}
+  header.hero{padding:34px 28px 18px;max-width:1280px;margin:0 auto}
+  .eyebrow{letter-spacing:.18em;font-size:11px;color:var(--accent);text-transform:uppercase;font-weight:700}
+  h1{margin:.25em 0 .1em;font-size:30px}
+  .sub{color:var(--muted);max-width:880px;font-size:14.5px}
+  .note{color:var(--muted);font-size:12px;margin-top:10px;font-style:italic}
+  .stats{display:flex;flex-wrap:wrap;gap:10px;margin:20px 0 4px}
+  .stat{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px 14px;min-width:96px}
+  .stat b{display:block;font-size:22px;color:#fff}
+  .stat span{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+  nav.tabs{position:sticky;top:0;z-index:20;background:rgba(11,16,32,.85);backdrop-filter:blur(10px);
+    border-bottom:1px solid var(--line);padding:0 16px}
+  nav.tabs .wrap{max-width:1280px;margin:0 auto;display:flex;gap:4px;overflow-x:auto}
+  nav.tabs button{background:none;border:0;color:var(--muted);padding:14px 14px;font-size:13.5px;font-weight:600;
+    cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap}
+  nav.tabs button:hover{color:var(--txt)}
+  nav.tabs button.active{color:#fff;border-bottom-color:var(--accent)}
+  main{max-width:1280px;margin:0 auto;padding:26px 20px 80px}
+  section{display:none;animation:fade .25s ease}
+  section.active{display:block}
+  @keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+  h2.sec{font-size:20px;margin:0 0 4px}
+  p.lead{color:var(--muted);margin:0 0 20px;font-size:14px}
+  .grid{display:grid;gap:14px}
+  .g2{grid-template-columns:repeat(auto-fill,minmax(330px,1fr))}
+  .g3{grid-template-columns:repeat(auto-fill,minmax(250px,1fr))}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:16px;box-shadow:var(--shadow)}
+  .card h3{margin:0 0 6px;font-size:15px}
+  .card .role{font-size:11px;color:var(--muted)}
+  .pill{display:inline-block;font-size:10.5px;padding:2px 8px;border-radius:999px;background:#1a2b4a;
+    border:1px solid var(--line);color:var(--muted);margin:2px 3px 2px 0}
+  .pill.acc{color:var(--accent);border-color:#26407a}
+  .pill.grn{color:var(--accent2);border-color:#1d5b46}
+  .pill.warn{color:var(--warn);border-color:#5b4a1d}
+  .muted{color:var(--muted)}
+  .mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12.5px}
+  ul.tight{margin:6px 0 0;padding-left:18px}
+  ul.tight li{margin:3px 0;font-size:13px}
+  /* layers */
+  .layer{background:linear-gradient(90deg,var(--panel),var(--panel2));border:1px solid var(--line);
+    border-radius:12px;padding:14px 16px;margin-bottom:10px;position:relative}
+  .layer h3{margin:0 0 8px;font-size:14px;display:flex;align-items:center;gap:8px}
+  .layer .dot{width:9px;height:9px;border-radius:50%;background:var(--accent)}
+  .layer .items{display:flex;flex-wrap:wrap;gap:8px}
+  .layer .items span{background:#0c1326;border:1px solid var(--line);border-radius:8px;padding:6px 10px;font-size:12px}
+  .arrow{text-align:center;color:var(--muted);font-size:18px;margin:-3px 0}
+  /* workflow */
+  .flow{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+  .node{border:1px solid var(--line);border-radius:10px;padding:8px 12px;font-size:12.5px;background:var(--panel);min-width:120px}
+  .node small{display:block;color:var(--muted);font-size:10px;font-family:ui-monospace,monospace}
+  .node.entry{border-color:#26407a}.node.party{border-color:#6d4ba6}
+  .node.ward{border-color:#1d5b46}.node.constituency{border-color:#1d5b46}
+  .node.admin_area{border-color:#1d5b46}.node.national{border-color:#5b4a1d}
+  .node.terminal{border-color:#5b2630;opacity:.85}
+  .seq{color:var(--muted);font-size:16px}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.05em;position:sticky;top:52px;background:var(--panel2)}
+  tr:hover td{background:rgba(79,140,255,.05)}
+  .tcode{font-family:ui-monospace,monospace;font-size:12px;color:var(--accent)}
+  .legend{display:flex;gap:14px;flex-wrap:wrap;margin:10px 0 16px;font-size:12px;color:var(--muted)}
+  .legend i{width:10px;height:10px;border-radius:3px;display:inline-block;margin-right:5px;vertical-align:middle}
+  details{background:var(--panel);border:1px solid var(--line);border-radius:10px;margin-bottom:8px;overflow:hidden}
+  details>summary{cursor:pointer;padding:12px 14px;font-weight:600;font-size:14px;list-style:none;display:flex;justify-content:space-between;align-items:center}
+  details>summary::-webkit-details-marker{display:none}
+  details>summary .meta{font-size:11px;color:var(--muted);font-weight:400}
+  details .body{padding:0 14px 14px;font-size:13px;color:var(--muted)}
+  footer{max-width:1280px;margin:0 auto;padding:20px;color:var(--muted);font-size:12px;border-top:1px solid var(--line)}
+  .kicker{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--accent);font-weight:700;margin:22px 0 8px}
+</style>
+</head>
+<body>
+<header class="hero">
+  <div class="eyebrow" id="owner"></div>
+  <h1 id="title"></h1>
+  <div class="sub" id="desc"></div>
+  <div class="stats" id="stats"></div>
+  <div class="note" id="note"></div>
+</header>
+
+<nav class="tabs"><div class="wrap" id="tabs"></div></nav>
+
+<main>
+  <section id="tab-overview"></section>
+  <section id="tab-stack"></section>
+  <section id="tab-roles"></section>
+  <section id="tab-workflow"></section>
+  <section id="tab-data"></section>
+  <section id="tab-routes"></section>
+  <section id="tab-services"></section>
+  <section id="tab-frontend"></section>
+</main>
+
+<footer id="footer"></footer>
+
+<script id="arch-data" type="application/json">
+{
+  "meta": {
+    "name": "IEC NERTP",
+    "fullName": "National Elections Results & Transparency Platform",
+    "owner": "Independent Electoral Commission (IEC), The Gambia",
+    "description": "Offline-capable PWA for capturing, certifying through a sequential hierarchy, aggregating, and publicly publishing election results. Built as an Inertia monolith (server-driven SPA) — no separate client API for the staff app; a thin Sanctum API exists for result submission, party acceptance and the public read API.",
+    "generatedFrom": "Source code in this repository (routes/, app/, resources/js/). Supersedes the aspirational IEC_NERTP_Architecture.md where they differ.",
+    "generatedOn": "2026-06-03"
+  },
+  "stats": {
+    "models": 16,
+    "roles": 8,
+    "certificationLevels": 4,
+    "resultStatuses": 12,
+    "reactPages": 73,
+    "controllers": 11,
+    "services": 8,
+    "customMiddleware": 4,
+    "routeFiles": 13,
+    "migrations": 28
+  },
+  "techStack": {
+    "Backend": [
+      { "name": "Laravel 12 (PHP 8.3)", "role": "Application framework" },
+      { "name": "Inertia.js (Laravel adapter v2)", "role": "Server-driven SPA bridge — controllers/routes return Inertia::render() of React pages" },
+      { "name": "Laravel Sanctum", "role": "API + session auth (auth:sanctum for /api)" },
+      { "name": "Spatie laravel-permission", "role": "RBAC — 8 roles, granular permissions, role:/permission: middleware" },
+      { "name": "Laravel Horizon + Redis/Predis", "role": "Queue management for jobs (ProcessResultSubmission, aggregation)" },
+      { "name": "Spatie laravel-activitylog", "role": "Activity log backing the audit trail" },
+      { "name": "Spatie laravel-backup", "role": "DB/file backups (admin Backups page)" },
+      { "name": "Laravel Telescope", "role": "Local debugging / request inspection" },
+      { "name": "Twilio SDK + AfricasTalking", "role": "SMS delivery for 2FA codes (SmsService)" },
+      { "name": "brick/geo + intervention/image", "role": "GPS distance math; result-sheet photo processing" },
+      { "name": "tightenco/ziggy", "role": "Exposes named Laravel routes to JS" }
+    ],
+    "Frontend": [
+      { "name": "React 19", "role": "UI library" },
+      { "name": "@inertiajs/react v2", "role": "Page components + client navigation, shared props" },
+      { "name": "Vite 7 + laravel-vite-plugin", "role": "Build / dev server / HMR" },
+      { "name": "Tailwind CSS 3", "role": "Styling" },
+      { "name": "Leaflet + react-leaflet, mapbox-gl", "role": "Interactive results map" },
+      { "name": "Chart.js + react-chartjs-2, recharts", "role": "Analytics charts" },
+      { "name": "react-hook-form + zod", "role": "Form state and validation" },
+      { "name": "vite-plugin-pwa + Workbox", "role": "Service worker / PWA / offline" },
+      { "name": "dayjs, lodash, clsx", "role": "Date, utility, classname helpers" }
+    ],
+    "Data & Infra": [
+      { "name": "SQLite (default) / configurable to PostgreSQL", "role": "Primary datastore (database/database.sqlite present; config/database.php supports pgsql/mysql)" },
+      { "name": "Redis", "role": "Cache + queue backend" },
+      { "name": "S3 / flysystem-aws-s3", "role": "Photo + backup storage (PhotoStorageService)" },
+      { "name": "Docker / docker-compose", "role": "Local containerized stack (nginx, php, db, redis)" },
+      { "name": "Vercel (api/index.php, api/lambda.php)", "role": "Serverless deploy target with /tmp writable-path handling" }
+    ]
+  },
+  "layers": [
+    {
+      "name": "Client Layer",
+      "items": ["React 19 pages (Inertia)", "Service Worker / Workbox (PWA)", "OfflineSync + SyncQueue (IndexedDB)", "Leaflet / Mapbox maps", "useGeolocation hook"]
+    },
+    {
+      "name": "HTTP / Routing Layer",
+      "items": ["web.php (Inertia pages, per-role route files)", "api.php (Sanctum-protected + public read API)", "Middleware: HandleInertiaRequests, AuditRequestMiddleware, role/permission, gps.validate, device.bound"]
+    },
+    {
+      "name": "Application Layer",
+      "items": ["Controllers (Auth, Public, Api, Approval, Acceptance, Report)", "Route closures (role dashboards & actions)", "Services (Certification, Aggregation, Validation, GPS, 2FA, SMS, Photo, DeviceBinding)", "Jobs (ProcessResultSubmission)", "Observers (AuditTrailObserver)"]
+    },
+    {
+      "name": "Domain / Data Layer",
+      "items": ["16 Eloquent models", "Result certification state machine", "AdministrativeHierarchy tree (national→admin_area→constituency→ward)", "AggregatedResult roll-ups"]
+    },
+    {
+      "name": "Persistence & External",
+      "items": ["SQLite/PostgreSQL", "Redis (cache/queue)", "S3 storage", "Twilio / AfricasTalking SMS", "Activity log / audit"]
+    }
+  ],
+  "roles": [
+    {
+      "key": "iec-administrator",
+      "label": "IEC Administrator",
+      "routeFile": "routes/admin.php",
+      "dashboard": "/admin/dashboard",
+      "purpose": "System setup: users, roles, elections, hierarchy, polling stations, parties/candidates, party reps, monitors, audit logs, settings, system health, backups.",
+      "keyPermissions": ["manage-users", "assign-roles", "create-election", "edit-election", "manage-polling-stations", "register-parties", "register-candidates", "manage-election-monitors", "configure-workflow", "view-audit-logs", "system-settings"],
+      "nav": ["Dashboard", "Users", "Elections", "Polling Stations", "Parties", "Audit Logs", "Settings"]
+    },
+    {
+      "key": "polling-officer",
+      "label": "Polling Officer",
+      "routeFile": "routes/officer.php",
+      "dashboard": "/officer/dashboard",
+      "purpose": "Captures and submits the result for their assigned polling station, with GPS validation and result-sheet photo upload. Entry point of the workflow.",
+      "keyPermissions": ["submit-result", "edit-pending-result", "upload-photo", "view-own-result", "view-own-polling-station"],
+      "nav": ["Dashboard", "Submit Result", "Submissions"]
+    },
+    {
+      "key": "ward-approver",
+      "label": "Ward Approver",
+      "routeFile": "routes/ward.php",
+      "dashboard": "/ward/dashboard",
+      "purpose": "First certification tier. Reviews submitted results pending at ward level; approves, approves-with-reservation, or rejects.",
+      "keyPermissions": ["approve-ward-result", "reject-ward-result", "reject-ward-result-with-reservation", "add-certification-comment", "view-ward-queue"],
+      "nav": ["Dashboard", "Approval Queue", "Analytics"]
+    },
+    {
+      "key": "constituency-approver",
+      "label": "Constituency Approver",
+      "routeFile": "routes/constituency.php",
+      "dashboard": "/constituency/dashboard",
+      "purpose": "Second tier. Reviews ward-certified results pending at constituency level, sees ward breakdowns, generates constituency reports.",
+      "keyPermissions": ["approve-constituency-result", "reject-constituency-result", "view-constituency-queue", "view-constituency-breakdowns", "generate-constituency-report"],
+      "nav": ["Dashboard", "Approval Queue", "Reports", "Ward Breakdowns"]
+    },
+    {
+      "key": "admin-area-approver",
+      "label": "Admin Area Approver",
+      "routeFile": "routes/admin-area.php",
+      "dashboard": "/admin-area/dashboard",
+      "purpose": "Third tier. Reviews constituency-certified results pending at admin-area level, sees constituency breakdowns and analytics.",
+      "keyPermissions": ["approve-admin-area-result", "reject-admin-area-result", "view-admin-area-queue", "generate-admin-area-report", "access-analytics"],
+      "nav": ["Dashboard", "Approval Queue", "Analytics"]
+    },
+    {
+      "key": "iec-chairman",
+      "label": "IEC Chairman",
+      "routeFile": "routes/chairman.php",
+      "dashboard": "/chairman/dashboard",
+      "purpose": "Final tier. National certification of admin-area-certified results, then publishes results publicly (per polling station) and can close the election.",
+      "keyPermissions": ["national-certification", "final-approval", "publish-results", "view-national-queue", "view-all-results", "access-full-analytics", "generate-national-report", "override-rejection"],
+      "nav": ["Dashboard", "National Queue", "All Results", "Analytics", "Publish"]
+    },
+    {
+      "key": "party-representative",
+      "label": "Party Representative",
+      "routeFile": "routes/party.php",
+      "dashboard": "/party/dashboard",
+      "purpose": "Reviews results for assigned stations and records the party's decision (accept / accept-with-reservation / reject) before/alongside certification.",
+      "keyPermissions": ["view-party-dashboard", "view-assigned-stations", "accept-result", "add-acceptance-comment", "view-own-result"],
+      "nav": ["Dashboard", "Stations", "Pending Acceptance"]
+    },
+    {
+      "key": "election-monitor",
+      "label": "Election Monitor / Observer",
+      "routeFile": "routes/monitor.php",
+      "dashboard": "/monitor/dashboard",
+      "purpose": "Independent observer. Records observations at assigned stations, views results, exports observation history.",
+      "keyPermissions": ["submit-observation", "view-observation-history", "export-observations", "view-assigned-stations"],
+      "nav": ["Dashboard", "Stations", "Observations", "Results", "Submit Observation"]
+    }
+  ],
+  "resultStatuses": [
+    { "const": "STATUS_SUBMITTED", "value": "submitted", "stage": "entry", "label": "Submitted" },
+    { "const": "STATUS_PENDING_PARTY_ACCEPTANCE", "value": "pending_party_acceptance", "stage": "party", "label": "Pending Party Acceptance" },
+    { "const": "STATUS_PENDING_WARD", "value": "pending_ward", "stage": "ward", "label": "Pending Ward" },
+    { "const": "STATUS_WARD_CERTIFIED", "value": "ward_certified", "stage": "ward", "label": "Ward Certified" },
+    { "const": "STATUS_PENDING_CONSTITUENCY", "value": "pending_constituency", "stage": "constituency", "label": "Pending Constituency" },
+    { "const": "STATUS_CONSTITUENCY_CERTIFIED", "value": "constituency_certified", "stage": "constituency", "label": "Constituency Certified" },
+    { "const": "STATUS_PENDING_ADMIN_AREA", "value": "pending_admin_area", "stage": "admin_area", "label": "Pending Admin Area" },
+    { "const": "STATUS_ADMIN_AREA_CERTIFIED", "value": "admin_area_certified", "stage": "admin_area", "label": "Admin Area Certified" },
+    { "const": "STATUS_PENDING_NATIONAL", "value": "pending_national", "stage": "national", "label": "Pending National" },
+    { "const": "STATUS_NATIONALLY_CERTIFIED", "value": "nationally_certified", "stage": "national", "label": "Nationally Certified (publishable)" },
+    { "const": "STATUS_REJECTED", "value": "rejected", "stage": "terminal", "label": "Rejected" },
+    { "const": "STATUS_NOT_REPORTED", "value": "not_reported", "stage": "terminal", "label": "Not Reported" }
+  ],
+  "workflowTransitions": [
+    { "from": "submitted", "to": "pending_party_acceptance", "trigger": "Validation passed" },
+    { "from": "pending_party_acceptance", "to": "pending_ward", "trigger": "Party acceptance recorded" },
+    { "from": "pending_ward", "to": "ward_certified", "trigger": "Ward approves" },
+    { "from": "pending_ward", "to": "rejected", "trigger": "Ward rejects → back to officer" },
+    { "from": "ward_certified", "to": "pending_constituency", "trigger": "Auto-promote (promoteToNextLevel)" },
+    { "from": "pending_constituency", "to": "constituency_certified", "trigger": "Constituency approves" },
+    { "from": "pending_constituency", "to": "pending_ward", "trigger": "Constituency rejects" },
+    { "from": "constituency_certified", "to": "pending_admin_area", "trigger": "Auto-promote" },
+    { "from": "pending_admin_area", "to": "admin_area_certified", "trigger": "Admin area approves" },
+    { "from": "pending_admin_area", "to": "pending_constituency", "trigger": "Admin area rejects" },
+    { "from": "admin_area_certified", "to": "pending_national", "trigger": "Auto-promote" },
+    { "from": "pending_national", "to": "nationally_certified", "trigger": "Chairman certifies" },
+    { "from": "pending_national", "to": "pending_admin_area", "trigger": "Chairman rejects" },
+    { "from": "nationally_certified", "to": "published", "trigger": "Chairman publishes (per polling station) → visible to public" }
+  ],
+  "certificationLevels": [
+    { "level": "ward", "approverRole": "ward-approver", "pendingStatus": "pending_ward", "certifiedStatus": "ward_certified" },
+    { "level": "constituency", "approverRole": "constituency-approver", "pendingStatus": "pending_constituency", "certifiedStatus": "constituency_certified" },
+    { "level": "admin_area", "approverRole": "admin-area-approver", "pendingStatus": "pending_admin_area", "certifiedStatus": "admin_area_certified" },
+    { "level": "national", "approverRole": "iec-chairman", "pendingStatus": "pending_national", "certifiedStatus": "nationally_certified" }
+  ],
+  "models": [
+    { "name": "Election", "table": "elections", "purpose": "Top-level election; status drives submission/certification/publish gates.", "relations": ["hasMany AdministrativeHierarchy", "hasMany PollingStation", "hasMany PoliticalParty", "belongsToMany PoliticalParty (participating)", "hasMany Candidate", "hasMany Result", "hasMany PartyRepresentative", "hasMany ElectionMonitor", "hasMany AggregatedResult", "belongsTo User (createdBy)"], "notable": ["status: active|results_pending|certifying|certified", "allowsResultSubmission(), allowsPublicDisplay(), bustPublicCaches()"] },
+    { "name": "AdministrativeHierarchy", "table": "administrative_hierarchy", "purpose": "Self-referential geographic tree: national → admin_area → constituency → ward.", "relations": ["belongsTo Election", "belongsTo parent (self)", "hasMany children (self)", "belongsTo User (assignedApprover)", "hasMany PollingStation (ward_id)", "hasMany ResultCertification (hierarchy_node_id)"], "notable": ["level: national|admin_area|constituency|ward", "materialized path + getAncestorIds()"] },
+    { "name": "PollingStation", "table": "polling_stations", "purpose": "Physical station with GPS coords and assigned officer.", "relations": ["belongsTo Election", "belongsTo AdministrativeHierarchy (ward)", "belongsTo User (assignedOfficer)", "hasMany Result", "hasOne latestResult"], "notable": ["isWithinGpsRadius(), getDistanceInMeters() — GPS validation", "scopes: active, forElection, assignedTo"] },
+    { "name": "Result", "table": "results", "purpose": "Per-station result record; carries the certification_status state machine.", "relations": ["belongsTo PollingStation", "belongsTo Election", "belongsTo User (submittedBy)", "hasMany ResultCandidateVote", "hasMany ResultCertification", "hasMany ResultVersion", "hasMany PartyAcceptance", "hasOne latestCertification"], "notable": ["12 status constants + pipeline arrays", "getNextStatus(), isEditable(), isPubliclyVisible(), getTurnoutPercentage()"] },
+    { "name": "ResultCandidateVote", "table": "result_candidate_votes", "purpose": "Vote count for each candidate within a result.", "relations": ["belongsTo Result", "belongsTo Candidate", "belongsTo Election"], "notable": [] },
+    { "name": "ResultCertification", "table": "result_certifications", "purpose": "Audit row per approval step (who, what level, status, comments).", "relations": ["belongsTo Result", "belongsTo User (approver)", "belongsTo AdministrativeHierarchy (hierarchyNode)"], "notable": ["status: pending|approved|rejected", "isExceedingSLA() > 24h", "no updated_at (append-only)"] },
+    { "name": "ResultVersion", "table": "result_versions", "purpose": "Immutable snapshot of a result on each change (versioning).", "relations": ["belongsTo Result", "belongsTo User (changedBy)"], "notable": ["append-only (no updated_at)"] },
+    { "name": "PartyAcceptance", "table": "party_acceptances", "purpose": "A party's accept / accept-with-reservation / reject decision on a result.", "relations": ["belongsTo Result", "belongsTo PoliticalParty", "belongsTo User (representative)"], "notable": [] },
+    { "name": "PoliticalParty", "table": "political_parties", "purpose": "Registered party; tied to elections via pivot.", "relations": ["belongsTo Election", "hasMany Candidate", "hasMany PartyRepresentative", "hasMany PartyAcceptance", "belongsToMany Election (election_political_party)"], "notable": ["colors / primary_color accessors"] },
+    { "name": "Candidate", "table": "candidates", "purpose": "Candidate standing for a party in an election.", "relations": ["belongsTo Election", "belongsTo PoliticalParty", "hasMany ResultCandidateVote"], "notable": ["soft deletes (deleted_at)", "full_name accessor"] },
+    { "name": "PartyRepresentative", "table": "party_representatives", "purpose": "Links a user to a party + election + assigned stations.", "relations": ["belongsTo User", "belongsTo PoliticalParty", "belongsTo Election", "belongsToMany PollingStation"], "notable": [] },
+    { "name": "ElectionMonitor", "table": "election_monitors", "purpose": "Observer assigned to an election and stations.", "relations": ["belongsTo User", "belongsTo Election", "belongsToMany PollingStation (election_monitor_polling_station)"], "notable": [] },
+    { "name": "AggregatedResult", "table": "aggregated_results", "purpose": "Pre-computed vote roll-ups per hierarchy node / candidate / party for fast public + analytics reads.", "relations": ["belongsTo Election", "belongsTo Candidate", "belongsTo PoliticalParty", "belongsTo AdministrativeHierarchy (hierarchyNode)"], "notable": ["written by ResultAggregationService"] },
+    { "name": "User", "table": "users", "purpose": "All actors; role via Spatie. Helper accessors expose role-aware dashboard URL.", "relations": ["hasMany Device", "hasMany AuditLog", "hasOne PartyRepresentative", "hasOne ElectionMonitor", "hasOne assignedStation (PollingStation)"], "notable": ["getDashboardUrlAttribute(), permission_names accessor", "Spatie roles/permissions"] },
+    { "name": "Device", "table": "devices", "purpose": "Trusted device binding for sensitive roles (2FA-adjacent).", "relations": ["belongsTo User"], "notable": ["ROLES_REQUIRING_DEVICE_BINDING", "verify(), recordUsage(), revoke(); scopes trusted/verified"] },
+    { "name": "AuditLog", "table": "audit_logs", "purpose": "Immutable audit trail (action, model, old/new values, ip).", "relations": ["belongsTo User"], "notable": ["append-only (no updated_at)", "fed by AuditTrailObserver + AuditRequestMiddleware"] }
+  ],
+  "controllers": [
+    { "name": "Auth/AuthenticatedSessionController", "path": "app/Http/Controllers/Auth/AuthenticatedSessionController.php", "purpose": "Login (create/store) + logout." },
+    { "name": "Auth/LoginController", "path": "app/Http/Controllers/Auth/LoginController.php", "purpose": "Login support logic." },
+    { "name": "Auth/TwoFactorController", "path": "app/Http/Controllers/Auth/TwoFactorController.php", "purpose": "2FA show/verify/resend (SMS codes)." },
+    { "name": "Api/ResultSubmissionController", "path": "app/Http/Controllers/Api/ResultSubmissionController.php", "purpose": "POST /api/results/submit (polling-officer, gps.validate); my-submissions." },
+    { "name": "Api/PublicResultsController", "path": "app/Http/Controllers/Api/PublicResultsController.php", "purpose": "Public read API: elections, national, ward, constituency, station, map." },
+    { "name": "AcceptanceController", "path": "app/Http/Controllers/AcceptanceController.php", "purpose": "Party acceptance submit/pending (api)." },
+    { "name": "ApprovalController", "path": "app/Http/Controllers/ApprovalController.php", "purpose": "Generic approval API: index/approve/reject/show for all tiers." },
+    { "name": "Public/ResultsSummaryController", "path": "app/Http/Controllers/Public/ResultsSummaryController.php", "purpose": "Home + /results public summary page (Inertia)." },
+    { "name": "Public/ResultsMapController", "path": "app/Http/Controllers/Public/ResultsMapController.php", "purpose": "/results/map page + /api/public/map-stations JSON." },
+    { "name": "Public/ResultsStationsController", "path": "app/Http/Controllers/Public/ResultsStationsController.php", "purpose": "/results/stations public listing." },
+    { "name": "ReportController", "path": "app/Http/Controllers/ReportController.php", "purpose": "Constituency report download." }
+  ],
+  "services": [
+    { "name": "CertificationWorkflowService", "purpose": "Core state machine: approve(), reject(), promoteToNextLevel(), getApprovalQueue(), getPendingStatus/RejectionTargetStatus(), createVersionSnapshot(), cache busting." },
+    { "name": "ResultAggregationService", "purpose": "Rolls per-station votes up the hierarchy into AggregatedResult rows." },
+    { "name": "ResultValidationService", "purpose": "Validates vote totals / turnout / completeness on submission." },
+    { "name": "GPSValidationService", "purpose": "Verifies officer location is within the station's GPS radius (gps.validate middleware)." },
+    { "name": "TwoFactorAuthService", "purpose": "Generates/verifies 2FA codes." },
+    { "name": "SmsService", "purpose": "Sends SMS via Twilio / AfricasTalking." },
+    { "name": "PhotoStorageService", "purpose": "Stores/processes result-sheet photos (intervention/image, S3)." },
+    { "name": "DeviceBindingService", "purpose": "Registers/verifies trusted devices for sensitive roles." }
+  ],
+  "jobs": [
+    { "name": "ProcessResultSubmission", "purpose": "Async processing of a submitted result (validation, aggregation trigger) via Horizon queue." }
+  ],
+  "observers": [
+    { "name": "AuditTrailObserver", "purpose": "Writes AuditLog entries on model events." }
+  ],
+  "middleware": [
+    { "name": "HandleInertiaRequests", "type": "web (append)", "purpose": "Shares auth.user (with role + permission_names + dashboard_url), flash, ziggy to every Inertia page." },
+    { "name": "AuditRequestMiddleware", "type": "web + api (append)", "purpose": "Records request-level audit data." },
+    { "name": "EnsureGpsValid (gps.validate)", "type": "alias", "purpose": "Blocks result submission when GPS is outside station radius." },
+    { "name": "EnsureDeviceBound (device.bound)", "type": "alias", "purpose": "Requires a verified device for bound roles." },
+    { "name": "RoleMiddleware (role:)", "type": "alias (Spatie)", "purpose": "Restricts routes to a role." },
+    { "name": "PermissionMiddleware (permission:)", "type": "alias (Spatie)", "purpose": "Restricts routes to a permission." }
+  ],
+  "routeGroups": [
+    { "file": "routes/web.php", "guard": "public/mixed", "lines": 48, "summary": "Home + public results pages, public map JSON, includes auth.php and every role file." },
+    { "file": "routes/auth.php", "guard": "guest/auth", "lines": 16, "summary": "GET/POST /auth/login, POST /logout." },
+    { "file": "routes/device.php", "guard": "auth", "lines": 47, "summary": "Device verify page + register." },
+    { "file": "routes/officer.php", "guard": "role:polling-officer", "lines": 344, "summary": "dashboard, results/submit (GET form + POST), submissions." },
+    { "file": "routes/ward.php", "guard": "role:ward-approver", "lines": 352, "summary": "dashboard, approval-queue, approve / approve-with-reservation / reject, analytics." },
+    { "file": "routes/constituency.php", "guard": "role:constituency-approver", "lines": 344, "summary": "dashboard, approval-queue, approve / reject, ward-breakdowns, reports." },
+    { "file": "routes/admin-area.php", "guard": "role:admin-area-approver", "lines": 464, "summary": "dashboard, approval-queue, approve / reject, constituency-breakdowns, analytics." },
+    { "file": "routes/chairman.php", "guard": "role:iec-chairman", "lines": 292, "summary": "dashboard, national-queue, certify, reject, close-election, publish." },
+    { "file": "routes/admin.php", "guard": "role:iec-administrator", "lines": 1438, "summary": "Full CRUD: users, roles, elections, polling stations, parties, candidates, party reps, monitors, hierarchy (admin-areas/constituencies/wards), audit logs, settings, system-health, backups." },
+    { "file": "routes/party.php", "guard": "role:party-representative", "lines": 446, "summary": "dashboard, stations, pending-acceptance, result detail, result decide." },
+    { "file": "routes/monitor.php", "guard": "role:election-monitor", "lines": 450, "summary": "dashboard, stations, submit-observation, observations (+export), results." },
+    { "file": "routes/api.php", "guard": "auth:sanctum / public", "lines": 91, "summary": "results/submit + my-submissions, acceptance, approval API, public/results/* read API." },
+    { "file": "routes/console.php", "guard": "cli", "lines": 8, "summary": "Artisan console closures." }
+  ],
+  "publicApi": [
+    { "method": "GET", "path": "/api/public/results/elections", "desc": "List elections with public results" },
+    { "method": "GET", "path": "/api/public/results/{election}", "desc": "National totals" },
+    { "method": "GET", "path": "/api/public/results/{election}/ward/{ward}", "desc": "Ward results" },
+    { "method": "GET", "path": "/api/public/results/{election}/constituency/{constituency}", "desc": "Constituency results" },
+    { "method": "GET", "path": "/api/public/results/{election}/station/{station}", "desc": "Station results" },
+    { "method": "GET", "path": "/api/public/results/{election}/map", "desc": "Map GeoJSON-ish data" },
+    { "method": "GET", "path": "/api/public/map-stations", "desc": "Homepage embedded-map station markers (web.php)" }
+  ],
+  "frontend": {
+    "layouts": ["AppLayout.jsx — role-aware sidebar nav, public top-nav, social links"],
+    "hooks": ["useGeolocation.js — GPS capture for officers", "useInertiaPrefetch.jsx — link prefetch"],
+    "services": ["OfflineSync.js + SyncQueue.js — IndexedDB queue + background sync for offline submission"],
+    "utils": ["permissions.js — client permission checks", "resultStatus.js — status → label/colour", "publicElection.js — active-election helpers"],
+    "components": ["Map/LeafletMap.jsx", "ResultsMap.jsx", "PhotoCapture.jsx", "PublicElectionHeader.jsx", "RichTextEditor.jsx", "SearchableSelect.jsx", "AdminUI.jsx"],
+    "pageAreas": [
+      { "area": "Public", "pages": ["Public/Results", "Public/ResultsMap", "Public/ResultsStations", "Welcome"] },
+      { "area": "Auth", "pages": ["Auth/Login", "Auth/TwoFactor", "Auth/DeviceVerification"] },
+      { "area": "Officer", "pages": ["Officer/Dashboard", "Officer/ResultSubmit", "Officer/Submissions", "PollingOfficer/ResultEntry"] },
+      { "area": "Ward", "pages": ["Ward/Dashboard", "Ward/ApprovalQueue", "Ward/Analytics"] },
+      { "area": "Constituency", "pages": ["Constituency/Dashboard", "Constituency/ApprovalQueue", "Constituency/WardBreakdowns", "Constituency/Reports"] },
+      { "area": "AdminArea", "pages": ["AdminArea/Dashboard", "AdminArea/ApprovalQueue", "AdminArea/ConstituencyBreakdowns", "AdminArea/Analytics"] },
+      { "area": "Chairman", "pages": ["Chairman/Dashboard", "Chairman/NationalQueue", "Chairman/AllResults", "Chairman/Analytics", "Chairman/Publish"] },
+      { "area": "Party", "pages": ["Party/Dashboard", "Party/DashboardOverview", "Party/Stations", "Party/PendingAcceptance", "Party/ResultDetail"] },
+      { "area": "Monitor", "pages": ["Monitor/Dashboard", "Monitor/Stations", "Monitor/Observations", "Monitor/SubmitObservation", "Monitor/Results"] },
+      { "area": "Admin", "pages": ["Admin/Dashboard", "Admin/Users(+Create/Edit)", "Admin/Elections(+Create)", "Admin/PollingStations(+Create/Edit)", "Admin/Parties(+Create/Edit)", "Admin/PartyRepresentatives", "Admin/ElectionMonitors", "Admin/Roles", "Admin/AuditLogs", "Admin/Settings", "Admin/SystemHealth", "Admin/Backups", "Admin/Hierarchy/*"] },
+      { "area": "IEC", "pages": ["IEC/ApprovalQueue"] }
+    ]
+  }
+}
+
+</script>
+<script>
+const D = JSON.parse(document.getElementById('arch-data').textContent);
+const $ = (h)=>{const t=document.createElement('template');t.innerHTML=h.trim();return t.content.firstChild;};
+const esc = (s)=>String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+
+// ---- hero
+owner.textContent = D.meta.owner;
+title.textContent = D.meta.fullName + " (" + D.meta.name + ")";
+desc.textContent = D.meta.description;
+note.textContent = D.meta.generatedFrom + "  •  Generated " + D.meta.generatedOn;
+const statMap = [
+  ['models','Models'],['roles','Roles'],['certificationLevels','Cert. Levels'],
+  ['resultStatuses','Result States'],['reactPages','React Pages'],['controllers','Controllers'],
+  ['services','Services'],['routeFiles','Route Files'],['migrations','Migrations']
+];
+stats.innerHTML = statMap.map(([k,l])=>`<div class="stat"><b>${D.stats[k]}</b><span>${l}</span></div>`).join('');
+
+// ---- tabs
+const TABS = [
+  ['overview','Overview'],['stack','Tech Stack'],['roles','Roles & RBAC'],
+  ['workflow','Certification Flow'],['data','Data Model'],['routes','Routes & API'],
+  ['services','Services & Middleware'],['frontend','Frontend']
+];
+tabs.innerHTML = TABS.map(([id,l],i)=>`<button data-t="${id}" class="${i===0?'active':''}">${l}</button>`).join('');
+tabs.addEventListener('click',e=>{
+  const b=e.target.closest('button'); if(!b)return;
+  document.querySelectorAll('nav.tabs button').forEach(x=>x.classList.remove('active'));
+  document.querySelectorAll('section').forEach(x=>x.classList.remove('active'));
+  b.classList.add('active');
+  document.getElementById('tab-'+b.dataset.t).classList.add('active');
+  window.scrollTo({top:0,behavior:'smooth'});
+});
+
+// ---- OVERVIEW (layers)
+(function(){
+  const s = document.getElementById('tab-overview'); s.classList.add('active');
+  let h = `<h2 class="sec">System Layers</h2><p class="lead">An Inertia.js monolith: Laravel routes/controllers return React page components. Requests flow top-to-bottom; a PWA service worker queues offline submissions until connectivity returns.</p>`;
+  D.layers.forEach((L,i)=>{
+    h += `<div class="layer"><h3><span class="dot"></span>${esc(L.name)}</h3><div class="items">${L.items.map(it=>`<span>${esc(it)}</span>`).join('')}</div></div>`;
+    if(i<D.layers.length-1) h+=`<div class="arrow">↓</div>`;
+  });
+  s.innerHTML = h;
+})();
+
+// ---- STACK
+(function(){
+  const s=document.getElementById('tab-stack');
+  let h=`<h2 class="sec">Technology Stack</h2><p class="lead">Actual dependencies in <span class="mono">composer.json</span> / <span class="mono">package.json</span>.</p><div class="grid g2">`;
+  for(const group in D.techStack){
+    h+=`<div class="card"><h3>${esc(group)}</h3><ul class="tight">`;
+    h+=D.techStack[group].map(t=>`<li><b>${esc(t.name)}</b> — <span class="muted">${esc(t.role)}</span></li>`).join('');
+    h+=`</ul></div>`;
+  }
+  s.innerHTML=h+`</div>`;
+})();
+
+// ---- ROLES
+(function(){
+  const s=document.getElementById('tab-roles');
+  let h=`<h2 class="sec">Roles &amp; Access Control</h2><p class="lead">${D.roles.length} roles via Spatie permission. Each owns a route file guarded by <span class="mono">role:&lt;key&gt;</span> and a role-aware sidebar (AppLayout).</p><div class="grid g2">`;
+  h+=D.roles.map(r=>`
+    <div class="card">
+      <h3>${esc(r.label)} <span class="pill acc mono">${esc(r.key)}</span></h3>
+      <div class="role mono">${esc(r.dashboard)} &nbsp;·&nbsp; ${esc(r.routeFile)}</div>
+      <p style="font-size:13px;margin:8px 0">${esc(r.purpose)}</p>
+      <div class="muted" style="font-size:11px;margin-bottom:3px">KEY PERMISSIONS</div>
+      <div>${r.keyPermissions.map(p=>`<span class="pill">${esc(p)}</span>`).join('')}</div>
+      <div class="muted" style="font-size:11px;margin:8px 0 3px">NAV</div>
+      <div>${r.nav.map(n=>`<span class="pill grn">${esc(n)}</span>`).join('')}</div>
+    </div>`).join('');
+  s.innerHTML=h+`</div>`;
+})();
+
+// ---- WORKFLOW
+(function(){
+  const s=document.getElementById('tab-workflow');
+  let h=`<h2 class="sec">Sequential Certification Workflow</h2><p class="lead">A polling-station <span class="mono">Result</span> carries a 12-value <span class="mono">certification_status</span> state machine driven by CertificationWorkflowService. Each tier approves/rejects; approval auto-promotes to the next level.</p>`;
+  h+=`<div class="legend">
+    <span><i style="background:#4f8cff"></i>Entry</span>
+    <span><i style="background:#8b5cf6"></i>Party</span>
+    <span><i style="background:#22c98a"></i>Certification tier</span>
+    <span><i style="background:#f6b73c"></i>National</span>
+    <span><i style="background:#ef5d6b"></i>Terminal</span>
+  </div>`;
+  // happy path chain
+  const chain = D.resultStatuses.filter(r=>r.stage!=='terminal');
+  h+=`<div class="kicker">Happy path</div><div class="flow">`;
+  chain.forEach((r,i)=>{
+    h+=`<div class="node ${r.stage}"><b>${esc(r.label)}</b><small>${esc(r.value)}</small></div>`;
+    if(i<chain.length-1)h+=`<span class="seq">→</span>`;
+  });
+  h+=`<span class="seq">→</span><div class="node national"><b>Published</b><small>public</small></div></div>`;
+
+  h+=`<div class="kicker">Certification tiers</div><div class="grid g2">`;
+  h+=D.certificationLevels.map(l=>`<div class="card"><h3 class="mono">${esc(l.level)}</h3>
+    <div class="muted" style="font-size:12px">approver: <span class="pill acc">${esc(l.approverRole)}</span></div>
+    <ul class="tight"><li>pending: <span class="tcode">${esc(l.pendingStatus)}</span></li>
+    <li>certified: <span class="tcode">${esc(l.certifiedStatus)}</span></li></ul></div>`).join('');
+  h+=`</div>`;
+
+  h+=`<div class="kicker">All transitions</div><table><thead><tr><th>From</th><th>To</th><th>Trigger</th></tr></thead><tbody>`;
+  h+=D.workflowTransitions.map(t=>`<tr><td class="tcode">${esc(t.from)}</td><td class="tcode">${esc(t.to)}</td><td class="muted">${esc(t.trigger)}</td></tr>`).join('');
+  s.innerHTML=h+`</tbody></table>`;
+})();
+
+// ---- DATA MODEL
+(function(){
+  const s=document.getElementById('tab-data');
+  let h=`<h2 class="sec">Domain / Data Model</h2><p class="lead">${D.models.length} Eloquent models. The hierarchy is a self-referential tree; results fan out to votes, certifications, versions and party acceptances.</p>`;
+  h+=D.models.map(m=>`
+    <details><summary>${esc(m.name)} <span class="meta mono">${esc(m.table)}</span></summary>
+      <div class="body">
+        <p style="margin:8px 0;color:var(--txt)">${esc(m.purpose)}</p>
+        <div class="muted" style="font-size:11px;margin-bottom:3px">RELATIONS</div>
+        <div>${m.relations.map(r=>`<span class="pill acc">${esc(r)}</span>`).join('')}</div>
+        ${m.notable.length?`<div class="muted" style="font-size:11px;margin:8px 0 3px">NOTABLE</div><div>${m.notable.map(n=>`<span class="pill warn">${esc(n)}</span>`).join('')}</div>`:''}
+      </div>
+    </details>`).join('');
+  s.innerHTML=h;
+})();
+
+// ---- ROUTES
+(function(){
+  const s=document.getElementById('tab-routes');
+  let h=`<h2 class="sec">Routes &amp; API</h2><p class="lead">web.php wires public pages + includes one file per role. A thin Sanctum API handles submission, acceptance, approval and the public read API.</p>`;
+  h+=`<div class="kicker">Route files (${D.routeGroups.length})</div><table><thead><tr><th>File</th><th>Guard</th><th>Lines</th><th>Summary</th></tr></thead><tbody>`;
+  h+=D.routeGroups.map(r=>`<tr><td class="tcode">${esc(r.file)}</td><td><span class="pill">${esc(r.guard)}</span></td><td class="muted">${r.lines}</td><td class="muted">${esc(r.summary)}</td></tr>`).join('');
+  h+=`</tbody></table>`;
+  h+=`<div class="kicker">Public read API</div><table><thead><tr><th>Method</th><th>Path</th><th>Description</th></tr></thead><tbody>`;
+  h+=D.publicApi.map(a=>`<tr><td><span class="pill grn">${esc(a.method)}</span></td><td class="tcode">${esc(a.path)}</td><td class="muted">${esc(a.desc)}</td></tr>`).join('');
+  h+=`</tbody></table>`;
+  h+=`<div class="kicker">Controllers (${D.controllers.length})</div><div class="grid g2">`;
+  h+=D.controllers.map(c=>`<div class="card"><h3>${esc(c.name)}</h3><div class="mono muted" style="font-size:11px">${esc(c.path)}</div><p style="font-size:13px;margin:6px 0 0">${esc(c.purpose)}</p></div>`).join('');
+  s.innerHTML=h+`</div>`;
+})();
+
+// ---- SERVICES
+(function(){
+  const s=document.getElementById('tab-services');
+  let h=`<h2 class="sec">Services, Jobs, Observers &amp; Middleware</h2><p class="lead">Business logic lives in services; the certification engine is the heart of the system.</p>`;
+  h+=`<div class="kicker">Services (${D.services.length})</div><div class="grid g2">`;
+  h+=D.services.map(s=>`<div class="card"><h3>${esc(s.name)}</h3><p style="font-size:13px;margin:4px 0 0" class="muted">${esc(s.purpose)}</p></div>`).join('');
+  h+=`</div><div class="kicker">Jobs &amp; Observers</div><div class="grid g2">`;
+  h+=D.jobs.concat(D.observers).map(j=>`<div class="card"><h3>${esc(j.name)}</h3><p style="font-size:13px;margin:4px 0 0" class="muted">${esc(j.purpose)}</p></div>`).join('');
+  h+=`</div><div class="kicker">Middleware (${D.middleware.length})</div><table><thead><tr><th>Name</th><th>Type</th><th>Purpose</th></tr></thead><tbody>`;
+  h+=D.middleware.map(m=>`<tr><td class="tcode">${esc(m.name)}</td><td><span class="pill">${esc(m.type)}</span></td><td class="muted">${esc(m.purpose)}</td></tr>`).join('');
+  s.innerHTML=h+`</tbody></table>`;
+})();
+
+// ---- FRONTEND
+(function(){
+  const s=document.getElementById('tab-frontend');
+  const f=D.frontend;
+  let h=`<h2 class="sec">Frontend (React 19 + Inertia)</h2><p class="lead">${D.stats.reactPages} page components grouped by role/area, plus shared layout, hooks, offline services and map components.</p>`;
+  h+=`<div class="grid g3">
+    ${[['Layouts',f.layouts],['Hooks',f.hooks],['Offline Services',f.services],['Utils',f.utils],['Components',f.components]]
+      .map(([t,arr])=>`<div class="card"><h3>${t}</h3><ul class="tight">${arr.map(x=>`<li class="mono" style="font-size:12px">${esc(x)}</li>`).join('')}</ul></div>`).join('')}
+  </div>`;
+  h+=`<div class="kicker">Page areas</div><div class="grid g2">`;
+  h+=f.pageAreas.map(a=>`<div class="card"><h3>${esc(a.area)} <span class="pill">${a.pages.length}</span></h3><div>${a.pages.map(p=>`<span class="pill acc mono">${esc(p)}</span>`).join('')}</div></div>`).join('');
+  s.innerHTML=h+`</div>`;
+})();
+
+footer.innerHTML = `<b>${esc(D.meta.name)}</b> — ${esc(D.meta.fullName)}. Architecture map generated from source on ${esc(D.meta.generatedOn)}. Data also available as <span class="mono">architecture.json</span>.`;
+</script>
+</body>
+</html>
