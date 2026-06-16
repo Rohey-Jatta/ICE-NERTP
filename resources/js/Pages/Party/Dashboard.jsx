@@ -1,5 +1,8 @@
 import AppLayout from '@/Layouts/AppLayout';
 import { Link } from '@inertiajs/react';
+import { useState } from 'react';
+import { useAutoRefreshWithVisibility } from '@/Hooks/useAutoRefresh';
+import { useNotifications, ToastContainer } from '@/Components/Notifications';
 
 const StatCard = ({ value, label, color, sub }) => (
     <div className="bg-white rounded-xl p-6 border border-slate-200 flex flex-col">
@@ -10,10 +13,28 @@ const StatCard = ({ value, label, color, sub }) => (
 );
 
 export default function PartyDashboard({ auth, party, assignedStations = [], statistics = {}, noAssignment = false }) {
+    const [refreshing, setRefreshing] = useState(false);
+    const [lastRefreshTime, setLastRefreshTime] = useState(new Date());
+    const { toasts, removeNotification, notify } = useNotifications();
+
+    // Auto-refresh every 30 seconds
+    useAutoRefreshWithVisibility({
+        url: '/party/dashboard',
+        interval: 30000,
+        preserveScroll: true,
+        preserveState: true,
+        onBeforeRefresh: () => setRefreshing(true),
+        onAfterRefresh: () => {
+            setRefreshing(false);
+            setLastRefreshTime(new Date());
+            notify.info('Dashboard updated');
+        },
+    });
 
     if (noAssignment) {
         return (
             <AppLayout user={auth.user}>
+                <ToastContainer toasts={toasts} onRemoveToast={removeNotification} />
                 <div className="container mx-auto px-4 py-16 flex items-center justify-center min-h-[60vh]">
                     <div className="text-center p-12 bg-white rounded-2xl border border-slate-200 max-w-lg">
                         <div className="text-6xl mb-4">🚫</div>
@@ -32,6 +53,7 @@ export default function PartyDashboard({ auth, party, assignedStations = [], sta
 
     return (
         <AppLayout user={auth.user}>
+            <ToastContainer toasts={toasts} onRemoveToast={removeNotification} />
             <div className="container mx-auto px-4 py-8">
 
                 {/* Header */}

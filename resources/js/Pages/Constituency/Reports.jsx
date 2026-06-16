@@ -5,18 +5,23 @@ import { useState } from 'react';
 export default function ConstituencyReports({ auth, constituency, reportData }) {
     const [generating, setGenerating] = useState(null);
 
-    const handleDownload = (reportType) => {
-        setGenerating(reportType);
-        // In production this would call a real export endpoint
-        setTimeout(() => {
-            alert(`${reportType} report generation would download here. Connect a PDF/Excel export endpoint.`);
-            setGenerating(null);
-        }, 800);
+    const handleDownload = (reportSlug, reportName) => {
+        setGenerating(reportName);
+        // Open the PDF export endpoint in a new tab — DomPDF streams it as a download
+        const link = document.createElement('a');
+        link.href = `/constituency/reports/export/${reportSlug}`;
+        link.setAttribute('download', '');
+        link.target = '_blank';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        setTimeout(() => setGenerating(null), 1500);
     };
 
     const reports = [
         {
             id: 'full',
+            slug: 'full',
             name: 'Full Constituency Results',
             description: 'Complete results with all wards and polling stations, candidate votes, and certification status.',
             format: 'PDF',
@@ -26,6 +31,7 @@ export default function ConstituencyReports({ auth, constituency, reportData }) 
         },
         {
             id: 'ward-summary',
+            slug: 'ward-summary',
             name: 'Ward Summary Report',
             description: 'Summary of each ward with aggregated vote totals, turnout statistics, and certification progress.',
             format: 'PDF',
@@ -35,6 +41,7 @@ export default function ConstituencyReports({ auth, constituency, reportData }) 
         },
         {
             id: 'turnout',
+            slug: 'turnout',
             name: 'Turnout Analysis',
             description: 'Detailed turnout statistics by ward and polling station with comparisons.',
             format: 'PDF',
@@ -44,6 +51,7 @@ export default function ConstituencyReports({ auth, constituency, reportData }) 
         },
         {
             id: 'certification',
+            slug: 'certification',
             name: 'Certification Status Report',
             description: 'Audit trail of certification decisions including approvals, reservations, and rejections.',
             format: 'PDF',
@@ -86,7 +94,7 @@ export default function ConstituencyReports({ auth, constituency, reportData }) 
                         <div className="mt-4 pt-4 border-t border-slate-200 flex gap-6 text-sm text-slate-500">
                             <span>Stations Reporting: <strong className="text-iec-navy">{reportData.total_stations}</strong></span>
                             <span>Certified: <strong className="text-iec-pink-600">{reportData.certified_count}</strong></span>
-                            <span>Rejected: <strong className="text-amber-300">{reportData.total_rejected?.toLocaleString()}</strong> votes rejected</span>
+                            <span>Rejected Votes: <strong className="text-amber-600">{reportData.total_rejected?.toLocaleString()}</strong></span>
                         </div>
                     </div>
                 )}
@@ -108,7 +116,7 @@ export default function ConstituencyReports({ auth, constituency, reportData }) 
                                 </span>
                             </div>
                             <button
-                                onClick={() => handleDownload(report.name)}
+                                onClick={() => handleDownload(report.slug, report.name)}
                                 disabled={generating === report.name}
                                 className={`w-full px-4 py-3 ${report.btnColor} disabled:opacity-50 text-white font-bold rounded-lg transition-colors flex items-center justify-center gap-2`}
                             >

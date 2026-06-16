@@ -1,6 +1,7 @@
 import AppLayout from '@/Layouts/AppLayout';
 import { useForm, Link } from '@inertiajs/react';
 import { useState, useEffect } from 'react';
+import { useNotifications, ToastContainer } from '@/Components/Notifications';
 
 export default function ResultSubmit({ auth, station, election, candidates = [], editableResult, alreadySubmitted }) {
     const isResubmission = editableResult !== null;
@@ -20,6 +21,7 @@ export default function ResultSubmit({ auth, station, election, candidates = [],
     const [photoPreview, setPhotoPreview]     = useState(null);
     const [totalsError, setTotalsError]       = useState(null);
     const [candidateError, setCandidateError] = useState(null);
+    const { toasts, removeNotification, notify } = useNotifications();
 
     useEffect(() => {
         const total = parseInt(data.total_votes_cast) || 0;
@@ -67,7 +69,18 @@ export default function ResultSubmit({ auth, station, election, candidates = [],
      */
     const handleSubmit = (e) => {
         e.preventDefault();
-        post('/officer/results/submit', { preserveScroll: true });
+        post('/officer/results/submit', {
+            preserveScroll: true,
+            onStart: () => notify.info('Submitting results...'),
+            onSuccess: () => notify.success(isResubmission ? 'Result resubmitted' : 'Results submitted'),
+            onError: (errs) => {
+                const messages = [];
+                Object.values(errs || {}).forEach((v) => {
+                    if (Array.isArray(v)) messages.push(v[0]); else messages.push(v);
+                });
+                notify.error(messages.length ? messages.join(' — ') : 'Failed to submit results');
+            },
+        });
     };
 
     const turnout = data.registered_voters && data.total_votes_cast
@@ -84,6 +97,7 @@ export default function ResultSubmit({ auth, station, election, candidates = [],
     if (alreadySubmitted && !isResubmission) {
         return (
             <AppLayout user={auth?.user}>
+                <ToastContainer toasts={toasts} onRemoveToast={removeNotification} />
                 <div className="container mx-auto px-4 py-8 max-w-2xl">
                     {/* <Link href="/officer/dashboard" className="text-slate-500 hover:text-iec-navy text-sm inline-flex items-center gap-1 mb-6">
                         ← Officer Dashboard
@@ -107,6 +121,7 @@ export default function ResultSubmit({ auth, station, election, candidates = [],
 
     return (
         <AppLayout user={auth?.user}>
+            <ToastContainer toasts={toasts} onRemoveToast={removeNotification} />
             <div className="container mx-auto px-4 py-8 max-w-3xl">
 
                 <div className="mb-6">
@@ -127,10 +142,10 @@ export default function ResultSubmit({ auth, station, election, candidates = [],
 
                 {isResubmission && editableResult?.last_rejection_reason && (
                     <div className="mb-6 p-4 bg-red-500/10 border border-red-500/40 rounded-xl">
-                        <div className="text-red-300 font-semibold text-sm mb-1">
+                        <div className="text-red-500 font-semibold text-sm mb-1">
                             This result was rejected {editableResult.rejection_count} time(s). Reason:
                         </div>
-                        <div className="text-red-200 text-sm" dangerouslySetInnerHTML={{ __html: editableResult.last_rejection_reason }} />
+                        <div className="text-red-500 text-sm" dangerouslySetInnerHTML={{ __html: editableResult.last_rejection_reason }} />
                         <div className="text-red-400 text-xs mt-2">Please correct the issues above before resubmitting.</div>
                     </div>
                 )}

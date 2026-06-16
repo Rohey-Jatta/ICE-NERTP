@@ -49,6 +49,15 @@ Route::middleware(['auth', 'role:party-representative'])
 
         $stationIds = $rep->pollingStations->pluck('id');
 
+        // Always build the assigned stations list regardless of election status
+        $assignedStationsData = $rep->pollingStations->map(fn($s) => [
+            'id'   => $s->id,
+            'name' => $s->name,
+            'code' => $s->code,
+        ]);
+
+        // If no stations assigned OR no active election, return real station data
+        // but zero out the election-dependent statistics
         if ($stationIds->isEmpty() || !$activeElection) {
             return Inertia::render('Party/Dashboard', [
                 'auth'             => ['user' => Auth::user()],
@@ -58,13 +67,13 @@ Route::middleware(['auth', 'role:party-representative'])
                     'abbreviation' => $rep->politicalParty->abbreviation,
                     'color'        => $rep->politicalParty->color,
                 ],
-                'assignedStations' => [],
+                'assignedStations' => $assignedStationsData,
                 'statistics'       => [
                     'pendingAcceptance'       => 0,
                     'accepted'                => 0,
                     'acceptedWithReservation' => 0,
                     'disputed'                => 0,
-                    'totalStations'           => 0,
+                    'totalStations'           => $stationIds->count(),
                 ],
                 'noAssignment' => false,
             ]);
@@ -109,11 +118,7 @@ Route::middleware(['auth', 'role:party-representative'])
                 'abbreviation' => $rep->politicalParty->abbreviation,
                 'color'        => $rep->politicalParty->color,
             ],
-            'assignedStations' => $rep->pollingStations->map(fn($s) => [
-                'id'   => $s->id,
-                'name' => $s->name,
-                'code' => $s->code,
-            ]),
+            'assignedStations' => $assignedStationsData,
             'statistics' => [
                 'pendingAcceptance'       => $pendingAcceptance,
                 'accepted'                => $acceptanceCounts->get('accepted', 0),

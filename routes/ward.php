@@ -51,7 +51,7 @@ Route::middleware(['auth', 'role:ward-approver'])
             $pendingCount = $baseQuery()
                 ->whereIn('certification_status', [
                     Result::STATUS_PENDING_WARD,
-                    Result::STATUS_PENDING_PARTY_ACCEPTANCE, // legacy backwards compat
+                    Result::STATUS_PENDING_PARTY_ACCEPTANCE,
                 ])
                 ->count();
 
@@ -114,7 +114,7 @@ Route::middleware(['auth', 'role:ward-approver'])
             // Parallel workflow: pending_ward + legacy pending_party_acceptance = actionable by ward approver
             $counts['pending']  = $base()->whereIn('certification_status', [
                 Result::STATUS_PENDING_WARD,
-                Result::STATUS_PENDING_PARTY_ACCEPTANCE, // legacy
+                Result::STATUS_PENDING_PARTY_ACCEPTANCE,
             ])->count();
 
             $counts['approved'] = $base()->whereIn('certification_status', [
@@ -127,8 +127,6 @@ Route::middleware(['auth', 'role:ward-approver'])
                 Result::STATUS_NATIONALLY_CERTIFIED,
             ])->count();
 
-            // Treat results returned to ward by higher levels (or sent back to officer)
-            // as 'rejected' for ward reporting if they have a rejection_count > 0.
             $counts['rejected'] = $base()
                 ->whereIn('certification_status', [Result::STATUS_SUBMITTED, Result::STATUS_PENDING_WARD])
                 ->where('rejection_count', '>', 0)->count();
@@ -147,7 +145,7 @@ Route::middleware(['auth', 'role:ward-approver'])
             match ($filter) {
                 'pending'  => $query->whereIn('certification_status', [
                     Result::STATUS_PENDING_WARD,
-                    Result::STATUS_PENDING_PARTY_ACCEPTANCE, // legacy
+                    Result::STATUS_PENDING_PARTY_ACCEPTANCE,
                 ]),
                 'approved' => $query->whereIn('certification_status', [
                     Result::STATUS_WARD_CERTIFIED,
@@ -158,8 +156,6 @@ Route::middleware(['auth', 'role:ward-approver'])
                     Result::STATUS_PENDING_NATIONAL,
                     Result::STATUS_NATIONALLY_CERTIFIED,
                 ]),
-                // Show results that have been rejected (either returned to officer or returned
-                // to ward from a higher level). Uses rejection_count to ensure it's a true rejection.
                 'rejected' => $query->whereIn('certification_status', [Result::STATUS_SUBMITTED, Result::STATUS_PENDING_WARD])
                     ->where('rejection_count', '>', 0),
                 default    => $query->whereIn('certification_status', [
@@ -258,6 +254,8 @@ Route::middleware(['auth', 'role:ward-approver'])
     })->name('approve-with-reservation')->middleware('permission:reject-ward-result-with-reservation|approve-ward-result');
 
     // ── Reject ────────────────────────────────────────────────────────────────
+    // FIX: Accept either the specific reject permission OR the approve permission,
+    // since any ward approver who can certify must also be able to reject/return.
     Route::post('/reject/{result}', function (Request $request, Result $result) {
         $request->validate(['comments' => 'required|string|max:5000']);
 
@@ -268,7 +266,7 @@ Route::middleware(['auth', 'role:ward-approver'])
         }
 
         return redirect()->route('ward.approval-queue')->with('success', 'Result rejected and returned to the Polling Officer.');
-    })->name('reject')->middleware('permission:reject-ward-result');
+    })->name('reject')->middleware('permission:reject-ward-result|approve-ward-result');
 
     // ── Analytics ─────────────────────────────────────────────────────────────
     Route::get('/analytics', function () {

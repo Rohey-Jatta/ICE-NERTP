@@ -1,5 +1,8 @@
 import AppLayout from '@/Layouts/AppLayout';
 import { Link } from '@inertiajs/react';
+import { useState } from 'react';
+import { useAutoRefreshWithVisibility } from '@/Hooks/useAutoRefresh';
+import { useNotifications, ToastContainer } from '@/Components/Notifications';
 import { RESULT_STATUS, RESULT_STATUS_LABELS } from '@/Utils/resultStatus';
 
 const PIPELINE_LABELS = {
@@ -12,9 +15,27 @@ const LEGACY_PIPELINE_LABELS = {
 
 export default function ChairmanDashboard({ auth, pendingNational, statistics = {}, recentActivity = [] }) {
     const pipeline = statistics.pipelineCounts || {};
+    const [refreshing, setRefreshing] = useState(false);
+    const [lastRefreshTime, setLastRefreshTime] = useState(new Date());
+    const { toasts, removeNotification, notify } = useNotifications();
+
+    // Auto-refresh every 30 seconds
+    useAutoRefreshWithVisibility({
+        url: '/chairman/dashboard',
+        interval: 30000,
+        preserveScroll: true,
+        preserveState: true,
+        onBeforeRefresh: () => setRefreshing(true),
+        onAfterRefresh: () => {
+            setRefreshing(false);
+            setLastRefreshTime(new Date());
+            notify.info('Dashboard updated');
+        },
+    });
 
     return (
         <AppLayout user={auth.user}>
+            <ToastContainer toasts={toasts} onRemoveToast={removeNotification} />
             <div className="container mx-auto px-4 py-8">
 
                 {/* Header */}

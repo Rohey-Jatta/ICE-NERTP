@@ -1,8 +1,26 @@
 import AppLayout from '@/Layouts/AppLayout';
 import { Link } from '@inertiajs/react';
+import { useState } from 'react';
 import { CERTIFIED_RESULT_STATUSES, RESULT_STATUS, getResultStatusMeta } from '@/Utils/resultStatus';
+import { useAutoRefreshWithVisibility } from '@/Hooks/useAutoRefresh';
 
 export default function MonitorStations({ auth, monitor, stations = [] }) {
+    const [refreshing, setRefreshing] = useState(false);
+    const [lastRefreshTime, setLastRefreshTime] = useState(new Date());
+
+    // Auto-refresh every 30 seconds
+    useAutoRefreshWithVisibility({
+        url: '/monitor/stations',
+        interval: 30000,
+        preserveScroll: true,
+        preserveState: true,
+        onBeforeRefresh: () => setRefreshing(true),
+        onAfterRefresh: () => {
+            setRefreshing(false);
+            setLastRefreshTime(new Date());
+        },
+    });
+
     const certified = stations.filter(s =>
         CERTIFIED_RESULT_STATUSES.includes(s.result_status)
     ).length;
@@ -12,14 +30,34 @@ export default function MonitorStations({ auth, monitor, stations = [] }) {
             <div className="container mx-auto px-4 py-8">
 
                 {/* Header */}
-                <div className="mb-6">
-                    <Link href="/monitor/dashboard" className="text-slate-500 hover:text-iec-navy text-sm mb-2 inline-flex items-center gap-1">
-                        Back to Monitor Dashboard
-                    </Link>
-                    <h1 className="text-3xl font-bold text-iec-navy">Assigned Polling Stations</h1>
-                    <p className="text-slate-500 mt-1">
-                        {stations.length} station{stations.length !== 1 ? 's' : ''} assigned for monitoring
-                    </p>
+                <div className="mb-6 flex justify-between items-start">
+                    <div>
+                        <Link href="/monitor/dashboard" className="text-slate-500 hover:text-iec-navy text-sm mb-2 inline-flex items-center gap-1">
+                            Back to Monitor Dashboard
+                        </Link>
+                        <h1 className="text-3xl font-bold text-iec-navy">Assigned Polling Stations</h1>
+                        <p className="text-slate-500 mt-1">
+                            {stations.length} station{stations.length !== 1 ? 's' : ''} assigned for monitoring
+                        </p>
+                    </div>
+
+                    {/* Refresh Status */}
+                    <div className={`text-xs flex items-center justify-end gap-2 px-3 py-2 rounded-lg ${refreshing ? 'bg-amber-500/20 text-amber-600' : 'bg-green-500/20 text-green-600'}`}>
+                        {refreshing ? (
+                            <>
+                                <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                                </svg>
+                                <span className="font-semibold">Refreshing...</span>
+                            </>
+                        ) : (
+                            <>
+                                <span>✓ Auto-refresh</span>
+                                <span className="text-xs opacity-75">{lastRefreshTime.toLocaleTimeString()}</span>
+                            </>
+                        )}
+                    </div>
                 </div>
 
                 {/* Summary */}

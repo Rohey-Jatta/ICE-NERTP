@@ -4,7 +4,18 @@ import { useForm } from '@inertiajs/react';
 import { useState } from 'react';
 import SearchableSelect from '@/Components/SearchableSelect';
 
+function generatePassword(length = 14) {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#$%^&*';
+    return Array.from(crypto.getRandomValues(new Uint8Array(length)))
+        .map(b => chars[b % chars.length])
+        .join('');
+}
+
 export default function UserEdit({ auth, user, roles, pollingStations, wards, constituencies, adminAreas }) {
+    const [showPasswordSection, setShowPasswordSection] = useState(false);
+    const [showPassword, setShowPassword] = useState(false);
+    const [copied, setCopied] = useState(false);
+
     const { data, setData, put, processing, errors } = useForm({
         name:                user.name   || '',
         email:               user.email  || '',
@@ -20,6 +31,9 @@ export default function UserEdit({ auth, user, roles, pollingStations, wards, co
         designation:         '',
         organization:        '',
         monitor_type:        'domestic',
+        // Password reset fields (optional)
+        new_password:        '',
+        must_change_password: user.must_change_password ?? false,
     });
 
     const [selectedRole, setSelectedRole] = useState(data.role);
@@ -27,6 +41,19 @@ export default function UserEdit({ auth, user, roles, pollingStations, wards, co
     const handleRoleChange = (role) => {
         setSelectedRole(role);
         setData('role', role);
+    };
+
+    const handleGeneratePassword = () => {
+        const pwd = generatePassword();
+        setData('new_password', pwd);
+        setShowPassword(true);
+    };
+
+    const handleCopyPassword = () => {
+        navigator.clipboard.writeText(data.new_password).then(() => {
+            setCopied(true);
+            setTimeout(() => setCopied(false), 2000);
+        });
     };
 
     const handleSubmit = (event) => {
@@ -151,6 +178,84 @@ export default function UserEdit({ auth, user, roles, pollingStations, wards, co
                         </div>
 
                         {renderRoleSpecificFields()}
+
+                        {/* ── Password Reset Section ──────────────────────────── */}
+                        <div className="border border-slate-200 rounded-xl overflow-hidden">
+                            <button
+                                type="button"
+                                onClick={() => setShowPasswordSection(v => !v)}
+                                className="w-full flex items-center justify-between p-4 bg-slate-50 hover:bg-slate-100 text-left transition-colors"
+                            >
+                                <div>
+                                    <span className="font-semibold text-slate-700 text-sm">🔑 Reset Password</span>
+                                    <span className="text-slate-500 text-xs ml-2">
+                                        {user.must_change_password ? '(User must change on next login)' : '(Optional — leave blank to keep current)'}
+                                    </span>
+                                </div>
+                                <span className="text-slate-400">{showPasswordSection ? '▲' : '▼'}</span>
+                            </button>
+
+                            {showPasswordSection && (
+                                <div className="p-4 space-y-4">
+                                    {user.must_change_password && (
+                                        <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-amber-700 text-xs">
+                                            ⚠ This user is currently required to change their password on next login.
+                                        </div>
+                                    )}
+
+                                    <div>
+                                        <div className="flex items-center justify-between mb-1.5">
+                                            <label className="text-sm font-semibold text-slate-600">New Password</label>
+                                            <button
+                                                type="button"
+                                                onClick={handleGeneratePassword}
+                                                className="px-3 py-1 bg-iec-pink-600 hover:bg-iec-pink-700 text-white text-xs rounded-lg"
+                                            >
+                                                🎲 Generate
+                                            </button>
+                                        </div>
+                                        <div className="relative">
+                                            <input
+                                                type={showPassword ? 'text' : 'password'}
+                                                value={data.new_password}
+                                                onChange={(e) => setData('new_password', e.target.value)}
+                                                className={`${inputClass} font-mono pr-20`}
+                                                placeholder="Leave blank to keep current password"
+                                                autoComplete="new-password"
+                                            />
+                                            <div className="absolute right-2 top-1/2 -translate-y-1/2 flex gap-1">
+                                                <button type="button" onClick={() => setShowPassword(v => !v)}
+                                                    className="px-2 py-1 text-slate-400 hover:text-slate-600 text-xs">
+                                                    {showPassword ? '🙈' : '👁'}
+                                                </button>
+                                                {data.new_password && (
+                                                    <button type="button" onClick={handleCopyPassword}
+                                                        className="px-2 py-1 text-xs bg-slate-100 hover:bg-slate-200 rounded">
+                                                        {copied ? '✓' : '📋'}
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </div>
+                                        {errors.new_password && <p className="text-rose-600 text-xs mt-1">{errors.new_password}</p>}
+                                        <p className="text-slate-400 text-xs mt-1">Minimum 8 characters. Leave blank to keep current password unchanged.</p>
+                                    </div>
+
+                                    {/* Force change toggle */}
+                                    <label className="flex items-start gap-3 p-3 bg-amber-50 border border-amber-200 rounded-lg cursor-pointer">
+                                        <input
+                                            type="checkbox"
+                                            checked={data.must_change_password}
+                                            onChange={(e) => setData('must_change_password', e.target.checked)}
+                                            className="mt-0.5 h-4 w-4 text-iec-pink-600 bg-white border-slate-200 rounded"
+                                        />
+                                        <div>
+                                            <div className="text-amber-800 font-semibold text-xs">Force password change on next login</div>
+                                            <div className="text-amber-600 text-xs mt-0.5">User will be redirected to change their password immediately after the next successful login.</div>
+                                        </div>
+                                    </label>
+                                </div>
+                            )}
+                        </div>
 
                         <div className="flex flex-wrap gap-3 pt-2">
                             <Button type="submit" disabled={processing}>{processing ? 'Updating...' : 'Update User'}</Button>

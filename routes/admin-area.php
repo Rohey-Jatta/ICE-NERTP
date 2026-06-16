@@ -6,6 +6,7 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 use App\Models\AdministrativeHierarchy;
+use App\Models\Election;
 use App\Models\Result;
 use App\Services\CertificationWorkflowService;
 
@@ -128,7 +129,6 @@ Route::middleware(['auth', 'role:admin-area-approver'])
                 'candidateVotes.candidate.politicalParty',
                 'partyAcceptances.politicalParty',
                 'submittedBy',
-                // FIX: Load ALL certification levels so we can show ward + constituency notes
                 'certifications' => fn($q) => $q->latest(),
             ]);
             $baseQuery = $areaScope($baseQuery);
@@ -158,7 +158,6 @@ Route::middleware(['auth', 'role:admin-area-approver'])
                 $partyTotal    = $r->partyAcceptances->count();
                 $constituency  = $r->pollingStation?->ward?->parent;
 
-                // FIX: Extract per-level approver comments
                 $certs       = $r->certifications->sortByDesc('created_at');
                 $wardNote    = $certs->where('certification_level', 'ward')
                                      ->where('status', 'approved')
@@ -169,7 +168,6 @@ Route::middleware(['auth', 'role:admin-area-approver'])
                 $areaNote    = $certs->where('certification_level', 'admin_area')
                                      ->first()?->comments;
 
-                // Compute candidate percentages
                 $totalValidVotes = $r->valid_votes ?: 0;
 
                 return [
@@ -208,7 +206,6 @@ Route::middleware(['auth', 'role:admin-area-approver'])
                         'percentage'  => $totalValidVotes > 0
                             ? round(($cv->votes / $totalValidVotes) * 100, 1) : 0,
                     ]),
-                    // FIX: Per-level approver notes now flow up correctly
                     'ward_comments'         => $wardNote,
                     'constituency_comments' => $constNote,
                     'area_comments'         => $areaNote,
@@ -252,6 +249,7 @@ Route::middleware(['auth', 'role:admin-area-approver'])
     })->name('approve-with-reservation')->middleware('permission:approve-admin-area-result-with-reservation|approve-admin-area-result');
 
     // ── Reject ────────────────────────────────────────────────────────────────
+    // FIX: Accept either the specific reject permission OR the approve permission.
     Route::post('/reject/{result}', function (Request $request, Result $result) {
         $request->validate(['comments' => 'required|string|max:5000']);
 
@@ -262,7 +260,7 @@ Route::middleware(['auth', 'role:admin-area-approver'])
         }
 
         return back()->with('success', 'Result rejected and returned to constituency level.');
-    })->name('reject')->middleware('permission:reject-admin-area-result');
+    })->name('reject')->middleware('permission:reject-admin-area-result|approve-admin-area-result');
 
     // ── Constituency Breakdowns ───────────────────────────────────────────────
     Route::get('/constituency-breakdowns', function () {
@@ -376,9 +374,10 @@ Route::middleware(['auth', 'role:admin-area-approver'])
 
         return Inertia::render('AdminArea/ConstituencyBreakdowns', [
             'auth'           => ['user' => $user],
-            'adminArea'      => $adminArea ? ['id' => $adminArea->id, 'name' => $adminArea->name] : null,
+            'adminArea'      => $adminArea ? ['id' => $adminArea->id,
+            'name' => $adminArea->name] : null,
             'constituencies' => $constituencies,
-            'stats'          => $stats,
+            'stats' => $stats,
         ]);
     })->name('constituency-breakdowns')->middleware('permission:view-constituency-breakdowns');
 

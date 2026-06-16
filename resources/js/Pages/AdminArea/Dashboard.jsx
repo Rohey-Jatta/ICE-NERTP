@@ -1,23 +1,48 @@
 import AppLayout from '@/Layouts/AppLayout';
 import { Link } from '@inertiajs/react';
+import { useState } from 'react';
+import { useAutoRefreshWithVisibility } from '@/Hooks/useAutoRefresh';
+import { useNotifications, ToastContainer } from '@/Components/Notifications';
 
 export default function AdminAreaDashboard({ auth, adminArea, pendingResults, statistics }) {
     const progress      = statistics?.progress    || 0;
     const awaitingBelow = statistics?.awaitingBelow || 0;
+    const [refreshing, setRefreshing] = useState(false);
+    const [lastRefreshTime, setLastRefreshTime] = useState(new Date());
+    const { toasts, removeNotification, notify } = useNotifications();
+
+    // Auto-refresh every 30 seconds
+    useAutoRefreshWithVisibility({
+        url: '/admin-area/dashboard',
+        interval: 30000,
+        preserveScroll: true,
+        preserveState: true,
+        onBeforeRefresh: () => setRefreshing(true),
+        onAfterRefresh: () => {
+            setRefreshing(false);
+            setLastRefreshTime(new Date());
+            notify.info('Dashboard updated');
+        },
+    });
 
     return (
         <AppLayout user={auth.user}>
+            <ToastContainer toasts={toasts} onRemoveToast={removeNotification} />
             <div className="container mx-auto px-4 py-8">
 
                 {/* Header */}
                 <div className="mb-8">
-                    <h1 className="text-3xl font-bold text-iec-navy">Administrative Area Approver Dashboard</h1>
-                    {adminArea?.name && (
-                        <p className="text-iec-pink-600 mt-1 text-lg">{adminArea.name}</p>
-                    )}
-                    <p className="text-slate-500 text-sm mt-1">
-                        Review and certify constituency-level results at the administrative area level
-                    </p>
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                        <div>
+                            <h1 className="text-3xl font-bold text-iec-navy">Administrative Area Approver Dashboard</h1>
+                            {adminArea?.name && (
+                                <p className="text-iec-pink-600 mt-1 text-lg">{adminArea.name}</p>
+                            )}
+                        </div>
+                        <p className="text-slate-500 text-sm max-w-2xl">
+                            Review and certify constituency-level results at the administrative area level
+                        </p>
+                    </div>
                 </div>
 
                 {/* Pending alert — only show when results are actually in THIS queue */}

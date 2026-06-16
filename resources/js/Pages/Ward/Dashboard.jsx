@@ -1,11 +1,32 @@
 import AppLayout from '@/Layouts/AppLayout';
 import { Link } from '@inertiajs/react';
+import { useState } from 'react';
+import { useAutoRefreshWithVisibility } from '@/Hooks/useAutoRefresh';
+import { useNotifications, ToastContainer } from '@/Components/Notifications';
 
 export default function WardDashboard({ auth, ward, pendingResults, statistics }) {
     const progress = statistics?.progress || 0;
+    const [refreshing, setRefreshing] = useState(false);
+    const [lastRefreshTime, setLastRefreshTime] = useState(new Date());
+    const { toasts, removeNotification, notify } = useNotifications();
+
+    // Auto-refresh every 30 seconds
+    useAutoRefreshWithVisibility({
+        url: '/ward/dashboard',
+        interval: 30000,
+        preserveScroll: true,
+        preserveState: true,
+        onBeforeRefresh: () => setRefreshing(true),
+        onAfterRefresh: () => {
+            setRefreshing(false);
+            setLastRefreshTime(new Date());
+            notify.info('Dashboard updated');
+        },
+    });
 
     return (
         <AppLayout user={auth.user}>
+            <ToastContainer toasts={toasts} onRemoveToast={removeNotification} />
             <div className="container mx-auto px-4 py-8">
 
                 {/* Header */}

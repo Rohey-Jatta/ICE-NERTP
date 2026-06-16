@@ -16,13 +16,19 @@ export default function DeviceVerification({ device_info }) {
         setError("");
 
         try {
+            const fingerprint = window.deviceFingerprint?.get?.();
             const r = await fetch("/auth/device/register", {
                 method: "POST",
+                credentials: 'same-origin',
                 headers: {
                     "Content-Type": "application/json",
                     "X-CSRF-TOKEN": document.querySelector('meta[name="csrf-token"]')?.content,
+                    ...(fingerprint ? { 'X-DEVICE-ID': fingerprint } : {}),
                 },
-                body: JSON.stringify({ device_name: deviceName }),
+                body: JSON.stringify({
+                    device_name: deviceName,
+                    device_id: fingerprint,
+                }),
             });
 
             const d = await r.json();
@@ -44,7 +50,7 @@ export default function DeviceVerification({ device_info }) {
             <div className="sm:mx-auto sm:w-full sm:max-w-md">
                 <div className="flex justify-center mb-4">
                     <div className="w-16 h-16 bg-blue-900 rounded-full flex items-center justify-center">
-                        <img src="/build/assets/logo.png" alt="logo" />
+                        <img src="/asset/logo.png" alt="logo" className="w-14 h-14" />
                     </div>
                 </div>
                 <h1 className="text-center text-2xl font-bold text-blue-900">New Device Detected</h1>

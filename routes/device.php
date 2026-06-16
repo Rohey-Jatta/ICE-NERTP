@@ -27,7 +27,9 @@ Route::middleware('auth')->group(function () {
         $service = app(\App\Services\DeviceBindingService::class);
         try {
             $service->registerDevice($user, $request, $request->device_name);
-            $redirectUrl = match ($user->roles->first()?->name) {
+            $roleNames = $user->getRoleNames();
+            $roleName = $roleNames?->first() ?? 'user';
+            $redirectUrl = match ($roleName) {
                 'polling-officer'       => '/officer/dashboard',
                 'ward-approver'         => '/ward/dashboard',
                 'constituency-approver' => '/constituency/dashboard',
@@ -40,8 +42,15 @@ Route::middleware('auth')->group(function () {
             };
             return response()->json(['status' => 'authenticated', 'redirect_url' => $redirectUrl]);
         } catch (\Exception $e) {
-            Log::error('Device registration failed', ['error' => $e->getMessage()]);
-            return response()->json(['message' => 'Device registration failed.'], 500);
+            Log::error('Device registration failed', ['error' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
+            
+            // User-friendly error messages
+            $message = 'Device registration failed. Please try again or contact support.';
+            if (str_contains($e->getMessage(), 'duplicate') || str_contains($e->getMessage(), 'unique')) {
+                $message = 'This device is already registered. Please try logging in again.';
+            }
+            
+            return response()->json(['message' => $message], 500);
         }
     })->name('device.register');
 });

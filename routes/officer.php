@@ -65,7 +65,11 @@ Route::middleware(['auth', 'role:polling-officer'])
         $hasSubmitted = $station && $activeElection
             ? Result::where('polling_station_id', $station->id)
                 ->where('election_id', $activeElection->id)
-                ->where('rejection_count', 0)
+                ->whereIn('certification_status', Result::CERTIFICATION_PIPELINE_STATUSES)
+                ->where(function ($query) {
+                    $query->where('rejection_count', 0)
+                          ->orWhereColumn('submitted_at', '>', 'last_rejected_at');
+                })
                 ->exists()
             : false;
 
@@ -117,19 +121,25 @@ Route::middleware(['auth', 'role:polling-officer'])
                 ->with('error', 'No active election found. Contact the administrator.');
         }
 
-        // A result that is NOT editable (already in pipeline for this active election)
+        // A result that is NOT editable (already in pipeline for this active election).
+        // This includes resubmitted rejected results that have already been resubmitted.
         $existingResult = Result::where('polling_station_id', $station->id)
             ->where('election_id', $election->id)
-            ->where('rejection_count', 0)
+            ->whereIn('certification_status', Result::CERTIFICATION_PIPELINE_STATUSES)
+            ->where(function ($query) {
+                $query->where('rejection_count', 0)
+                      ->orWhereColumn('submitted_at', '>', 'last_rejected_at');
+            })
             ->latest('submitted_at')
             ->first();
 
-        // A rejected result the officer can fix and resubmit
+        // A rejected result the officer can fix and resubmit.
         $editableResult = Result::where('polling_station_id', $station->id)
             ->where('election_id', $election->id)
             ->where('submitted_by', $user->id)
             ->where('certification_status', Result::STATUS_SUBMITTED)
             ->where('rejection_count', '>', 0)
+            ->whereColumn('submitted_at', '<=', 'last_rejected_at')
             ->latest('submitted_at')
             ->first();
 
@@ -243,6 +253,21 @@ Route::middleware(['auth', 'role:polling-officer'])
         $station = PollingStation::where('assigned_officer_id', $user->id)->first();
         if (!$station) {
             return back()->withErrors(['error' => 'No polling station assigned to your account.']);
+        }
+
+        $activeSubmissionExists = Result::where('polling_station_id', $station->id)
+            ->where('election_id', $election->id)
+            ->whereIn('certification_status', Result::CERTIFICATION_PIPELINE_STATUSES)
+            ->where(function ($query) {
+                $query->where('rejection_count', 0)
+                      ->orWhereColumn('submitted_at', '>', 'last_rejected_at');
+            })
+            ->exists();
+
+        if ($activeSubmissionExists && !$existingResult) {
+            return back()->withErrors([
+                'error' => 'A valid submission already exists for this polling station. You may only resubmit after a rejected result has been returned for correction.',
+            ])->withInput();
         }
 
         $existingResult = Result::where('polling_station_id', $station->id)
@@ -360,7 +385,10 @@ Route::middleware(['auth', 'role:polling-officer'])
                     ? asset('storage/' . $r->result_sheet_photo_path)
                     : null,
                 'is_editable'             => $r->certification_status === Result::STATUS_SUBMITTED
-                    && $r->rejection_count > 0,
+                    && $r->rejection_count > 0
+                    && $r->last_rejected_at !== null
+                    && $r->submitted_at !== null
+                    && $r->submitted_at <= $r->last_rejected_at,
                 'candidate_votes'         => $r->candidateVotes->map(fn ($cv) => [
                     'candidate_name' => $cv->candidate->name ?? $cv->candidate->full_name ?? 'Unknown',
                     'party_abbr'     => $cv->candidate->politicalParty->abbreviation ?? 'IND',

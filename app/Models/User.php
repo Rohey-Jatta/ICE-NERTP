@@ -20,6 +20,8 @@ class User extends Authenticatable
         'status',
         'two_factor_enabled',
         'two_factor_secret',
+        'must_change_password',
+        'bound_device_id',
     ];
 
     protected $hidden = [
@@ -29,9 +31,10 @@ class User extends Authenticatable
     ];
 
     protected $casts = [
-        'email_verified_at' => 'datetime',
-        'password' => 'hashed',
-        'two_factor_enabled' => 'boolean',
+        'email_verified_at'    => 'datetime',
+        'password'             => 'hashed',
+        'two_factor_enabled'   => 'boolean',
+        'must_change_password' => 'boolean',
     ];
 
     // Relationships
@@ -39,6 +42,11 @@ class User extends Authenticatable
     public function devices()
     {
         return $this->hasMany(Device::class);
+    }
+
+    public function boundDevice()
+    {
+        return $this->belongsTo(Device::class, 'bound_device_id');
     }
 
     public function auditLogs()

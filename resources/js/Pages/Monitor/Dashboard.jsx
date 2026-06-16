@@ -1,5 +1,9 @@
 import AppLayout from '@/Layouts/AppLayout';
 import { Link } from '@inertiajs/react';
+import { useState, useEffect } from 'react';
+import { useAutoRefreshWithVisibility } from '@/Hooks/useAutoRefresh';
+import { useNotifications, ToastContainer } from '@/Components/Notifications';
+import { useMonitorNotifications } from '@/Hooks/useMonitorNotifications';
 
 const TYPE_COLORS = {
     general:         'bg-iec-pink-500/20 text-iec-pink-600',
@@ -17,42 +21,92 @@ const SEVERITY_DOT = {
 };
 
 export default function MonitorDashboard({ auth, monitor, stats = {}, recentObservations = [] }) {
+    const [refreshing, setRefreshing] = useState(false);
+    const [lastRefreshTime, setLastRefreshTime] = useState(new Date());
+    const { toasts, removeNotification, notify } = useNotifications();
+
+    // Monitor observations for new submissions
+    useMonitorNotifications({
+        observations: recentObservations,
+        onNotify: (message, type) => notify[type](message),
+    });
+
+    // Auto-refresh every 30 seconds, pause when tab not visible
+    useAutoRefreshWithVisibility({
+        url: '/monitor/dashboard',
+        interval: 30000,
+        preserveScroll: true,
+        preserveState: true,
+        onBeforeRefresh: () => setRefreshing(true),
+        onAfterRefresh: () => {
+            setRefreshing(false);
+            setLastRefreshTime(new Date());
+        },
+    });
+
     return (
         <AppLayout user={auth.user}>
+            <ToastContainer toasts={toasts} onRemoveToast={removeNotification} />
+            
             <div className="container mx-auto px-4 py-8">
 
                 {/* Header */}
-                <div className="mb-8">
-                    <h1 className="text-3xl font-bold text-iec-navy">Election Monitor Dashboard</h1>
-                    <p className="text-slate-500 mt-1">
-                        {monitor?.organization
-                            ? `${monitor.organization} — ${monitor.type?.replace('_', ' ')}`
-                            : 'Independent Election Monitoring'}
+                <div className="mb-8 flex justify-between items-start">
+                    <div>
+                        <h1 className="text-3xl font-bold text-iec-navy">Election Monitor Dashboard</h1>
+                        <p className="text-slate-500 mt-1">
+                            {monitor?.organization
+                                ? `${monitor.organization} — ${monitor.type?.replace('_', ' ')}`
+                                : 'Independent Election Monitoring'}
                     </p>
                     {monitor?.accreditation_number && (
                         <p className="text-iec-pink-600 text-sm mt-1 font-mono">
                             Accreditation: {monitor.accreditation_number}
                         </p>
                     )}
-                </div>
+                    </div>
 
-                {/* Stats */}
+                    {/* Auto-refresh Status */}
+                    <div className="text-right text-xs">
+                        <div className={`flex items-center justify-end gap-2 px-3 py-2 rounded-lg ${refreshing ? 'bg-amber-500/20 text-amber-600' : 'bg-green-500/20 text-green-600'}`}>
+                            {refreshing ? (
+                                <>
+                                    <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                                    </svg>
+                                    <span className="font-semibold">Refreshing...</span>
+                                </>
+                            ) : (
+                                <>
+                                    <span>✓</span>
+                                    <div className="text-left">
+                                        <div className="font-semibold">Auto-refresh active</div>
+                                        <div className="text-xs opacity-75">
+                                            Last updated: {lastRefreshTime.toLocaleTimeString()}
+                                        </div>
+                                    </div>
+                                </>
+                            )}
+                        </div>
+                    </div>
+                </div>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
                     <div className="bg-white rounded-xl p-5 border border-slate-200">
                         <div className="text-3xl font-bold text-iec-navy">{stats.assigned_stations || 0}</div>
-                        <div className="text-slate-500 text-sm mt-1">Assigned Stations</div>
+                        <div className="text-slate-600 text-sm mt-1">Assigned Stations</div>
                     </div>
-                    <div className="bg-teal-900/40 rounded-xl p-5 border border-teal-700/50">
-                        <div className="text-3xl font-bold text-iec-pink-600">{stats.observations || 0}</div>
-                        <div className="text-slate-500 text-sm mt-1">Observations Submitted</div>
-                    </div>
-                    <div className="bg-amber-900/40 rounded-xl p-5 border border-amber-700/50">
-                        <div className="text-3xl font-bold text-amber-300">{stats.flagged || 0}</div>
-                        <div className="text-slate-500 text-sm mt-1">Issues Flagged</div>
+                    <div className="bg-teal-600/40 rounded-xl p-5 border border-pink-700/50">
+                        <div className="text-3xl font-bold text-iec-pink-500">{stats.observations || 0}</div>
+                        <div className="text-pink-700 text-sm mt-1">Observations Submitted</div>
                     </div>
                     <div className="bg-white rounded-xl p-5 border border-slate-200">
-                        <div className="text-3xl font-bold text-iec-pink-600">{stats.visited || 0}</div>
-                        <div className="text-slate-500 text-sm mt-1">Stations Visited</div>
+                        <div className="text-3xl font-bold text-amber-600">{stats.visited || 0}</div>
+                        <div className="text-slate-600 text-sm mt-1">Stations Visited</div>
+                    </div>
+                    <div className="bg-pink-400/40 rounded-xl p-5 border border-pink-700/50">
+                        <div className="text-3xl font-bold text-red-700">{stats.flagged || 0}</div>
+                        <div className="text-pink-700 text-sm mt-1">Issues Flagged</div>
                     </div>
                 </div>
 

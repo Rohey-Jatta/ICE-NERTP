@@ -4,9 +4,9 @@ import { Link, router } from '@inertiajs/react';
 import { RESULT_STATUS, getResultStatusMeta } from '@/Utils/resultStatus';
 
 const PARTY_STATUS = {
-    accepted:                  { label: 'Accepted',            color: 'bg-iec-pink-500/20 text-iec-pink-600 border-teal-500/30',    icon: '✓' },
-    accepted_with_reservation: { label: 'Accepted (Reserved)', color: 'bg-yellow-500/20 text-yellow-300 border-yellow-500/30', icon: '⚠' },
-    rejected:                  { label: 'Rejected',            color: 'bg-red-500/20 text-red-300 border-red-500/30',       icon: '✗' },
+    accepted:                  { label: 'Accepted',            color: 'bg-iec-pink-500/20 text-iec-pink-700 border-teal-500/30',    icon: '✓' },
+    accepted_with_reservation: { label: 'Accepted (Reserved)', color: 'bg-yellow-500/20 text-yellow-600 border-yellow-500/30', icon: '⚠' },
+    rejected:                  { label: 'Rejected',            color: 'bg-red-500/20 text-red-600 border-red-500/30',       icon: '✗' },
     pending:                   { label: 'Pending',             color: 'bg-slate-100 text-slate-600 border-slate-200',    icon: '…' },
 };
 
@@ -130,7 +130,7 @@ export default function ConstituencyApprovalQueue({
 
                 {flash && !selectedResult && (
                     <div className={`mb-4 p-4 rounded-xl border ${
-                        flash.type === 'error' ? 'bg-red-500/20 border-red-500/50 text-red-300' : 'bg-iec-pink-500/20 border-teal-500/50 text-iec-pink-600'
+                        flash.type === 'error' ? 'bg-red-500/20 border-red-500/50 text-red-700' : 'bg-iec-pink-500/20 border-teal-500/50 text-iec-pink-700'
                     }`}>
                         {flash.text}
                     </div>
@@ -190,12 +190,12 @@ export default function ConstituencyApprovalQueue({
                                                 <span className="text-xs text-slate-500 bg-slate-100 px-2 py-0.5 rounded">Ward: {result.ward_name}</span>
                                                 <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${statusCfg.badgeClass}`}>{statusCfg.label}</span>
                                                 {result.rejection_count > 0 && (
-                                                    <span className="px-2 py-0.5 rounded-full text-xs bg-pink-500/20 text-pink-300">
+                                                    <span className="px-2 py-0.5 rounded-full text-xs bg-pink-500/20 text-pink-800">
                                                         Rejected {result.rejection_count}×
                                                     </span>
                                                 )}
                                                 {anomalies.length > 0 && (
-                                                    <span className="px-2 py-0.5 rounded-full text-xs bg-pink-500/20 text-pink-300">⚠ Anomaly</span>
+                                                    <span className="px-2 py-0.5 rounded-full text-xs bg-pink-500/20 text-pink-700">⚠ Anomaly</span>
                                                 )}
                                             </div>
                                             <p className="text-slate-500 text-sm">Submitted: {result.submitted_at}</p>
@@ -205,7 +205,7 @@ export default function ConstituencyApprovalQueue({
                                             <div className={`font-semibold ${
                                                 result.party_acceptances.length === 0 ? 'text-slate-500' :
                                                 result.party_acceptances.every(p => ['accepted','accepted_with_reservation'].includes(p.status))
-                                                    ? 'text-green-300' : 'text-pink-300'
+                                                    ? 'text-green-600' : 'text-pink-600'
                                             }`}>
                                                 {result.party_acceptances.length === 0 ? 'N/A' :
                                                     `${result.party_acceptances.filter(p => p.status !== 'pending').length}/${result.party_acceptances.length} Responded`}
@@ -216,8 +216,8 @@ export default function ConstituencyApprovalQueue({
                                     {/* Anomaly Banner */}
                                     {anomalies.length > 0 && (
                                         <div className="mx-5 mb-4 p-3 bg-orange-500/10 border border-pink-500/30 rounded-lg">
-                                            <div className="text-xs text-pink-400 font-semibold mb-1">⚠ Anomalies Detected</div>
-                                            {anomalies.map((a, i) => <div key={i} className="text-pink-300 text-sm">{a}</div>)}
+                                            <div className="text-xs text-pink-800 font-semibold mb-1">⚠ Anomalies Detected</div>
+                                            {anomalies.map((a, i) => <div key={i} className="text-pink-800 text-sm">{a}</div>)}
                                         </div>
                                     )}
 
@@ -270,7 +270,7 @@ export default function ConstituencyApprovalQueue({
                                                                 {cfg.icon} {pa.abbr} — {cfg.label}
                                                             </span>
                                                             {pa.comments && (
-                                                                <p className="text-xs text-slate-500 italic mt-1 ml-3 pl-2 border-l-2 border-slate-200">
+                                                                <p className="text-xs text-slate-700 italic mt-1 ml-3 pl-2 border-l-2 border-slate-200">
                                                                     "{pa.comments}"
                                                                 </p>
                                                             )}
@@ -284,7 +284,7 @@ export default function ConstituencyApprovalQueue({
                                     {/* ── Ward Approver Note ── */}
                                     {result.ward_cert_comments && (
                                         <div className="mx-5 mb-4 p-3 bg-iec-pink-500/10 border border-blue-500/30 rounded-lg">
-                                            <div className="text-xs text-iec-pink-600 font-semibold mb-1">📋 Ward Approver Note</div>
+                                            <div className="text-xs text-iec-pink-800 font-semibold mb-1">📋 Ward Approver Note</div>
                                             <div className="text-blue-200 text-sm">{result.ward_cert_comments}</div>
                                         </div>
                                     )}
@@ -292,8 +292,8 @@ export default function ConstituencyApprovalQueue({
                                     {/* Prior rejection reason */}
                                     {result.last_rejection_reason && (
                                         <div className="mx-5 mb-4 p-3 bg-red-500/10 border border-red-500/30 rounded-lg">
-                                            <div className="text-xs text-red-400 font-semibold mb-1">Previous Rejection Reason</div>
-                                            <div className="text-red-300 text-sm">{result.last_rejection_reason}</div>
+                                            <div className="text-xs text-red-600 font-semibold mb-1">Previous Rejection Reason</div>
+                                            <div className="text-red-600 text-sm">{result.last_rejection_reason}</div>
                                         </div>
                                     )}
 
@@ -301,7 +301,7 @@ export default function ConstituencyApprovalQueue({
                                     {result.photo_url && (
                                         <div className="px-5 pb-4">
                                             <a href={result.photo_url} target="_blank" rel="noopener noreferrer"
-                                               className="inline-flex items-center gap-2 text-sm text-iec-pink-600 hover:text-iec-pink-600">
+                                               className="inline-flex items-center gap-2 text-sm text-iec-pink-700 hover:text-iec-pink-700">
                                                 📄 View Result Sheet Photo
                                             </a>
                                         </div>
@@ -340,7 +340,7 @@ export default function ConstituencyApprovalQueue({
                             <div className="flex items-start justify-between gap-4">
                                 <div>
                                     <h2 className="text-lg font-bold text-iec-navy">{ACTION_CONFIG[action].title}</h2>
-                                    <p className="text-slate-500 text-xs mt-0.5">
+                                    <p className="text-slate-600 text-xs mt-0.5">
                                         {selectedResult.polling_station} · Ward: {selectedResult.ward_name}
                                     </p>
                                 </div>
@@ -364,14 +364,14 @@ export default function ConstituencyApprovalQueue({
                                     { label: 'Turnout',     value: `${selectedResult.turnout}%` },
                                 ].map(s => (
                                     <div key={s.label} className="bg-white p-3 rounded-xl text-center">
-                                        <div className="text-xs text-slate-500 mb-0.5">{s.label}</div>
+                                        <div className="text-xs text-slate-600 mb-0.5">{s.label}</div>
                                         <div className="text-iec-navy font-bold">{s.value}</div>
                                     </div>
                                 ))}
                             </div>
 
                             {flash && (
-                                <div className={`p-3 rounded-lg text-sm ${flash.type === 'error' ? 'bg-red-500/20 text-red-300' : 'bg-iec-pink-500/20 text-iec-pink-600'}`}>
+                                <div className={`p-3 rounded-lg text-sm ${flash.type === 'error' ? 'bg-red-500/20 text-red-600' : 'bg-iec-pink-500/20 text-iec-pink-700'}`}>
                                     {flash.text}
                                 </div>
                             )}
@@ -379,14 +379,14 @@ export default function ConstituencyApprovalQueue({
                             <div className="bg-white border border-slate-200 rounded-xl p-4">
                                 <label className="block text-gray-200 font-semibold mb-2 text-sm">
                                     {ACTION_CONFIG[action].commentLabel}
-                                    {ACTION_CONFIG[action].commentReq && <span className="text-red-400 ml-1">*</span>}
+                                    {ACTION_CONFIG[action].commentReq && <span className="text-red-700 ml-1">*</span>}
                                 </label>
                                 <textarea
                                     value={comment}
                                     onChange={(e) => setComment(e.target.value)}
                                     rows={4}
                                     placeholder={ACTION_CONFIG[action].placeholder}
-                                    className="w-full px-4 py-3 bg-white border-2 border-slate-200 focus:border-iec-pink-500 rounded-xl text-iec-navy resize-none focus:outline-none transition-colors text-sm"
+                                    className="w-full px-4 py-3 bg-white border-2 border-slate-200 focus:border-iec-pink-700 rounded-xl text-iec-navy resize-none focus:outline-none transition-colors text-sm"
                                 />
                             </div>
                         </div>
@@ -395,7 +395,7 @@ export default function ConstituencyApprovalQueue({
                         <div className="px-6 py-4 border-t border-slate-200 flex-shrink-0 flex gap-3">
                             <button
                                 onClick={submitAction}
-                                disabled={processing || (ACTION_CONFIG[action].commentReq && !comment.trim())}
+                                disabled={processing}
                                 className={`flex-1 py-3 rounded-xl font-bold text-white disabled:opacity-40 disabled:cursor-not-allowed transition-colors ${ACTION_CONFIG[action].btnColor}`}
                             >
                                 {processing ? 'Processing…' : ACTION_CONFIG[action].confirmBtn}

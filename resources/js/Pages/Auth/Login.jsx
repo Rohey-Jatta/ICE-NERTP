@@ -1,10 +1,19 @@
+import { useEffect } from 'react';
 import { useForm } from '@inertiajs/react';
 
 export default function Login() {
+    const fingerprint = typeof window !== 'undefined' ? window.deviceFingerprint?.get?.() || '' : '';
     const { data, setData, post, processing, errors } = useForm({
-        email:    '',
-        password: '',
+        email:     '',
+        password:  '',
+        device_id: fingerprint,
     });
+
+    useEffect(() => {
+        if (!data.device_id && window.deviceFingerprint?.get) {
+            setData('device_id', window.deviceFingerprint.get() || '');
+        }
+    }, [data.device_id, setData]);
 
     const handleSubmit = (e) => {
         e.preventDefault();
@@ -47,6 +56,7 @@ export default function Login() {
                     )}
 
                     <form onSubmit={handleSubmit} className="space-y-4">
+                        <input type="hidden" name="device_id" value={data.device_id} />
                         <div>
                             <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
                                 Email address

@@ -2,14 +2,26 @@ import { useState, useEffect } from 'react';
 import { useForm, router } from '@inertiajs/react';
 
 export default function TwoFactor({ expiresAt, status }) {
+    const fingerprint = typeof window !== 'undefined' ? window.deviceFingerprint?.get?.() || '' : '';
     const { data, setData, post, processing, errors } = useForm({
-        code: '',
+        code:      '',
+        device_id: fingerprint,
     });
+
+    useEffect(() => {
+        if (!data.device_id && window.deviceFingerprint?.get) {
+            setData('device_id', window.deviceFingerprint.get() || '');
+        }
+    }, [data.device_id, setData]);
 
     const initialCountdown = expiresAt ? Math.max(0, expiresAt - Math.floor(Date.now() / 1000)) : 600;
     const [countdown, setCountdown] = useState(initialCountdown);
     const [isResending, setIsResending] = useState(false);
     const [resendMessage, setResendMessage] = useState(status || '');
+
+    useEffect(() => {
+        setResendMessage(status || '');
+    }, [status]);
 
     useEffect(() => {
         const timer = setInterval(() => {
@@ -95,9 +107,23 @@ export default function TwoFactor({ expiresAt, status }) {
                             </div>
                         </div>
 
-                        {resendMessage}
+                        {resendMessage && (
+                            <div className="mt-4 p-3 bg-blue-50 border border-blue-200 text-blue-700 rounded-lg text-sm">
+                                {resendMessage}
+                            </div>
+                        )}
 
-                       
+                        {errors.email && (
+                            <div className="mt-4 p-3 bg-red-100 border border-red-300 text-red-800 rounded-lg text-sm">
+                                {errors.email}
+                            </div>
+                        )}
+
+                        {errors.device_id && (
+                            <div className="mt-4 p-3 bg-red-100 border border-red-300 text-red-800 rounded-lg text-sm">
+                                {errors.device_id}
+                            </div>
+                        )}
                     </div>
 
                     {errors.code && (
@@ -107,6 +133,7 @@ export default function TwoFactor({ expiresAt, status }) {
                     )}
 
                     <form onSubmit={handleSubmit}>
+                        <input type="hidden" name="device_id" value={data.device_id} />
                         <div className="mb-6">
                             <label className="block text-sm font-medium text-gray-700 mb-2 text-center">
                                 Verification Code

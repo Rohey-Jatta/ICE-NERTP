@@ -342,4 +342,220 @@ Route::middleware(['auth', 'role:constituency-approver'])
             'reportData'   => $reportData,
         ]);
     })->name('reports')->middleware('permission:generate-constituency-report');
+
+    // ── PDF Report Export ─────────────────────────────────────────────────────
+    Route::get('/reports/export/{type}', function ($type) {
+        $validTypes = ['full', 'ward-summary', 'turnout', 'certification'];
+        if (!in_array($type, $validTypes)) {
+            abort(404, 'Unknown report type.');
+        }
+
+        $user = Auth::user();
+        $constituency = AdministrativeHierarchy::where('assigned_approver_id', $user->id)
+            ->where('level', 'constituency')->first();
+
+        if (!$constituency) {
+            abort(403, 'No constituency assigned to your account.');
+        }
+
+        $activeElection = Election::where('status', 'active')->latest()->first()
+            ?? Election::whereNotIn('status', ['archived'])->latest()->first();
+
+        if (!$activeElection) {
+            abort(404, 'No election found.');
+        }
+
+        $wardIds = AdministrativeHierarchy::where('parent_id', $constituency->id)
+            ->where('level', 'ward')
+            ->pluck('id');
+
+        $results = Result::where('election_id', $activeElection->id)
+            ->whereHas('pollingStation', fn($q) => $q->whereIn('ward_id', $wardIds))
+            ->with([
+                'pollingStation.ward',
+                'candidateVotes.candidate.politicalParty',
+                'certifications' => fn($q) => $q->latest(),
+                'partyAcceptances.politicalParty',
+            ])
+            ->get();
+
+        $wards = AdministrativeHierarchy::where('parent_id', $constituency->id)
+            ->where('level', 'ward')
+            ->get();
+
+        $titles = [
+            'full'         => 'Full Constituency Results',
+            'ward-summary' => 'Ward Summary Report',
+            'turnout'      => 'Turnout Analysis',
+            'certification'=> 'Certification Status Report',
+        ];
+        $reportTitle = $titles[$type];
+
+        // ── Shared summary stats ───────────────────────────────────────────
+        $totalRegistered = $results->sum('total_registered_voters');
+        $totalCast       = $results->sum('total_votes_cast');
+        $totalValid      = $results->sum('valid_votes');
+        $totalRejected   = $results->sum('rejected_votes');
+        $turnout         = $totalRegistered > 0 ? round(($totalCast / $totalRegistered) * 100, 2) : 0;
+        $generatedAt     = now()->format('d M Y, H:i');
+
+        // ── Build report-specific table rows ──────────────────────────────
+        $tableRows = '';
+
+        if ($type === 'full') {
+            $tableRows = '<thead><tr>
+                <th>Station</th><th>Code</th><th>Ward</th>
+                <th>Registered</th><th>Cast</th><th>Valid</th><th>Rejected</th>
+                <th>Turnout</th><th>Status</th>
+            </tr></thead><tbody>';
+            foreach ($results as $r) {
+                $t = $r->total_registered_voters > 0
+                    ? round(($r->total_votes_cast / $r->total_registered_voters) * 100, 1) . '%'
+                    : '—';
+                $status = str_replace('_', ' ', $r->certification_status);
+                $tableRows .= "<tr>
+                    <td>{$r->pollingStation->name}</td>
+                    <td>{$r->pollingStation->code}</td>
+                    <td>{$r->pollingStation->ward->name}</td>
+                    <td>{$r->total_registered_voters}</td>
+                    <td>{$r->total_votes_cast}</td>
+                    <td>{$r->valid_votes}</td>
+                    <td>{$r->rejected_votes}</td>
+                    <td>$t</td>
+                    <td>" . ucwords($status) . "</td>
+                </tr>";
+            }
+            $tableRows .= '</tbody>';
+        }
+
+        if ($type === 'ward-summary') {
+            $tableRows = '<thead><tr>
+                <th>Ward</th><th>Stations</th><th>Reporting</th>
+                <th>Total Cast</th><th>Valid Votes</th><th>Turnout</th>
+            </tr></thead><tbody>';
+            foreach ($wards as $ward) {
+                $wardResults = $results->filter(fn($r) => $r->pollingStation->ward_id === $ward->id);
+                $wReg  = $wardResults->sum('total_registered_voters');
+                $wCast = $wardResults->sum('total_votes_cast');
+                $wValid= $wardResults->sum('valid_votes');
+                $wTurn = $wReg > 0 ? round(($wCast / $wReg) * 100, 1) . '%' : '—';
+                $stationTotal = \App\Models\PollingStation::where('ward_id', $ward->id)->count();
+                $tableRows .= "<tr>
+                    <td><strong>{$ward->name}</strong></td>
+                    <td>{$stationTotal}</td>
+                    <td>{$wardResults->count()}</td>
+                    <td>" . number_format($wCast) . "</td>
+                    <td>" . number_format($wValid) . "</td>
+                    <td>$wTurn</td>
+                </tr>";
+            }
+            $tableRows .= '</tbody>';
+        }
+
+        if ($type === 'turnout') {
+            $tableRows = '<thead><tr>
+                <th>Station</th><th>Ward</th><th>Registered</th>
+                <th>Votes Cast</th><th>Valid</th><th>Rejected</th><th>Turnout %</th>
+            </tr></thead><tbody>';
+            $sortedByTurnout = $results->sortByDesc(fn($r) =>
+                $r->total_registered_voters > 0
+                    ? ($r->total_votes_cast / $r->total_registered_voters)
+                    : 0
+            );
+            foreach ($sortedByTurnout as $r) {
+                $t = $r->total_registered_voters > 0
+                    ? round(($r->total_votes_cast / $r->total_registered_voters) * 100, 2) . '%'
+                    : '—';
+                $tableRows .= "<tr>
+                    <td>{$r->pollingStation->name}</td>
+                    <td>{$r->pollingStation->ward->name}</td>
+                    <td>{$r->total_registered_voters}</td>
+                    <td>{$r->total_votes_cast}</td>
+                    <td>{$r->valid_votes}</td>
+                    <td>{$r->rejected_votes}</td>
+                    <td><strong>$t</strong></td>
+                </tr>";
+            }
+            $tableRows .= '</tbody>';
+        }
+
+        if ($type === 'certification') {
+            $tableRows = '<thead><tr>
+                <th>Station</th><th>Ward</th><th>Submitted</th>
+                <th>Certification Status</th><th>Rejections</th><th>Last Rejection Reason</th>
+            </tr></thead><tbody>';
+            foreach ($results as $r) {
+                $status  = str_replace('_', ' ', ucwords($r->certification_status));
+                $reason  = htmlspecialchars($r->last_rejection_reason ?? '—');
+                $submitted = $r->submitted_at?->format('d/m/Y H:i') ?? '—';
+                $tableRows .= "<tr>
+                    <td>{$r->pollingStation->name}</td>
+                    <td>{$r->pollingStation->ward->name}</td>
+                    <td>$submitted</td>
+                    <td>$status</td>
+                    <td>{$r->rejection_count}</td>
+                    <td style='font-size:11px;'>$reason</td>
+                </tr>";
+            }
+            $tableRows .= '</tbody>';
+        }
+
+        // ── Assemble HTML ──────────────────────────────────────────────────
+        $html = "<!DOCTYPE html>
+<html>
+<head>
+<meta charset='UTF-8'>
+<title>{$reportTitle}</title>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: DejaVu Sans, Arial, sans-serif; font-size: 12px; color: #1a1a2e; margin: 25px; }
+  .header { border-bottom: 3px solid #E91E8C; padding-bottom: 12px; margin-bottom: 20px; }
+  .header h1 { font-size: 20px; margin: 0 0 4px 0; color: #1a1a2e; }
+  .header p  { margin: 2px 0; color: #555; font-size: 11px; }
+  .summary { display: flex; gap: 10px; margin-bottom: 20px; }
+  .stat-box { flex: 1; background: #f7f7fa; border: 1px solid #e0e0e8; border-radius: 6px; padding: 10px; text-align: center; }
+  .stat-box .val { font-size: 20px; font-weight: bold; color: #E91E8C; }
+  .stat-box .lbl { font-size: 10px; color: #666; margin-top: 3px; }
+  table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 11px; }
+  thead tr { background: #1a1a2e; color: white; }
+  th { padding: 7px 8px; text-align: left; font-weight: 600; }
+  td { padding: 6px 8px; border-bottom: 1px solid #eee; }
+  tr:nth-child(even) td { background: #f9f9fb; }
+  .footer { margin-top: 20px; font-size: 10px; color: #888; border-top: 1px solid #eee; padding-top: 8px; }
+  .pink { color: #E91E8C; }
+</style>
+</head>
+<body>
+  <div class='header'>
+    <h1>{$reportTitle}</h1>
+    <p><strong>Constituency:</strong> {$constituency->name} &nbsp;|&nbsp; <strong>Election:</strong> {$activeElection->name}</p>
+    <p><strong>Generated:</strong> {$generatedAt} &nbsp;|&nbsp; <strong>Generated by:</strong> {$user->name}</p>
+  </div>
+
+  <div class='summary'>
+    <div class='stat-box'><div class='val'>" . number_format($totalRegistered) . "</div><div class='lbl'>Registered Voters</div></div>
+    <div class='stat-box'><div class='val'>" . number_format($totalCast) . "</div><div class='lbl'>Votes Cast</div></div>
+    <div class='stat-box'><div class='val'>" . number_format($totalValid) . "</div><div class='lbl'>Valid Votes</div></div>
+    <div class='stat-box'><div class='val'>" . number_format($totalRejected) . "</div><div class='lbl'>Rejected Votes</div></div>
+    <div class='stat-box'><div class='val'>{$turnout}%</div><div class='lbl'>Turnout</div></div>
+    <div class='stat-box'><div class='val'>{$results->count()}</div><div class='lbl'>Stations Reporting</div></div>
+  </div>
+
+  <table>{$tableRows}</table>
+
+  <div class='footer'>
+    Independent Electoral Commission of The Gambia &nbsp;|&nbsp; NERTP System &nbsp;|&nbsp; Confidential
+  </div>
+</body>
+</html>";
+
+        $filename = strtolower(str_replace([' ', '/'], ['-', '-'], $reportTitle)) . '-' . now()->format('Y-m-d') . '.pdf';
+
+        return \Barryvdh\DomPDF\Facade\Pdf::loadHTML($html)
+            ->setPaper('a4', $type === 'full' || $type === 'certification' ? 'landscape' : 'portrait')
+            ->setOption('isHtml5ParserEnabled', true)
+            ->setOption('isRemoteEnabled', false)
+            ->download($filename);
+
+    })->name('reports.export')->middleware('permission:generate-constituency-report');
 });

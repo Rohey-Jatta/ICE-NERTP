@@ -16,7 +16,8 @@ class DeviceBindingService
 
     public function checkDevice(User $user, Request $request): string
     {
-        $userRole = $user->getRoleNames()->first();
+        $roleNames = $user->getRoleNames();
+        $userRole = $roleNames?->first();
 
         if (!Device::roleRequiresBinding($userRole)) {
             return 'not_required';
@@ -65,34 +66,89 @@ class DeviceBindingService
     {
         $fingerprint = $this->extractFingerprint($request);
         $pending = $this->getPendingDevice($user);
+        
+        $finalFingerprint = $fingerprint ?? $this->generateFingerprint($request);
 
-        $device = Device::create([
-            'user_id' => $user->id,
-            'device_fingerprint' => $fingerprint ?? $this->generateFingerprint($request),
-            'device_name' => $deviceName,
-            'device_type' => $this->detectDeviceType($request),
-            'os' => $pending['os'] ?? $this->detectOs($request),
-            'browser' => $pending['browser'] ?? $this->detectBrowser($request),
-            'verified_at' => now(),
-            'verified_by_ip' => $request->ip(),
-            'last_used_at' => now(),
-            'last_used_ip' => $request->ip(),
-            'is_trusted' => true,
-            'is_revoked' => false,
-        ]);
+        // Check if this device already exists for this user
+        $existingDevice = Device::where('user_id', $user->id)
+            ->where('device_fingerprint', $finalFingerprint)
+            ->first();
+
+        if ($existingDevice) {
+            // Device already exists for this user — just update it and mark as verified
+            $existingDevice->update([
+                'device_name' => $deviceName,
+                'verified_at' => now(),
+                'verified_by_ip' => $request->ip(),
+                'last_used_at' => now(),
+                'last_used_ip' => $request->ip(),
+                'is_trusted' => true,
+                'is_revoked' => false,
+            ]);
+
+            if ($user->bound_device_id === null) {
+                $user->bound_device_id = $existingDevice->id;
+                $user->save();
+            }
+
+            $this->clearPendingDevice($user);
+            return $existingDevice;
+        }
+
+        // Device doesn't exist for this user — create it
+        try {
+            $device = Device::create([
+                'user_id' => $user->id,
+                'device_fingerprint' => $finalFingerprint,
+                'device_name' => $deviceName,
+                'device_type' => $this->detectDeviceType($request),
+                'os' => $pending['os'] ?? $this->detectOs($request),
+                'browser' => $pending['browser'] ?? $this->detectBrowser($request),
+                'verified_at' => now(),
+                'verified_by_ip' => $request->ip(),
+                'last_used_at' => now(),
+                'last_used_ip' => $request->ip(),
+                'is_trusted' => true,
+                'is_revoked' => false,
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('Device creation failed: ' . $e->getMessage(), ['exception' => $e]);
+            throw $e;
+        }
+
+        if ($user->bound_device_id === null) {
+            $user->bound_device_id = $device->id;
+            $user->save();
+
+            try {
+                AuditLog::record(
+                    action: 'auth.device.bound',
+                    event: 'created',
+                    module: 'Authentication',
+                    auditable: $user,
+                    extra: ['device_id' => $device->id, 'device_fingerprint' => $device->device_fingerprint]
+                );
+            } catch (\Exception $e) {
+                \Log::warning('Failed to record audit log for device.bound: ' . $e->getMessage());
+            }
+        }
 
         $this->clearPendingDevice($user);
 
-        AuditLog::record(
-            action: 'auth.device.registered',
-            event: 'created',
-            module: 'Authentication',
-            auditable: $device,
-            extra: [
-                'device_fingerprint' => $device->device_fingerprint,
-                'outcome' => 'success',
-            ]
-        );
+        try {
+            AuditLog::record(
+                action: 'auth.device.registered',
+                event: 'created',
+                module: 'Authentication',
+                auditable: $device,
+                extra: [
+                    'device_fingerprint' => $device->device_fingerprint,
+                    'outcome' => 'success',
+                ]
+            );
+        } catch (\Exception $e) {
+            \Log::warning('Failed to record audit log for device.registered: ' . $e->getMessage());
+        }
 
         return $device;
     }
@@ -151,7 +207,24 @@ class DeviceBindingService
 
     public function extractFingerprint(Request $request): ?string
     {
-        return $request->cookie(self::DEVICE_COOKIE_NAME);
+        $cookie = $request->cookie(self::DEVICE_COOKIE_NAME);
+        if ($cookie) {
+            $fingerprint = trim($cookie);
+        } else {
+            $header = $request->header('X-DEVICE-ID') ?? $request->header('x-device-id');
+            if ($header) {
+                $fingerprint = trim($header);
+            } else {
+                $serverHeader = $request->server('HTTP_X_DEVICE_ID') ?? $request->server('X_DEVICE_ID');
+                if ($serverHeader) {
+                    $fingerprint = trim($serverHeader);
+                } else {
+                    $fingerprint = $request->input('device_id') ? trim($request->input('device_id')) : null;
+                }
+            }
+        }
+
+        return $fingerprint;
     }
 
     public function generateFingerprint(Request $request): string

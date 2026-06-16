@@ -4,7 +4,9 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Services\TwoFactorAuthService;
+use App\Services\DeviceBindingService;
 use App\Models\AuditLog;
+use App\Models\Device;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -13,10 +15,12 @@ use Inertia\Inertia;
 class TwoFactorController extends Controller
 {
     protected TwoFactorAuthService $twoFactorService;
+    protected DeviceBindingService $deviceService;
 
-    public function __construct(TwoFactorAuthService $twoFactorService)
+    public function __construct(TwoFactorAuthService $twoFactorService, DeviceBindingService $deviceService)
     {
         $this->twoFactorService = $twoFactorService;
+        $this->deviceService    = $deviceService;
     }
 
     public function show(Request $request)
@@ -67,14 +71,95 @@ class TwoFactorController extends Controller
             return back()->withErrors(['code' => 'Invalid verification code. Please try again.']);
         }
 
-        // Code is valid — now actually log the user in
+        // Before finalizing login, check device binding requirements.
+        $deviceStatus = $this->deviceService->checkDevice($user, $request);
+
+        if ($deviceStatus === 'revoked') {
+            AuditLog::record(
+                action: 'auth.device.revoked_access_attempt',
+                event: 'blocked',
+                module: 'Authentication',
+                auditable: $user,
+                extra: ['outcome' => 'blocked', 'failure_reason' => 'Revoked device attempted login']
+            );
+            return back()->withErrors(['email' => ['This device has been revoked. Contact IEC Administrator.']]);
+        }
+
+        if ($deviceStatus === 'pending_registration') {
+            $fingerprint = $this->deviceService->extractFingerprint($request);
+
+            if (!$fingerprint) {
+                return back()->withErrors(['email' => ['Device identifier unavailable. Please enable JavaScript and try again.']]);
+            }
+
+            if ($user->bound_device_id !== null) {
+                AuditLog::record(
+                    action: 'auth.device.binding_mismatch',
+                    event: 'blocked',
+                    module: 'Authentication',
+                    auditable: $user,
+                    extra: ['bound_device_id' => $user->bound_device_id, 'attempted_device_fingerprint' => $fingerprint]
+                );
+
+                return back()->withErrors(['email' => ['This account is already registered to another device and cannot be used on this device.']])->setStatusCode(403);
+            }
+
+            Auth::login($user);
+            $request->session()->regenerate();
+            $request->session()->forget(['2fa_user_id', '2fa_sms_sent', '2fa_expires_at']);
+
+            return redirect()->route('device.verify');
+        }
+
+        // Complete login and then ensure the user's `bound_device_id` is set for already-registered devices.
         Auth::login($user);
-
-        // Regenerate session AFTER login (safe to do here)
         $request->session()->regenerate();
-
-        // Clean up 2FA session data
         $request->session()->forget(['2fa_user_id', '2fa_sms_sent', '2fa_expires_at']);
+
+        $fingerprint = $this->deviceService->extractFingerprint($request);
+
+        if ($fingerprint) {
+            $device = Device::where('device_fingerprint', $fingerprint)
+                ->where('user_id', $user->id)
+                ->first();
+
+            if ($device) {
+                if ($user->bound_device_id === null) {
+                    $user->bound_device_id = $device->id;
+                    $user->save();
+
+                    AuditLog::record(
+                        action: 'auth.device.bound',
+                        event: 'created',
+                        module: 'Authentication',
+                        auditable: $user,
+                        extra: ['device_id' => $device->id, 'device_fingerprint' => $device->device_fingerprint]
+                    );
+                } elseif ($user->bound_device_id !== $device->id) {
+                    AuditLog::record(
+                        action: 'auth.device.binding_mismatch',
+                        event: 'blocked',
+                        module: 'Authentication',
+                        auditable: $user,
+                        extra: ['bound_device_id' => $user->bound_device_id, 'attempted_device_fingerprint' => $device->device_fingerprint]
+                    );
+
+                    Auth::logout();
+                    $request->session()->invalidate();
+                    $request->session()->regenerateToken();
+
+                    if ($request->expectsJson()) {
+                        return response()->json([
+                            'message' => 'This account is already registered to another device and cannot be used on this device.'
+                        ], 403);
+                    }
+
+                    return redirect()->route('login')
+                        ->withErrors(['email' => ['This account is already registered to another device and cannot be used on this device.']])
+                        ->setStatusCode(403);
+                }
+            }
+        }
 
         AuditLog::record(
             action: 'auth.login.success',
@@ -84,7 +169,6 @@ class TwoFactorController extends Controller
             extra: ['outcome' => 'success']
         );
 
-        // Redirect based on role
         return $this->redirectByRole($user);
     }
 

@@ -15,7 +15,7 @@ return new class extends Migration
         Schema::create('devices', function (Blueprint $table) {
             $table->id();
             $table->foreignId('user_id')->constrained()->cascadeOnDelete();
-            $table->string('device_fingerprint')->unique();
+            $table->string('device_fingerprint');
             $table->string('device_name');
             $table->string('device_type', 50);
             $table->string('os', 100)->nullable();
@@ -29,6 +29,7 @@ return new class extends Migration
             $table->boolean('is_revoked')->default(false);
             $table->timestamp('revoked_at')->nullable();
             $table->timestamps();
+            $table->unique(['user_id', 'device_fingerprint']);
             $table->index('user_id');
             $table->index('is_trusted');
             $table->index('is_revoked');

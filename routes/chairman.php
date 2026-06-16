@@ -15,8 +15,6 @@ use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
 // ── Shared helper: bust every public-facing cache for a given election ─────────
-// Call this whenever a result's certification_status changes so all public
-// pages (summary, map, stations) immediately show updated data.
 if (!function_exists('bustPublicCachesForElection')) {
     function bustPublicCachesForElection(int $electionId): void
     {
@@ -42,7 +40,18 @@ Route::middleware(['auth', 'role:iec-chairman'])
 
     // ── Dashboard ─────────────────────────────────────────────────────────────
     Route::get('/dashboard', function () {
-        $cacheKey = 'chairman_dashboard_stats';
+        // Resolve the election we should be displaying stats for.
+        // Prefer live/certifying over a closed certified election.
+        $activeElection = Election::whereIn('status', ['active', 'certifying', 'results_pending'])
+            ->latest('start_date')->first()
+            ?? Election::where('status', 'certified')->latest('start_date')->first();
+
+        $electionId = $activeElection?->id;
+
+        // Include election ID in cache key so stale data from a previous
+        // election is never served to the chairman after a new one starts.
+        $cacheKey = 'chairman_dashboard_stats_' . ($electionId ?? 'none');
+
         $pendingNational     = 0;
         $nationallyCertified = 0;
         $totalStations       = 0;
@@ -51,17 +60,26 @@ Route::middleware(['auth', 'role:iec-chairman'])
         $pipelineCounts      = [];
 
         $statistics = Cache::remember($cacheKey, 30, function () use (
+            $electionId,
             &$pendingNational, &$nationallyCertified, &$totalStations,
             &$totalVoters, &$nationalProgress, &$pipelineCounts
         ) {
-            $statusCounts = Result::selectRaw('certification_status, COUNT(*) as cnt')
+            // ── Filter ALL result queries to the active election ──────────
+            $resultBase = Result::when($electionId, fn($q) => $q->where('election_id', $electionId));
+
+            $statusCounts = (clone $resultBase)
+                ->selectRaw('certification_status, COUNT(*) as cnt')
                 ->groupBy('certification_status')
                 ->pluck('cnt', 'certification_status');
 
             $pendingNational     = (int) ($statusCounts[Result::STATUS_PENDING_NATIONAL] ?? 0);
             $nationallyCertified = (int) ($statusCounts[Result::STATUS_NATIONALLY_CERTIFIED] ?? 0);
 
-            $stationAgg    = PollingStation::selectRaw('COUNT(*) as total, COALESCE(SUM(registered_voters), 0) as total_voters')->first();
+            // ── Filter station counts to the active election ──────────────
+            $stationAgg = PollingStation::when($electionId, fn($q) => $q->where('election_id', $electionId))
+                ->selectRaw('COUNT(*) as total, COALESCE(SUM(registered_voters), 0) as total_voters')
+                ->first();
+
             $totalStations = (int) ($stationAgg->total ?? 0);
             $totalVoters   = (int) ($stationAgg->total_voters ?? 0);
 
@@ -115,7 +133,13 @@ Route::middleware(['auth', 'role:iec-chairman'])
 
     // ── National Certification Queue ──────────────────────────────────────────
     Route::get('/national-queue', function () {
+        // Scope queue to the active election only
+        $activeElection = Election::whereIn('status', ['active', 'certifying', 'results_pending'])
+            ->latest('start_date')->first()
+            ?? Election::where('status', 'certified')->latest('start_date')->first();
+
         $results = Result::where('certification_status', Result::STATUS_PENDING_NATIONAL)
+            ->when($activeElection, fn($q) => $q->where('election_id', $activeElection->id))
             ->with([
                 'pollingStation.ward',
                 'candidateVotes.candidate.politicalParty',
@@ -228,7 +252,7 @@ Route::middleware(['auth', 'role:iec-chairman'])
                 'pending_national'     => $query->where('certification_status', Result::STATUS_PENDING_NATIONAL),
                 'in_pipeline'          => $query->whereIn('certification_status', $pipelineStatuses),
                 'nationally_certified' => $query->where('certification_status', Result::STATUS_NATIONALLY_CERTIFIED),
-                default                => null, // all
+                default                => null,
             };
 
             $results = $query->latest('submitted_at')
@@ -341,7 +365,7 @@ Route::middleware(['auth', 'role:iec-chairman'])
                     'certified' => (int) $r->certified,
                     'votes'     => (int) $r->votes,
                     'progress'  => $r->total > 0 ? round(($r->certified / $r->total) * 100) : 0,
-                    'turnout'   => 0, // Placeholder; add detailed turnout query if needed
+                    'turnout'   => 0,
                 ])
                 ->sortByDesc('votes')
                 ->values()
@@ -386,8 +410,6 @@ Route::middleware(['auth', 'role:iec-chairman'])
                 'lastUpdated'     => now()->format('Y-m-d H:i'),
             ];
 
-            // canPublish: only when election is still open (not yet published/closed)
-            // canClose:   any time the election is still open
             $readinessCheck = [
                 'canPublish' => $certifiedCount > 0 && in_array($election->status, ['active', 'certifying']),
                 'canClose'   => in_array($election->status, ['active', 'certifying', 'results_pending']),
@@ -410,52 +432,28 @@ Route::middleware(['auth', 'role:iec-chairman'])
     // POST ACTIONS
     // ─────────────────────────────────────────────────────────────────────────
 
-    // ── Certify Nationally ────────────────────────────────────────────────────
-    // The CertificationWorkflowService handles ALL certification logic:
-    //   - Creates ResultCertification record
-    //   - Updates result.certification_status → nationally_certified
-    //   - Sets nationally_certified_at
-    //   - Clears workflow caches
-    //
-    // This route ONLY calls the service. It does NOT change election status.
-    // Certifying an individual result never closes the election.
     Route::post('/certify/{result}', function (Request $request, Result $result) {
-        $request->validate([
-            'comments' => 'nullable|string|max:2000',
-        ]);
+        $request->validate(['comments' => 'nullable|string|max:2000']);
 
         try {
             app(CertificationWorkflowService::class)->approve(
-                $result,
-                Auth::user(),
-                'national',
-                $request->comments
+                $result, Auth::user(), 'national', $request->comments
             );
         } catch (\Throwable $e) {
             return back()->withErrors(['error' => 'Could not certify this result: ' . $e->getMessage()]);
         }
 
-        // Bust ALL public caches (map, stations, summary) so the certified
-        // result appears immediately on public-facing pages.
         bustPublicCachesForElection($result->election_id);
 
         return back()->with('success', 'Result has been nationally certified and is now publicly visible.');
     })->name('certify')->middleware('permission:national-certification');
 
-    // ── Reject / Return to Admin Area ─────────────────────────────────────────
-    // Returns a result to the Admin Area level for further review.
-    // Does NOT change election status.
     Route::post('/reject/{result}', function (Request $request, Result $result) {
-        $request->validate([
-            'reason' => 'required|string|max:2000',
-        ]);
+        $request->validate(['reason' => 'required|string|max:2000']);
 
         try {
             app(CertificationWorkflowService::class)->reject(
-                $result,
-                Auth::user(),
-                'national',
-                $request->reason
+                $result, Auth::user(), 'national', $request->reason
             );
         } catch (\Throwable $e) {
             return back()->withErrors(['error' => 'Result is not pending national approval.']);
@@ -466,22 +464,12 @@ Route::middleware(['auth', 'role:iec-chairman'])
         return back()->with('success', 'Result has been returned to the Admin Area for further review.');
     })->name('reject')->middleware('permission:national-certification');
 
-    // ── Publish Results ───────────────────────────────────────────────────────
-    // Makes certified results prominently available on public pages by
-    // transitioning election status: active/certifying → results_pending.
-    //
-    // KEY: This does NOT close the election. Polling officers can STILL
-    // submit results after this action. Use "Close Election" to block further
-    // submissions.
     Route::post('/publish-results', function () {
         $election = Election::whereIn('status', ['active', 'certifying'])
-            ->latest()
-            ->first();
+            ->latest()->first();
 
         if (!$election) {
-            return back()->withErrors([
-                'error' => 'No active election found to publish. The election may already be published or closed.',
-            ]);
+            return back()->withErrors(['error' => 'No active election found to publish.']);
         }
 
         $election->update(['status' => 'results_pending']);
@@ -499,19 +487,9 @@ Route::middleware(['auth', 'role:iec-chairman'])
             ->with('success', 'Results are now published. The election remains open — polling officers can still submit results.');
     })->name('publish-results')->middleware('permission:publish-results');
 
-    // ── Close Election ────────────────────────────────────────────────────────
-    // EXPLICIT closure action. This is the ONLY action that prevents polling
-    // officers from submitting results. It is separate from certifying
-    // individual results or publishing.
-    //
-    // After this action:
-    //   - Polling officers CANNOT submit new results
-    //   - The election status becomes 'certified'
-    //   - Publicly certified results remain visible
     Route::post('/close-election', function () {
         $election = Election::whereIn('status', ['active', 'certifying', 'results_pending'])
-            ->latest()
-            ->first();
+            ->latest()->first();
 
         if (!$election) {
             return back()->withErrors(['error' => 'No open election found to close.']);

@@ -2,8 +2,10 @@
 
 use App\Http\Middleware\EnsureDeviceBound;
 use App\Http\Middleware\EnsureGpsValid;
+use App\Http\Middleware\ForcePasswordChange;
 use App\Http\Middleware\HandleInertiaRequests;
 use App\Http\Middleware\AuditRequestMiddleware;
+use App\Http\Middleware\RedirectIfAuthenticated;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -24,6 +26,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->web(append: [
             HandleInertiaRequests::class,
             AuditRequestMiddleware::class,
+            ForcePasswordChange::class,
         ]);
 
         $middleware->api(append: [
@@ -35,24 +38,20 @@ return Application::configure(basePath: dirname(__DIR__))
             'permission'   => \Spatie\Permission\Middleware\PermissionMiddleware::class,
             'device.bound' => EnsureDeviceBound::class,
             'gps.validate' => EnsureGpsValid::class,
+            'guest'        => RedirectIfAuthenticated::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         //
     })
-    // CRITICAL: This section tells Laravel how to behave on Vercel
     ->booting(function () {
         if (env('VERCEL')) {
-            // Set the compiled view path to /tmp (the only writable folder on Vercel)
             $compiledPath = '/tmp/storage/framework/views';
-
             if (!is_dir($compiledPath)) {
                 mkdir($compiledPath, 0755, true);
             }
-
             config(['view.compiled' => $compiledPath]);
 
-            // Also ensure the session and cache have a place to go if using file driver
             if (!is_dir('/tmp/storage/framework/sessions')) {
                 mkdir('/tmp/storage/framework/sessions', 0755, true);
             }

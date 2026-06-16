@@ -1,20 +1,23 @@
 import AppLayout from '@/Layouts/AppLayout';
 import { Link, router } from '@inertiajs/react';
 import { useState } from 'react';
+import { useAutoRefreshWithVisibility } from '@/Hooks/useAutoRefresh';
+import { useNotifications, ToastContainer } from '@/Components/Notifications';
+import { useMonitorNotifications } from '@/Hooks/useMonitorNotifications';
 
 const TYPE_CONFIG = {
-    general:         { label: 'General',          color: 'bg-iec-pink-500/20 text-iec-pink-600 border-blue-500/30',     icon: '📋' },
-    positive:        { label: 'Positive',          color: 'bg-green-500/20 text-green-300 border-green-500/30', icon: '✅' },
-    process_concern: { label: 'Process Concern',   color: 'bg-amber-500/20 text-amber-300 border-amber-500/30', icon: '⚠️' },
-    irregularity:    { label: 'Irregularity',      color: 'bg-orange-500/20 text-orange-300 border-orange-500/30', icon: '🚨' },
-    incident:        { label: 'Incident',          color: 'bg-red-500/20 text-red-300 border-red-500/30',       icon: '🔴' },
+    general:         { label: 'General',          color: 'bg-blue-600 text-white border-blue-700',     icon: '📋' },
+    positive:        { label: 'Positive',         color: 'bg-green-600 text-white border-green-700',   icon: '✅' },
+    process_concern: { label: 'Process Concern',  color: 'bg-amber-600 text-white border-amber-700',   icon: '⚠️' },
+    irregularity:    { label: 'Irregularity',     color: 'bg-orange-600 text-white border-orange-700', icon: '🚨' },
+    incident:        { label: 'Incident',         color: 'bg-red-600 text-white border-red-700',       icon: '🔴' },
 };
 
 const SEVERITY_CONFIG = {
-    low:      { label: 'Low',      color: 'bg-green-500/20 text-green-300',  dot: 'bg-green-400' },
-    medium:   { label: 'Medium',   color: 'bg-amber-500/20 text-amber-300',  dot: 'bg-amber-400' },
-    high:     { label: 'High',     color: 'bg-orange-500/20 text-orange-300', dot: 'bg-orange-400' },
-    critical: { label: 'Critical', color: 'bg-red-500/20 text-red-300',      dot: 'bg-red-400' },
+    low:      { label: 'Low',      color: 'bg-green-600 text-white',   dot: 'bg-green-400' },
+    medium:   { label: 'Medium',   color: 'bg-amber-600 text-white',   dot: 'bg-amber-400' },
+    high:     { label: 'High',     color: 'bg-orange-600 text-white',  dot: 'bg-orange-400' },
+    critical: { label: 'Critical', color: 'bg-red-600 text-white',     dot: 'bg-red-400' },
 };
 
 export default function Observations({
@@ -27,6 +30,28 @@ export default function Observations({
 }) {
     const [expandedId, setExpandedId]     = useState(null);
     const [selectedPhotos, setSelectedPhotos] = useState([]);
+    const [refreshing, setRefreshing] = useState(false);
+    const [lastRefreshTime, setLastRefreshTime] = useState(new Date());
+    const { toasts, removeNotification, notify } = useNotifications();
+
+    // Monitor observations for new submissions
+    useMonitorNotifications({
+        observations: observations,
+        onNotify: (message, type) => notify[type](message),
+    });
+
+    // Auto-refresh every 30 seconds
+    useAutoRefreshWithVisibility({
+        url: '/monitor/observations',
+        interval: 30000,
+        preserveScroll: true,
+        preserveState: true,
+        onBeforeRefresh: () => setRefreshing(true),
+        onAfterRefresh: () => {
+            setRefreshing(false);
+            setLastRefreshTime(new Date());
+        },
+    });
 
     const handleFilterChange = (type, value) => {
         const params = {
@@ -41,6 +66,8 @@ export default function Observations({
 
     return (
         <AppLayout user={auth?.user}>
+            <ToastContainer toasts={toasts} onRemoveToast={removeNotification} />
+            
             <div className="container mx-auto px-4 py-8">
 
                 {/* Header */}
@@ -53,26 +80,54 @@ export default function Observations({
                             <h1 className="text-3xl font-bold text-iec-navy">My Observations</h1>
                             <p className="text-slate-500 mt-1">{totalObservations} total observations submitted</p>
                         </div>
-                        {/* Export button */}
                         
-                        <a href="/monitor/observations/export"
-                            className="px-6 py-3 bg-iec-pink-600 hover:bg-iec-pink-700 text-white font-bold rounded-lg flex items-center gap-2"
-                        >
-                            ⬇ Export CSV
-                        </a>
+                        {/* Refresh Status & Export Buttons */}
+                        <div className="flex flex-col items-end gap-2">
+                            <div className={`text-xs flex items-center justify-end gap-2 px-3 py-2 rounded-lg ${refreshing ? 'bg-amber-500/20 text-amber-600' : 'bg-green-500/20 text-green-600'}`}>
+                                {refreshing ? (
+                                    <>
+                                        <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                                        </svg>
+                                        <span className="font-semibold">Updating...</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <span>✓ Auto-refresh</span>
+                                        <span className="text-xs opacity-75">{lastRefreshTime.toLocaleTimeString()}</span>
+                                    </>
+                                )}
+                            </div>
+                            
+                            <div className="flex gap-2">
+                                <a href="/monitor/observations/export"
+                                    className="px-6 py-3 bg-iec-pink-600 hover:bg-iec-pink-700 text-white font-bold rounded-lg flex items-center gap-2"
+                                >
+                                    ⬇ Export CSV
+                                </a>
+                                <a href={`/monitor/observations/pdf/batch?type=${typeFilter}&severity=${severityFilter}`}
+                                    className="px-6 py-3 bg-orange-600 hover:bg-orange-700 text-white font-bold rounded-lg flex items-center gap-2"
+                                >
+                                    📄 Export PDF
+                                </a>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
                 {/* Type summary pills */}
                 {totalObservations > 0 && (
-                    <div className="flex flex-wrap gap-2 mb-6">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 mb-6">
                         {Object.entries(typeCounts).map(([type, count]) => {
-                            const cfg = TYPE_CONFIG[type] || { label: type, color: 'bg-slate-100 text-slate-600', icon: '📋' };
+                            const cfg = TYPE_CONFIG[type] || { label: type, color: 'bg-slate-600 text-white', icon: '📋' };
                             return (
-                                <div key={type} className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-sm border ${cfg.color}`}>
-                                    <span>{cfg.icon}</span>
-                                    <span className="font-medium">{cfg.label}</span>
-                                    <span className="font-bold">{count}</span>
+                                <div key={type} className={`flex items-center gap-2 px-4 py-3 rounded-lg text-sm font-bold border-2 ${cfg.color}`}>
+                                    <span className="text-lg">{cfg.icon}</span>
+                                    <div>
+                                        <div>{cfg.label}</div>
+                                        <div className="text-xs font-bold opacity-90">{count} submitted</div>
+                                    </div>
                                 </div>
                             );
                         })}
@@ -148,38 +203,43 @@ export default function Observations({
                             const isExpanded  = expandedId === obs.id;
 
                             return (
-                                <div key={obs.id} className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+                                <div key={obs.id} className="bg-white rounded-xl border border-slate-200 overflow-hidden hover:border-slate-300 transition-colors">
 
                                     {/* Observation Header */}
                                     <button
                                         onClick={() => setExpandedId(isExpanded ? null : obs.id)}
-                                        className="w-full p-5 text-left flex flex-wrap gap-4 justify-between items-start hover:bg-slate-100 transition-colors"
+                                        className="w-full p-5 text-left flex flex-wrap gap-3 justify-between items-start hover:bg-slate-50 transition-colors"
                                     >
                                         <div className="flex-1 min-w-0">
-                                            <div className="flex items-center gap-2 flex-wrap mb-1">
-                                                <span>{typeCfg.icon}</span>
-                                                <h3 className="text-iec-navy font-bold">{obs.title}</h3>
-                                                <span className={`px-2 py-0.5 rounded-full text-xs font-semibold border ${typeCfg.color}`}>
+                                            <div className="flex items-center gap-2 flex-wrap mb-2">
+                                                <span className="text-xl">{typeCfg.icon}</span>
+                                                <h3 className="text-lg font-bold text-iec-navy">{obs.title}</h3>
+                                            </div>
+                                            
+                                            {/* Enhanced Badges */}
+                                            <div className="flex items-center gap-2 flex-wrap mb-2">
+                                                <span className={`px-3 py-1.5 rounded-lg text-sm font-bold border ${typeCfg.color}`}>
                                                     {typeCfg.label}
                                                 </span>
-                                                <span className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold ${severityCfg.color}`}>
-                                                    <span className={`w-1.5 h-1.5 rounded-full ${severityCfg.dot}`} />
+                                                <span className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-bold ${severityCfg.color}`}>
+                                                    <span className={`w-2 h-2 rounded-full ${severityCfg.dot}`} />
                                                     {severityCfg.label}
                                                 </span>
                                                 {!obs.is_public && (
-                                                    <span className="px-2 py-0.5 rounded-full text-xs bg-slate-100 text-slate-400">
-                                                        Private
+                                                    <span className="px-3 py-1.5 rounded-lg text-sm font-semibold bg-slate-200 text-slate-700">
+                                                        🔒 Private
                                                     </span>
                                                 )}
                                             </div>
-                                            <div className="text-sm text-slate-500">
-                                                {obs.station_name} ({obs.station_code}) —{' '}
-                                                {obs.observed_at ? new Date(obs.observed_at).toLocaleString() : '—'}
+                                            
+                                            <div className="text-sm text-slate-600">
+                                                <strong>{obs.station_name}</strong> ({obs.station_code}) • 
+                                                <span className="font-mono text-xs ml-1">{obs.observed_at ? new Date(obs.observed_at).toLocaleString() : '—'}</span>
                                             </div>
                                         </div>
-                                        <div className="flex items-center gap-2">
+                                        <div className="flex items-center gap-2 flex-shrink-0">
                                             {obs.photo_paths?.length > 0 && (
-                                                <span className="text-xs text-slate-500 flex items-center gap-1">
+                                                <span className="text-xs font-semibold text-slate-600 bg-slate-100 px-2 py-1 rounded-lg flex items-center gap-1">
                                                     📷 {obs.photo_paths.length}
                                                 </span>
                                             )}
@@ -189,11 +249,11 @@ export default function Observations({
 
                                     {/* Expanded content */}
                                     {isExpanded && (
-                                        <div className="border-t border-slate-200 p-5">
+                                        <div className="border-t border-slate-200 p-5 space-y-4">
                                             {/* Observation text */}
-                                            <div className="mb-4">
-                                                <div className="text-xs text-slate-500 uppercase tracking-wide mb-2">Observation</div>
-                                                <p className="text-gray-200 leading-relaxed whitespace-pre-wrap">{obs.observation}</p>
+                                            <div>
+                                                <div className="text-xs text-slate-500 uppercase tracking-wide font-semibold mb-2">Observation</div>
+                                                <p className="text-slate-700 leading-relaxed whitespace-pre-wrap">{obs.observation}</p>
                                             </div>
 
                                             {/* GPS */}
@@ -237,6 +297,54 @@ export default function Observations({
                                                     </div>
                                                 </div>
                                             )}
+
+                                            {/* Supporting Documents */}
+                                            {obs.documents?.length > 0 && (
+                                                <div>
+                                                    <div className="text-xs text-slate-500 uppercase tracking-wide font-semibold mb-2">
+                                                        Supporting Documents ({obs.documents.length})
+                                                    </div>
+                                                    <div className="space-y-2">
+                                                        {obs.documents.map((doc, i) => (
+                                                            <a
+                                                                key={i}
+                                                                href={doc.path}
+                                                                download={doc.name}
+                                                                target="_blank"
+                                                                rel="noopener noreferrer"
+                                                                className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg border border-slate-200 hover:bg-slate-100 transition-colors group"
+                                                            >
+                                                                <div className="flex-shrink-0 w-8 h-8 bg-slate-200 rounded flex items-center justify-center text-xs font-bold text-slate-600 group-hover:bg-iec-pink-200 group-hover:text-iec-pink-600 transition-colors">
+                                                                    {doc.name.split('.').pop().toUpperCase()}
+                                                                </div>
+                                                                <div className="flex-1 min-w-0">
+                                                                    <div className="text-sm font-medium text-slate-700 truncate group-hover:text-iec-pink-600 transition-colors">
+                                                                        {doc.name}
+                                                                    </div>
+                                                                    <div className="text-xs text-slate-500">
+                                                                        {(doc.size / 1024 / 1024).toFixed(2)} MB
+                                                                    </div>
+                                                                </div>
+                                                                <span className="flex-shrink-0 text-iec-pink-600 group-hover:translate-x-1 transition-transform">
+                                                                    ⬇
+                                                                </span>
+                                                            </a>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {/* Download PDF */}
+                                            <div className="mt-4 pt-4 border-t border-slate-200 flex gap-2">
+                                                <a
+                                                    href={`/monitor/observations/${obs.id}/pdf`}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="flex-1 px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white font-semibold rounded-lg text-sm flex items-center justify-center gap-2 transition-colors"
+                                                >
+                                                    📄 Download PDF
+                                                </a>
+                                            </div>
                                         </div>
                                     )}
                                 </div>

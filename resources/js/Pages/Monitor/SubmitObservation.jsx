@@ -2,25 +2,28 @@ import AppLayout from '@/Layouts/AppLayout';
 import { useForm, Link } from '@inertiajs/react';
 import { useState } from 'react';
 import SearchableSelect from '@/Components/SearchableSelect';
+import { useNotifications, ToastContainer } from '@/Components/Notifications';
 
 const OBSERVATION_TYPES = [
     { value: 'general',         label: 'General Observation',   color: 'text-iec-pink-600',   icon: '📋' },
-    { value: 'positive',        label: 'Positive Observation',  color: 'text-green-300',  icon: '✅' },
-    { value: 'process_concern', label: 'Process Concern',       color: 'text-amber-300',  icon: '⚠️' },
-    { value: 'irregularity',    label: 'Irregularity',          color: 'text-orange-300', icon: '🚨' },
-    { value: 'incident',        label: 'Incident',              color: 'text-red-300',    icon: '🔴' },
+    { value: 'positive',        label: 'Positive Observation',  color: 'text-green-500',  icon: '✅' },
+    { value: 'process_concern', label: 'Process Concern',       color: 'text-yellow-500',  icon: '⚠️' },
+    { value: 'irregularity',    label: 'Irregularity',          color: 'text-orange-500', icon: '🚨' },
+    { value: 'incident',        label: 'Incident',              color: 'text-red-500',    icon: '🔴' },
 ];
 
 const SEVERITIES = [
-    { value: 'low',      label: 'Low',      color: 'bg-green-500/20 text-green-300 border-green-500/40' },
-    { value: 'medium',   label: 'Medium',   color: 'bg-amber-500/20 text-amber-300 border-amber-500/40' },
-    { value: 'high',     label: 'High',     color: 'bg-orange-500/20 text-orange-300 border-orange-500/40' },
-    { value: 'critical', label: 'Critical', color: 'bg-red-500/20 text-red-300 border-red-500/40' },
+    { value: 'low',      label: 'Low',      color: 'bg-green-500/20 text-green-500 border-green-500/40' },
+    { value: 'medium',   label: 'Medium',   color: 'bg-yellow-500/20 text-yellow-500 border-amber-500/40' },
+    { value: 'high',     label: 'High',     color: 'bg-orange-500/20 text-orange-500 border-orange-500/40' },
+    { value: 'critical', label: 'Critical', color: 'bg-red-500/20 text-red-500 border-red-500/40' },
 ];
 
 export default function SubmitObservation({ auth, monitor, stations = [], preselectedStation }) {
     const [photoPreviews, setPhotoPreviews] = useState([]);
+    const [documentPreviews, setDocumentPreviews] = useState([]);
     const [locationLoading, setLocationLoading] = useState(false);
+    const { toasts, removeNotification, notify } = useNotifications();
 
     const { data, setData, post, processing, errors, reset } = useForm({
         polling_station_id: preselectedStation || '',
@@ -33,12 +36,13 @@ export default function SubmitObservation({ auth, monitor, stations = [], presel
         latitude:           '',
         longitude:          '',
         photos:             [],
+        documents:          [],
     });
 
     const handlePhotoChange = (e) => {
         const files = Array.from(e.target.files);
         if (files.length > 5) {
-            alert('Maximum 5 photos allowed.');
+            notify.error('Maximum 5 photos allowed.');
             return;
         }
         setData('photos', files);
@@ -64,9 +68,62 @@ export default function SubmitObservation({ auth, monitor, stations = [], presel
         setPhotoPreviews(prev => prev.filter((_, i) => i !== index));
     };
 
+    const ALLOWED_DOCUMENT_TYPES = ['application/pdf', 'application/msword', 
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'application/vnd.ms-excel',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'text/csv', 'text/plain'];
+    const ALLOWED_EXTENSIONS = ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'csv', 'txt'];
+
+    const handleDocumentChange = (e) => {
+        const files = Array.from(e.target.files);
+        if (files.length > 10) {
+            notify.error('Maximum 10 documents allowed.');
+            return;
+        }
+
+        // Validate file types and sizes
+        const validFiles = [];
+        const invalidFiles = [];
+        
+        files.forEach(file => {
+            const ext = file.name.split('.').pop().toLowerCase();
+            if (!ALLOWED_EXTENSIONS.includes(ext)) {
+                invalidFiles.push(`${file.name} (invalid type)`);
+                return;
+            }
+            if (file.size > 10 * 1024 * 1024) { // 10MB limit
+                invalidFiles.push(`${file.name} (exceeds 10MB)`);
+                return;
+            }
+            validFiles.push(file);
+        });
+
+        if (invalidFiles.length > 0) {
+            notify.error(`Invalid files:\n${invalidFiles.join('\n')}`);
+        }
+
+        setData('documents', validFiles);
+
+        // Generate previews with file info
+        const previews = validFiles.map(file => ({
+            name: file.name,
+            size: (file.size / 1024 / 1024).toFixed(2),
+            ext: file.name.split('.').pop().toUpperCase(),
+            type: file.type,
+        }));
+        setDocumentPreviews(previews);
+    };
+
+    const removeDocument = (index) => {
+        const newDocuments = data.documents.filter((_, i) => i !== index);
+        setData('documents', newDocuments);
+        setDocumentPreviews(prev => prev.filter((_, i) => i !== index));
+    };
+
     const handleGetLocation = () => {
         if (!navigator.geolocation) {
-            alert('Geolocation not supported on this device.');
+            notify.error('Geolocation not supported on this device.');
             return;
         }
         setLocationLoading(true);
@@ -77,7 +134,7 @@ export default function SubmitObservation({ auth, monitor, stations = [], presel
                 setLocationLoading(false);
             },
             () => {
-                alert('Could not get location. Please enter manually or try again.');
+                notify.error('Could not get location. Please enter manually or try again.');
                 setLocationLoading(false);
             },
             { enableHighAccuracy: true, timeout: 10000 }
@@ -86,13 +143,37 @@ export default function SubmitObservation({ auth, monitor, stations = [], presel
 
     const handleSubmit = (e) => {
         e.preventDefault();
-        post('/monitor/observations', { forceFormData: true });
+        post('/monitor/observations', {
+            forceFormData: true,
+            preserveState: false,
+            onStart: () => notify.info('Submitting observation...'),
+            onSuccess: (page) => {
+                notify.success('Observation submitted successfully');
+                // Optionally reset previews and form
+                setPhotoPreviews([]);
+                setDocumentPreviews([]);
+                reset();
+            },
+            onError: (errs) => {
+                // errs is an object of field => messages
+                const messages = [];
+                Object.values(errs || {}).forEach((v) => {
+                    if (Array.isArray(v)) messages.push(v[0]);
+                    else messages.push(v);
+                });
+                const message = messages.length ? messages.join(' — ') : 'Failed to submit observation.';
+                notify.error(message);
+            },
+            onFinish: () => {},
+        });
     };
 
     const selectedType = OBSERVATION_TYPES.find(t => t.value === data.observation_type);
 
     return (
         <AppLayout user={auth?.user}>
+            <ToastContainer toasts={toasts} onRemoveToast={removeNotification} />
+            
             <div className="container mx-auto px-4 py-8 max-w-3xl">
 
                 {/* Header */}
@@ -109,7 +190,13 @@ export default function SubmitObservation({ auth, monitor, stations = [], presel
                         You are not registered as an active election monitor. Contact the IEC Administrator.
                     </div>
                 ) : (
-                    <form onSubmit={handleSubmit} className="space-y-6">
+                    <>
+                        {errors.error && (
+                            <div className="mb-4 p-4 rounded-xl border border-red-500/30 bg-red-500/10 text-red-300 text-sm">
+                                ⚠ {Array.isArray(errors.error) ? errors.error[0] : errors.error}
+                            </div>
+                        )}
+                        <form onSubmit={handleSubmit} className="space-y-6">
 
                         {/* Station Selection */}
                         <div className="bg-white rounded-xl p-6 border border-slate-200">
@@ -313,9 +400,68 @@ export default function SubmitObservation({ auth, monitor, stations = [], presel
                             {errors.photos && <p className="text-red-400 text-sm mt-2">{errors.photos}</p>}
                         </div>
 
+                        {/* Supporting Documents */}
+                        <div className="bg-white rounded-xl p-6 border border-slate-200">
+                            <h2 className="text-lg font-bold text-iec-navy mb-4">5. Supporting Documents (Optional)</h2>
+                            <p className="text-slate-500 text-sm mb-4">
+                                Upload supporting evidence documents. Accepted formats: PDF, DOC, DOCX, XLS, XLSX, CSV, TXT. Max 10MB each, up to 10 files.
+                            </p>
+
+                            {/* Document upload */}
+                            <div className="border-2 border-dashed border-slate-200 rounded-lg p-6 text-center hover:border-teal-500/50 transition-colors">
+                                <input
+                                    type="file"
+                                    accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.txt"
+                                    multiple
+                                    onChange={handleDocumentChange}
+                                    className="hidden"
+                                    id="document-upload"
+                                />
+                                <label htmlFor="document-upload" className="cursor-pointer">
+                                    <div className="text-4xl mb-2">📄</div>
+                                    <p className="text-iec-navy font-semibold">Click to upload documents</p>
+                                    <p className="text-slate-500 text-sm mt-1">PDF, DOC, DOCX, XLS, XLSX, CSV, TXT up to 10MB each</p>
+                                </label>
+                            </div>
+
+                            {/* Document Previews */}
+                            {documentPreviews.length > 0 && (
+                                <div className="mt-4 space-y-2">
+                                    <div className="text-sm font-semibold text-slate-700 mb-3">
+                                        {documentPreviews.length} document{documentPreviews.length !== 1 ? 's' : ''} selected
+                                    </div>
+                                    {documentPreviews.map((doc, i) => (
+                                        <div
+                                            key={i}
+                                            className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-200 hover:bg-slate-100 transition-colors"
+                                        >
+                                            <div className="flex items-center gap-3 flex-1 min-w-0">
+                                                <div className="flex-shrink-0 w-8 h-8 bg-slate-200 rounded flex items-center justify-center text-xs font-bold text-slate-600">
+                                                    {doc.ext}
+                                                </div>
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="text-sm font-medium text-slate-700 truncate">{doc.name}</div>
+                                                    <div className="text-xs text-slate-500">{doc.size} MB</div>
+                                                </div>
+                                            </div>
+                                            <button
+                                                type="button"
+                                                onClick={() => removeDocument(i)}
+                                                className="ml-2 flex-shrink-0 w-6 h-6 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded flex items-center justify-center transition-colors"
+                                                title="Remove document"
+                                            >
+                                                ✕
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                            {errors.documents && <p className="text-red-400 text-sm mt-2">{errors.documents}</p>}
+                        </div>
+
                         {/* GPS Location */}
                         <div className="bg-white rounded-xl p-6 border border-slate-200">
-                            <h2 className="text-lg font-bold text-iec-navy mb-4">5. GPS Location (Optional)</h2>
+                            <h2 className="text-lg font-bold text-iec-navy mb-4">6. GPS Location (Optional)</h2>
                             <p className="text-slate-500 text-sm mb-4">
                                 Your location helps verify where the observation was made.
                             </p>
@@ -394,8 +540,9 @@ export default function SubmitObservation({ auth, monitor, stations = [], presel
                                 Cancel
                             </Link>
                         </div>
-                    </form>
-                )}
+                        </form>
+                        </>
+                    )}
             </div>
         </AppLayout>
     );

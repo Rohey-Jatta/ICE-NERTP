@@ -58,11 +58,13 @@ class ResultsMapController extends Controller
                 'election'           => null,
                 'elections'          => $availableElections,
                 'selectedElectionId' => null,
+                'isPublished'        => false,
             ]);
         }
 
-        $cacheKey = "results_map_{$election->id}";
-        $stations = Cache::remember($cacheKey, 30, fn() => $this->computeStationsData($election));
+        $isPublished = $election->status === 'certified';
+        $cacheKey = "results_map_{$election->id}_" . ($isPublished ? 'pub' : 'prov');
+        $stations = Cache::remember($cacheKey, 30, fn() => $this->computeStationsData($election, $isPublished));
 
         $aggKey = "results_map_agg_v3_{$election->id}";
         $agg    = Cache::remember($aggKey, 300, fn() => $this->computeRegionAggregates($election));
@@ -80,6 +82,7 @@ class ResultsMapController extends Controller
             ],
             'elections'          => $availableElections,
             'selectedElectionId' => $election->id,
+            'isPublished'        => $isPublished,
         ]);
     }
 
@@ -95,13 +98,14 @@ class ResultsMapController extends Controller
         $election   = $this->resolvePublicElection($selectedId);
 
         if (!$election) {
-            return response()->json(['stations' => []]);
+            return response()->json(['stations' => [], 'isPublished' => false]);
         }
 
-        $cacheKey = "results_map_{$election->id}";
-        $stations = Cache::remember($cacheKey, 30, fn() => $this->computeStationsData($election));
+        $isPublished = $election->status === 'certified';
+        $cacheKey = "results_map_{$election->id}_" . ($isPublished ? 'pub' : 'prov');
+        $stations = Cache::remember($cacheKey, 30, fn() => $this->computeStationsData($election, $isPublished));
 
-        return response()->json(['stations' => $stations]);
+        return response()->json(['stations' => $stations, 'isPublished' => $isPublished]);
     }
 
     // ── Private helpers ───────────────────────────────────────────────────────
@@ -138,7 +142,7 @@ class ResultsMapController extends Controller
      * Build the stations array for the Leaflet map.
      * Includes all stations with their current pipeline status and candidate votes.
      */
-    private function computeStationsData(Election $election): array
+    private function computeStationsData(Election $election, bool $isPublished = false): array
     {
         $latestResults = <<<SQL
 SELECT DISTINCT ON (polling_station_id)
@@ -161,7 +165,8 @@ SQL;
                 w.name   AS ward_name,
                 COALESCE(r.certification_status, 'not_reported') AS status,
                 r.id AS result_id,
-                r.total_votes_cast, r.valid_votes, r.rejected_votes
+                r.total_votes_cast, r.valid_votes, r.rejected_votes,
+                r.result_sheet_photo_path
             ")
             ->leftJoin('administrative_hierarchy as w',   'w.id',   '=', 'ps.ward_id')
             ->leftJoin('administrative_hierarchy as cst', 'cst.id', '=', 'w.parent_id')
@@ -182,6 +187,8 @@ SQL;
         $resultIds = $stationsRaw->pluck('result_id')->filter()->unique()->values()->all();
 
         $votesByResult = collect();
+        $partyAcceptancesByResult = [];
+
         if (!empty($resultIds)) {
             $votesByResult = DB::table('result_candidate_votes as rcv')
                 ->selectRaw("
@@ -197,9 +204,36 @@ SQL;
                 ->orderByDesc('rcv.votes')
                 ->get()
                 ->groupBy('result_id');
+
+            // Only load party acceptances for published elections
+            if ($isPublished) {
+                $paRows = DB::table('party_acceptances as pa')
+                    ->selectRaw("
+                        pa.result_id,
+                        pp.name         AS party_name,
+                        pp.abbreviation AS party_abbr,
+                        pa.status,
+                        pa.comments
+                    ")
+                    ->join('political_parties as pp', 'pp.id', '=', 'pa.political_party_id')
+                    ->whereIn('pa.result_id', $resultIds)
+                    ->get();
+
+                foreach ($paRows as $row) {
+                    if (!isset($partyAcceptancesByResult[$row->result_id])) {
+                        $partyAcceptancesByResult[$row->result_id] = [];
+                    }
+                    $partyAcceptancesByResult[$row->result_id][] = [
+                        'party_name' => $row->party_name,
+                        'party_abbr' => $row->party_abbr,
+                        'status'     => $row->status,
+                        'comments'   => $row->comments,
+                    ];
+                }
+            }
         }
 
-        return $stationsRaw->map(function ($station) use ($votesByResult) {
+        return $stationsRaw->map(function ($station) use ($votesByResult, $partyAcceptancesByResult, $isPublished) {
             $votes = $votesByResult->get($station->result_id, collect());
             $station->candidate_votes = $votes->map(fn($v) => [
                 'name'  => $v->name,
@@ -207,6 +241,15 @@ SQL;
                 'color' => $this->partyColor($v->party, $v->color),
                 'votes' => $v->votes,
             ])->values()->all();
+            
+            $station->party_acceptances = ($isPublished && $station->result_id)
+                ? ($partyAcceptancesByResult[$station->result_id] ?? [])
+                : [];
+            
+            $station->photo_url = ($isPublished && $station->result_sheet_photo_path)
+                ? asset('storage/' . $station->result_sheet_photo_path)
+                : null;
+
             return $station;
         })->toArray();
     }

@@ -13,6 +13,7 @@ use App\Models\Election;
 use App\Models\ElectionMonitor;
 use App\Models\PollingStation;
 use App\Models\Result;
+use App\Services\ObservationPDFService;
 
 Route::middleware(['auth', 'role:election-monitor'])
     ->prefix('monitor')
@@ -186,6 +187,8 @@ Route::middleware(['auth', 'role:election-monitor'])
             'longitude'          => 'nullable|numeric',
             'photos'             => 'nullable|array|max:5',
             'photos.*'           => 'image|max:5120', // 5MB per photo
+            'documents'          => 'nullable|array|max:10',
+            'documents.*'        => 'file|mimes:pdf,doc,docx,xls,xlsx,csv,txt|max:10240', // 10MB per document
         ]);
 
         $user    = Auth::user();
@@ -213,10 +216,27 @@ Route::middleware(['auth', 'role:election-monitor'])
             if ($request->hasFile('photos')) {
                 foreach ($request->file('photos') as $photo) {
                     $path = $photo->store(
-                        "monitor-observations/{$monitor->election_id}/{$monitor->id}",
+                        "monitor-observations/{$monitor->election_id}/{$monitor->id}/photos",
                         'public'
                     );
                     $photoPaths[] = $path;
+                }
+            }
+
+            // Handle document uploads
+            $documentPaths = [];
+            if ($request->hasFile('documents')) {
+                foreach ($request->file('documents') as $document) {
+                    $path = $document->store(
+                        "monitor-observations/{$monitor->election_id}/{$monitor->id}/documents",
+                        'public'
+                    );
+                    $documentPaths[] = [
+                        'path' => $path,
+                        'name' => $document->getClientOriginalName(),
+                        'size' => $document->getSize(),
+                        'mime' => $document->getMimeType(),
+                    ];
                 }
             }
 
@@ -229,6 +249,7 @@ Route::middleware(['auth', 'role:election-monitor'])
                 'observation'         => $request->observation,
                 'severity'            => $request->severity,
                 'photo_paths'         => !empty($photoPaths) ? json_encode($photoPaths) : null,
+                'documents_paths'     => !empty($documentPaths) ? json_encode($documentPaths) : null,
                 'latitude'            => $request->latitude,
                 'longitude'           => $request->longitude,
                 'is_public'           => $request->boolean('is_public', true),
@@ -248,19 +269,22 @@ Route::middleware(['auth', 'role:election-monitor'])
                     'observation_type'   => $request->observation_type,
                     'severity'           => $request->severity,
                     'election_id'        => $monitor->election_id,
+                    'photo_count'        => count($photoPaths),
+                    'document_count'     => count($documentPaths),
                     'latitude'           => $request->latitude,
                     'longitude'          => $request->longitude,
                 ]
             );
 
             return redirect()->route('monitor.observations')
-                ->with('success', 'Observation submitted successfully!');
+                ->with('success', 'Observation submitted successfully!' . (count($documentPaths) > 0 ? " ({$documentPaths} documents uploaded)" : ''));
 
         } catch (\Exception $e) {
             Log::error('Monitor observation submission failed', ['error' => $e->getMessage()]);
             return back()->withErrors(['error' => 'Failed to submit observation: ' . $e->getMessage()]);
         }
     })->name('observations.store')->middleware('permission:submit-observation');
+
 
     // ── View Observations History ─────────────────────────────────────────────
     Route::get('/observations', function (Request $request) {
@@ -292,6 +316,27 @@ Route::middleware(['auth', 'role:election-monitor'])
 
             $observations = $query->orderByDesc('monitor_observations.observed_at')->get()
                 ->map(function ($obs) {
+                    // Parse photo paths
+                    $photoPaths = [];
+                    if ($obs->photo_paths) {
+                        $photoPaths = collect(json_decode($obs->photo_paths, true))
+                            ->map(fn($p) => asset('storage/' . $p))
+                            ->toArray();
+                    }
+
+                    // Parse document paths and metadata
+                    $documents = [];
+                    if ($obs->documents_paths) {
+                        $documents = collect(json_decode($obs->documents_paths, true))
+                            ->map(fn($d) => [
+                                'name' => $d['name'] ?? basename($d['path']),
+                                'path' => asset('storage/' . $d['path']),
+                                'size' => $d['size'] ?? 0,
+                                'mime' => $d['mime'] ?? 'application/octet-stream',
+                            ])
+                            ->toArray();
+                    }
+
                     return [
                         'id'               => $obs->id,
                         'title'            => $obs->title,
@@ -304,11 +349,8 @@ Route::middleware(['auth', 'role:election-monitor'])
                         'is_public'        => $obs->is_public,
                         'latitude'         => $obs->latitude,
                         'longitude'        => $obs->longitude,
-                        'photo_paths'      => $obs->photo_paths
-                            ? collect(json_decode($obs->photo_paths, true))
-                                ->map(fn($p) => asset('storage/' . $p))
-                                ->toArray()
-                            : [],
+                        'photo_paths'      => $photoPaths,
+                        'documents'        => $documents,
                     ];
                 });
         }
@@ -405,6 +447,100 @@ Route::middleware(['auth', 'role:election-monitor'])
         ]);
     })->name('observations.export')->middleware('permission:export-observations');
 
+    // ── Download Single Observation as PDF ────────────────────────────────────
+    Route::get('/observations/{id}/pdf', function ($id) {
+        $user    = Auth::user();
+        $monitor = ElectionMonitor::where('user_id', $user->id)
+            ->where('is_active', true)
+            ->first();
+
+        if (!$monitor) {
+            abort(403, 'Not an active monitor.');
+        }
+
+        // Verify observation belongs to this monitor
+        $observation = DB::table('monitor_observations')
+            ->where('id', $id)
+            ->where('election_monitor_id', $monitor->id)
+            ->first();
+
+        if (!$observation) {
+            abort(404, 'Observation not found.');
+        }
+
+        try {
+            $pdf = ObservationPDFService::generate($id, $monitor);
+            
+            AuditLog::record(
+                action:    'monitor.observation.pdf-downloaded',
+                event:     'exported',
+                module:    'ElectionMonitor',
+                extra:     [
+                    'outcome'        => 'success',
+                    'observation_id' => $id,
+                ]
+            );
+
+            return $pdf->download("observation-{$id}-" . now()->format('Y-m-d-His') . '.pdf');
+        } catch (\Exception $e) {
+            Log::error('PDF generation failed', ['error' => $e->getMessage(), 'observation_id' => $id]);
+            abort(500, 'Failed to generate PDF: ' . $e->getMessage());
+        }
+    })->name('observations.pdf')->middleware('permission:export-observations');
+
+    // ── Download Batch Observations as PDF ────────────────────────────────────
+    Route::get('/observations/pdf/batch', function (Request $request) {
+        $user    = Auth::user();
+        $monitor = ElectionMonitor::where('user_id', $user->id)
+            ->where('is_active', true)
+            ->first();
+
+        if (!$monitor) {
+            abort(403, 'Not an active monitor.');
+        }
+
+        $typeFilter     = $request->get('type', 'all');
+        $severityFilter = $request->get('severity', 'all');
+
+        // Build query
+        $query = DB::table('monitor_observations')
+            ->where('election_monitor_id', $monitor->id);
+
+        if ($typeFilter !== 'all') {
+            $query->where('observation_type', $typeFilter);
+        }
+        if ($severityFilter !== 'all') {
+            $query->where('severity', $severityFilter);
+        }
+
+        $observationIds = $query->pluck('id')->toArray();
+
+        if (empty($observationIds)) {
+            return back()->with('error', 'No observations to export.');
+        }
+
+        try {
+            $pdf = ObservationPDFService::generateBatch($observationIds, $monitor);
+
+            AuditLog::record(
+                action:    'monitor.observations.pdf-batch-downloaded',
+                event:     'exported',
+                module:    'ElectionMonitor',
+                extra:     [
+                    'outcome' => 'success',
+                    'count'   => count($observationIds),
+                    'type'    => $typeFilter,
+                    'severity'=> $severityFilter,
+                ]
+            );
+
+            return $pdf->download('observations-batch-' . now()->format('Y-m-d-His') . '.pdf');
+        } catch (\Exception $e) {
+            Log::error('Batch PDF generation failed', ['error' => $e->getMessage()]);
+            abort(500, 'Failed to generate PDF: ' . $e->getMessage());
+        }
+    })->name('observations.pdf-batch')->middleware('permission:export-observations');
+
     // ── View Results (read-only, assigned stations only) ─────────────────────
     Route::get('/results', function () {
         $user    = Auth::user();
@@ -447,4 +583,58 @@ Route::middleware(['auth', 'role:election-monitor'])
             'results' => $results,
         ]);
     })->name('results')->middleware('permission:view-assigned-stations');
+
+    // ── Download Document ────────────────────────────────────────────────────
+    Route::post('/observations/{observationId}/download-document', function ($observationId, Request $request) {
+        $user = Auth::user();
+        $monitor = ElectionMonitor::where('user_id', $user->id)
+            ->where('is_active', true)
+            ->first();
+
+        if (!$monitor) {
+            abort(403, 'Not an active monitor.');
+        }
+
+        $observation = DB::table('monitor_observations')
+            ->where('id', $observationId)
+            ->where('election_monitor_id', $monitor->id)
+            ->first();
+
+        if (!$observation || !$observation->documents_paths) {
+            abort(404, 'Document not found or access denied.');
+        }
+
+        $documentPath = $request->get('path');
+        if (!$documentPath) {
+            abort(400, 'Document path is required.');
+        }
+
+        // Verify the path is actually in the documents_paths JSON
+        $documents = json_decode($observation->documents_paths, true) ?? [];
+        $docExists = collect($documents)->firstWhere('path', $documentPath);
+
+        if (!$docExists) {
+            abort(403, 'Document access denied.');
+        }
+
+        $fullPath = storage_path("app/public/{$documentPath}");
+        if (!file_exists($fullPath) || !is_file($fullPath)) {
+            abort(404, 'File not found on disk.');
+        }
+
+        // Log document download
+        AuditLog::record(
+            action:    'monitor.observation.document-downloaded',
+            event:     'downloaded',
+            module:    'ElectionMonitor',
+            extra:     [
+                'outcome'         => 'success',
+                'observation_id'  => $observationId,
+                'document_name'   => $docExists['name'] ?? 'unknown',
+                'document_size'   => $docExists['size'] ?? 0,
+            ]
+        );
+
+        return response()->download($fullPath, $docExists['name'] ?? basename($documentPath));
+    })->name('download-document')->middleware('permission:view-observations');
 });

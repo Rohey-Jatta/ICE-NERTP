@@ -155,6 +155,8 @@ const isWorkspaceRoute = (url = '/') => WORKSPACE_PREFIXES.some(
 );
 
 const AuthenticatedShell = ({ children, user, url, onLogout, isLoggingOut }) => {
+    const page = usePage();
+    const { flash, errors } = page.props;
     const [sidebarOpen, setSidebarOpen] = useState(false);
 
     // Sidebar collapsed state — persisted in localStorage
@@ -324,6 +326,32 @@ const AuthenticatedShell = ({ children, user, url, onLogout, isLoggingOut }) => 
                 </div>
 
                 <main className="workspace-light-surface min-h-screen">
+                    {flash && (flash.success || flash.error || flash.info) && (
+                        <div className="max-w-7xl mx-auto px-4 py-4 sm:px-6 lg:px-8">
+                            {flash.success && (
+                                <div className="mb-4 rounded-2xl border border-teal-500/30 bg-iec-pink-500/10 px-5 py-4 text-sm text-iec-pink-600">
+                                    ✓ {flash.success}
+                                </div>
+                            )}
+                            {flash.error && (
+                                <div className="mb-4 rounded-2xl border border-red-500/30 bg-red-500/10 px-5 py-4 text-sm text-red-300">
+                                    ⚠ {flash.error}
+                                </div>
+                            )}
+                            {flash.info && (
+                                <div className="mb-4 rounded-2xl border border-slate-300 bg-slate-50 px-5 py-4 text-sm text-slate-700">
+                                    ℹ {flash.info}
+                                </div>
+                            )}
+                        </div>
+                    )}
+                    {errors?.error && (
+                        <div className="max-w-7xl mx-auto px-4 py-2 sm:px-6 lg:px-8">
+                            <div className="mb-4 rounded-2xl border border-red-500/30 bg-red-500/10 px-5 py-4 text-sm text-red-300">
+                                ⚠ {Array.isArray(errors.error) ? errors.error[0] : errors.error}
+                            </div>
+                        </div>
+                    )}
                     {children}
                 </main>
             </div>
@@ -334,7 +362,7 @@ const AuthenticatedShell = ({ children, user, url, onLogout, isLoggingOut }) => 
 // ── Component ──────────────────────────────────────────────────────────────
 export default function AppLayout({ children }) {
     const page             = usePage();
-    const { auth }         = page.props;
+    const { auth, flash, errors }  = page.props;
     const url              = page.url || '/';
     const user             = auth?.user;
     const isAuthenticated  = !!user;
@@ -544,6 +572,32 @@ export default function AppLayout({ children }) {
 
             {/* ══ Main Content ═════════════════════════════════════════════ */}
             <main className="flex-1">
+                {flash && (flash.success || flash.error || flash.info) && (
+                    <div className="max-w-7xl mx-auto px-4 py-4 sm:px-6 lg:px-8">
+                        {flash.success && (
+                            <div className="mb-4 rounded-2xl border border-teal-500/30 bg-iec-pink-500/10 px-5 py-4 text-sm text-iec-pink-600">
+                                ✓ {flash.success}
+                            </div>
+                        )}
+                        {flash.error && (
+                            <div className="mb-4 rounded-2xl border border-red-500/30 bg-red-500/10 px-5 py-4 text-sm text-red-300">
+                                ⚠ {flash.error}
+                            </div>
+                        )}
+                        {flash.info && (
+                            <div className="mb-4 rounded-2xl border border-slate-300 bg-slate-50 px-5 py-4 text-sm text-slate-700">
+                                ℹ {flash.info}
+                            </div>
+                        )}
+                    </div>
+                )}
+                {errors?.error && (
+                    <div className="max-w-7xl mx-auto px-4 py-2 sm:px-6 lg:px-8">
+                        <div className="mb-4 rounded-2xl border border-red-500/30 bg-red-500/10 px-5 py-4 text-sm text-red-300">
+                            ⚠ {Array.isArray(errors.error) ? errors.error[0] : errors.error}
+                        </div>
+                    </div>
+                )}
                 {children}
             </main>
 

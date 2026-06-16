@@ -112,9 +112,25 @@ class AuthenticatedSessionController extends Controller
             module: 'Authentication',
             extra: ['outcome' => 'success']
         );
+        
+        // Clear all authentication data
         Auth::logout();
+        
+        // Invalidate the entire session
         $request->session()->invalidate();
+        
+        // Clear 2FA session data if any remains
+        $request->session()->forget([
+            '2fa_user_id',
+            '2fa_sms_sent',
+            '2fa_expires_at',
+            'auth.pending_user_id',
+            'auth.pending_email',
+        ]);
+        
+        // Regenerate CSRF token for security
         $request->session()->regenerateToken();
+        
         return redirect('/');
     }
 }

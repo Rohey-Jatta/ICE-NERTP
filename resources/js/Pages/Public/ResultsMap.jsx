@@ -188,7 +188,7 @@ function DrillRow({ color, title, sub, right, onClick }) {
 
 // ── 3-level drill panel ───────────────────────────────────────────────────────
 // drill: { region, constituency, ward }  — null at each unselected level
-function DrillPanel({ regions, drill, onDrill, stations, param }) {
+function DrillPanel({ regions, drill, onDrill, stations, param, isPublished = false }) {
     const { region: selRegion, constituency: selCon, ward: selWard } = drill;
 
     const region = selRegion ? regions.find((r) => r.name === selRegion) : null;
@@ -244,15 +244,49 @@ function DrillPanel({ regions, drill, onDrill, stations, param }) {
                             const isReported = s.status !== 'not_reported' && s.total_votes_cast != null;
                             const statusColor = RESULT_STATUS_MAP_COLORS[s.status] || RESULT_STATUS_MAP_COLORS[RESULT_STATUS.NOT_REPORTED];
                             return (
-                                <div key={s.id} className="flex items-start gap-3 border-b border-slate-100 px-5 py-3">
-                                    <span className="mt-1.5 h-2 w-2 flex-shrink-0 rounded-full" style={{ backgroundColor: statusColor }} />
-                                    <div className="min-w-0 flex-1">
-                                        <div className="truncate text-sm font-semibold text-slate-800">{s.name}</div>
-                                        <div className="font-mono text-xs text-slate-400">{s.code}</div>
+                                <div key={s.id} className="border-b border-slate-100">
+                                    <div className="flex items-start gap-3 px-5 py-3">
+                                        <span className="mt-1.5 h-2 w-2 flex-shrink-0 rounded-full" style={{ backgroundColor: statusColor }} />
+                                        <div className="min-w-0 flex-1">
+                                            <div className="truncate text-sm font-semibold text-slate-800">{s.name}</div>
+                                            <div className="font-mono text-xs text-slate-400">{s.code}</div>
+                                        </div>
+                                        <div className="flex-shrink-0 text-right text-xs tabular-nums text-slate-500">
+                                            {isReported ? numeric(s.valid_votes).toLocaleString() + ' valid' : '—'}
+                                        </div>
                                     </div>
-                                    <div className="flex-shrink-0 text-right text-xs tabular-nums text-slate-500">
-                                        {isReported ? numeric(s.valid_votes).toLocaleString() + ' valid' : '—'}
-                                    </div>
+
+                                    {/* Result sheet photo (published only) */}
+                                    {isPublished && s.photo_url && (
+                                        <div className="border-t border-slate-100 px-5 py-3">
+                                            <img
+                                                src={s.photo_url}
+                                                alt={`Result sheet for ${s.name}`}
+                                                className="w-full rounded-lg border border-slate-200 object-cover"
+                                            />
+                                        </div>
+                                    )}
+
+                                    {/* Party acceptances (published only) */}
+                                    {isPublished && s.party_acceptances?.length > 0 && (
+                                        <div className="border-t border-slate-100 px-5 py-2">
+                                            <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500 mb-2">Party Acceptances</div>
+                                            <div className="flex flex-col gap-1">
+                                                {s.party_acceptances.map((pa, idx) => (
+                                                    <div key={`${pa.party_abbr}-${idx}`} className="flex items-center justify-between gap-2 text-[11px]">
+                                                        <span className="truncate font-semibold text-slate-800">{pa.party_abbr}</span>
+                                                        <span className={`flex-shrink-0 rounded-full px-2 py-0.5 text-[9px] font-semibold capitalize ${
+                                                            pa.status === 'accepted' ? 'bg-emerald-100 text-emerald-700' : 
+                                                            pa.status === 'rejected' ? 'bg-red-100 text-red-700' : 
+                                                            'bg-slate-100 text-slate-600'
+                                                        }`}>
+                                                            {pa.status}
+                                                        </span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                             );
                         })
@@ -383,7 +417,7 @@ function DrillPanel({ regions, drill, onDrill, stations, param }) {
 }
 
 // ── Main ──────────────────────────────────────────────────────────────────────
-export default function ResultsMap({ election, elections = [], selectedElectionId, stations = [], regions = [], national = null }) {
+export default function ResultsMap({ election, elections = [], selectedElectionId, stations = [], regions = [], national = null, isPublished = false }) {
     const param = selectedElectionId ? `?election=${selectedElectionId}` : '';
 
     const [mode,        setMode]        = useState('regions');   // 'regions' | 'stations'
@@ -394,6 +428,7 @@ export default function ResultsMap({ election, elections = [], selectedElectionI
     const [selConst,    setSelConst]    = useState('all');
     const [statusFilter,setStatusFilter]= useState('all');
     const [sidebarOpen, setSidebarOpen] = useState(false);
+    const [selWard, setSelWard] = useState('all');
 
     const selectedRegion = drill.region;
 
@@ -408,9 +443,13 @@ export default function ResultsMap({ election, elections = [], selectedElectionI
         selStationReg === 'all' ? stationList : stationList.filter((s) => s.admin_area_name === selStationReg)
     ), [stationList, selStationReg]);
     const constOptions = useMemo(() => buildOptions(regionScoped, 'constituency_name'), [regionScoped]);
-    const locationFiltered = useMemo(() => (
+    const constScoped = useMemo(() => (
         regionScoped.filter((s) => selConst === 'all' || s.constituency_name === selConst)
     ), [regionScoped, selConst]);
+    const wardOptions = useMemo(() => buildOptions(constScoped, 'ward_name'), [constScoped]);
+    const locationFiltered = useMemo(() => (
+        constScoped.filter((s) => selWard === 'all' || s.ward_name === selWard)
+    ), [constScoped, selWard]);
     const filterCounts = useMemo(() => ({
         all:          locationFiltered.length,
         not_reported: locationFiltered.filter((s) => stationCategory(s) === 'not_reported').length,
@@ -427,9 +466,9 @@ export default function ResultsMap({ election, elections = [], selectedElectionI
         });
     }, [locationFiltered, deferredSearch, statusFilter]);
 
-    const handleStationRegion = useCallback((val) => { setSelStationReg(val); setSelConst('all'); }, []);
-    const clearFilters = useCallback(() => { setSearchTerm(''); setSelStationReg('all'); setSelConst('all'); setStatusFilter('all'); }, []);
-    const hasFilters = searchTerm || selStationReg !== 'all' || selConst !== 'all' || statusFilter !== 'all';
+    const handleStationRegion = useCallback((val) => { setSelStationReg(val); setSelConst('all'); setSelWard('all'); }, []);
+    const clearFilters = useCallback(() => { setSearchTerm(''); setSelStationReg('all'); setSelConst('all'); setSelWard('all'); setStatusFilter('all'); }, []);
+    const hasFilters = searchTerm || selStationReg !== 'all' || selConst !== 'all' || selWard !== 'all' || statusFilter !== 'all';
 
     // Map-click on a region polygon → select that region (level 1)
     const handleRegionClick = useCallback((regionName) => {
@@ -526,6 +565,7 @@ export default function ResultsMap({ election, elections = [], selectedElectionI
                                 onDrill={setDrill}
                                 stations={stationList}
                                 param={param}
+                                isPublished={isPublished}
                             />
                         </aside>
                     ) : (
@@ -534,10 +574,11 @@ export default function ResultsMap({ election, elections = [], selectedElectionI
                                 searchTerm={searchTerm} setSearchTerm={setSearchTerm}
                                 selectedRegion={selStationReg} setSelectedRegion={handleStationRegion}
                                 selectedConst={selConst} setSelectedConst={setSelConst}
-                                regionOptions={regionOptions} constOptions={constOptions}
+                                selectedWard={selWard} setSelectedWard={setSelWard}
+                                regionOptions={regionOptions} constOptions={constOptions} wardOptions={wardOptions}
                                 statusFilter={statusFilter} setStatusFilter={setStatusFilter}
                                 filterCounts={filterCounts} hasFilters={hasFilters} clearFilters={clearFilters}
-                                totalCount={stationList.length} regionScopedCount={regionScoped.length}
+                                totalCount={stationList.length} regionScopedCount={regionScoped.length} constScopedCount={constScoped.length}
                             />
                         </aside>
                     )}
@@ -552,16 +593,9 @@ export default function ResultsMap({ election, elections = [], selectedElectionI
                                     onDrill={setDrill}
                                     stations={stationList}
                                     param={param}
+                                    isPublished={isPublished}
                                 />
-                            </div>
-                        </div>
-                    )}
 
-                    {/* Mobile filters overlay (stations mode) */}
-                    {mode === 'stations' && sidebarOpen && (
-                        <div className="fixed inset-0 z-50 lg:hidden">
-                            <button className="absolute inset-0 bg-black/40" onClick={() => setSidebarOpen(false)} aria-label="Close filters" />
-                            <div className="relative ml-auto flex h-full w-72 flex-col bg-white shadow-2xl">
                                 <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
                                     <span className="text-xs font-bold uppercase tracking-widest text-slate-400">Filters</span>
                                     <button onClick={() => setSidebarOpen(false)} className="text-lg text-slate-400 hover:text-slate-900">✕</button>
@@ -570,10 +604,11 @@ export default function ResultsMap({ election, elections = [], selectedElectionI
                                     searchTerm={searchTerm} setSearchTerm={setSearchTerm}
                                     selectedRegion={selStationReg} setSelectedRegion={handleStationRegion}
                                     selectedConst={selConst} setSelectedConst={setSelConst}
-                                    regionOptions={regionOptions} constOptions={constOptions}
+                                    selectedWard={selWard} setSelectedWard={setSelWard}
+                                    regionOptions={regionOptions} constOptions={constOptions} wardOptions={wardOptions}
                                     statusFilter={statusFilter} setStatusFilter={setStatusFilter}
                                     filterCounts={filterCounts} hasFilters={hasFilters} clearFilters={clearFilters}
-                                    totalCount={stationList.length} regionScopedCount={regionScoped.length}
+                                    totalCount={stationList.length} regionScopedCount={regionScoped.length} constScopedCount={constScoped.length}
                                 />
                             </div>
                         </div>
@@ -589,10 +624,11 @@ function SidebarContent({
     searchTerm, setSearchTerm,
     selectedRegion, setSelectedRegion,
     selectedConst, setSelectedConst,
-    regionOptions, constOptions,
+    selectedWard, setSelectedWard,
+    regionOptions, constOptions, wardOptions,
     statusFilter, setStatusFilter,
     filterCounts, hasFilters, clearFilters,
-    totalCount, regionScopedCount,
+    totalCount, regionScopedCount, constScopedCount,
 }) {
     return (
         <div className="flex flex-1 flex-col overflow-hidden">
@@ -615,6 +651,11 @@ function SidebarContent({
                     <label className="mb-2 block text-xs font-bold uppercase tracking-wide text-slate-500">Constituency</label>
                     <SearchableSelect value={selectedConst} onChange={setSelectedConst}
                                       options={[{ value: 'all', label: `All (${regionScopedCount})` }, ...constOptions]} placeholder="All Constituencies" className="w-full text-sm" />
+                </div>
+                <div>
+                    <label className="mb-2 block text-xs font-bold uppercase tracking-wide text-slate-500">Ward</label>
+                    <SearchableSelect value={selectedWard} onChange={setSelectedWard}
+                                      options={[{ value: 'all', label: `All (${constScopedCount})` }, ...wardOptions]} placeholder="All Wards" className="w-full text-sm" />
                 </div>
                 <div>
                     <label className="mb-2 block text-xs font-bold uppercase tracking-wide text-slate-500">Result Status</label>

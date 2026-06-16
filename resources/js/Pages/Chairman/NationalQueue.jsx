@@ -14,14 +14,20 @@ export default function NationalQueue({ auth, pendingResults = [], pendingCount 
     const [comment, setComment]           = useState('');
     const [processing, setProcessing]     = useState(false);
     const [photoOpen, setPhotoOpen]       = useState(null);
+    const [flash, setFlash]               = useState(null);
 
     const submitAction = (resultId, type) => {
-        if (type === 'reject' && !comment.trim()) return;
+        if (type === 'reject' && !comment.trim()) {
+            setFlash({ type: 'error', text: 'A reason is required to return this result.' });
+            return;
+        }
         setProcessing(true);
+        setFlash(null);
         const url  = type === 'certify' ? `/chairman/certify/${resultId}` : `/chairman/reject/${resultId}`;
         const body = type === 'certify' ? { comments: comment } : { reason: comment };
         router.post(url, body, {
-            onSuccess: () => { setActionResult(null); setComment(''); },
+            onSuccess: () => { setActionResult(null); setComment(''); setFlash(null); },
+            onError:   () => setFlash({ type: 'error', text: 'An error occurred. Please try again.' }),
             onFinish:  () => setProcessing(false),
         });
     };
@@ -272,6 +278,12 @@ export default function NationalQueue({ auth, pendingResults = [], pendingCount 
                                     : 'This result will be returned to the Admin Area level for further review. Please provide a clear reason.'}
                             </div>
 
+                            {flash && (
+                                <div className={`p-3 rounded-lg text-sm ${flash.type === 'error' ? 'bg-red-500/20 text-red-300 border border-red-500/30' : 'bg-iec-pink-500/20 text-iec-pink-600 border border-teal-500/30'}`}>
+                                    {flash.text}
+                                </div>
+                            )}
+
                             <div className="bg-white border border-slate-200 rounded-xl p-4">
                                 <label className="block text-gray-200 font-semibold mb-2 text-sm">
                                     {actionResult.type === 'certify' ? 'Certification Notes (optional)' : 'Reason for Return (required)'}
@@ -294,7 +306,7 @@ export default function NationalQueue({ auth, pendingResults = [], pendingCount 
                         <div className="px-6 py-4 border-t border-slate-200 flex-shrink-0 flex gap-3">
                             <button
                                 onClick={() => submitAction(actionResult.id, actionResult.type)}
-                                disabled={processing || (actionResult.type === 'reject' && !comment.trim())}
+                                disabled={processing}
                                 className={`flex-1 py-3 font-bold text-iec-navy rounded-xl disabled:opacity-40 disabled:cursor-not-allowed transition-colors ${
                                     actionResult.type === 'certify' ? 'bg-green-600 hover:bg-green-500' : 'bg-red-700 hover:bg-red-600'
                                 }`}

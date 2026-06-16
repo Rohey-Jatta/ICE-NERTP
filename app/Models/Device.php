@@ -3,10 +3,12 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Device extends Model
 {
+    use HasFactory;
     const ROLES_REQUIRING_DEVICE_BINDING = [
         'polling-officer',
         'ward-approver',

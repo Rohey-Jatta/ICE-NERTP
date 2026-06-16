@@ -161,7 +161,12 @@ class CertificationWorkflowService
                 event:     'updated',
                 module:    'Certification',
                 auditable: $result,
-                extra:     ['level' => $level, 'reason' => $reason, 'outcome' => 'rejected']
+                extra:     [
+                    'level'          => $level,
+                    'reason'         => $reason,
+                    'outcome'        => 'failure',
+                    'failure_reason' => $reason,
+                ]
             );
 
             DB::commit();

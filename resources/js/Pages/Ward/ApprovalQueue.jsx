@@ -401,7 +401,7 @@ export default function WardApprovalQueue({ auth, ward, results = [], filter = '
                         <div className="px-6 py-4 border-t border-slate-200 flex-shrink-0 flex gap-3">
                             <button
                                 onClick={submitAction}
-                                disabled={processing || (ACTION_CONFIG[action].commentReq && !comment.trim())}
+                                disabled={processing}
                                 className={`flex-1 py-3 rounded-xl font-bold text-white disabled:opacity-40 disabled:cursor-not-allowed transition-colors ${ACTION_CONFIG[action].confirmColor}`}
                             >
                                 {processing ? 'Processing…' : ACTION_CONFIG[action].confirmBtn}
