@@ -9,14 +9,10 @@ function firstColor(value, fallback = '#94a3b8') {
 }
 
 // ── Region ↔ boundary name matching ───────────────────────────────────────────
-// DB admin-area names ("Greater Banjul", "Brikama (West Coast)") don't match the
-// boundary shapeNames ("Banjul", "Brikama"); normalize + alias to bridge them.
 function normalizeName(s) {
     return String(s || '').toLowerCase().replace(/\(.*?\)/g, '').replace(/[^a-z]/g, '');
 }
 
-// Boundary feature → keywords that should match a DB region's normalized name.
-// Banjul and Kanifing are now separate regions in the DB — no aliases needed.
 const FEATURE_ALIASES = {};
 
 function matchRegion(featureName, regions) {
@@ -97,7 +93,7 @@ function buildPopupHtml(station) {
         </div>` : `
         <div style="padding:10px 14px;">
             <div style="background:#f8fafc;border-radius:6px;padding:10px;text-align:center;color:#64748b;font-size:12px;">
-                No results submitted yet<br/>
+                ${status === 'not_reported' ? 'No results submitted yet' : 'Certification in progress — figures publish once nationally certified'}<br/>
                 <span style="font-size:11px;color:#94a3b8;">${Number(station.registered_voters || 0).toLocaleString()} registered voters</span>
             </div>
         </div>`;
@@ -106,6 +102,43 @@ function buildPopupHtml(station) {
         <div style="border-top:1px solid #f1f5f9;padding:10px 14px 12px;">
             <div style="font-size:10px;color:#94a3b8;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px;font-weight:600;">Candidate Results</div>
             ${candidateRows}
+        </div>` : '';
+
+    // ── Party representative reactions — only present once the result has
+    //    been nationally certified / published by the IEC Chairman.
+    let partyAcceptances = [];
+    if (station.party_acceptances) {
+        try {
+            partyAcceptances = typeof station.party_acceptances === 'string'
+                ? JSON.parse(station.party_acceptances)
+                : Array.isArray(station.party_acceptances) ? station.party_acceptances : [];
+        } catch { partyAcceptances = []; }
+    }
+    partyAcceptances = partyAcceptances.filter(Boolean);
+
+    const partyBadgeStyle = (paStatus) => {
+        if (paStatus === 'accepted') return { icon: '✓', bg: '#d1fae5', color: '#065f46' };
+        if (paStatus === 'rejected') return { icon: '✗', bg: '#fee2e2', color: '#991b1b' };
+        return { icon: '⚠', bg: '#fef3c7', color: '#92400e' }; // accepted_with_reservation
+    };
+
+    const partySection = partyAcceptances.length > 0 ? `
+        <div style="border-top:1px solid #f1f5f9;padding:10px 14px 12px;">
+            <div style="font-size:10px;color:#94a3b8;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px;font-weight:600;">Party Representative Status</div>
+            <div style="display:flex;flex-wrap:wrap;gap:6px;">
+                ${partyAcceptances.map((pa) => {
+                    const b = partyBadgeStyle(pa.status);
+                    return `<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:10px;font-size:10px;font-weight:600;background:${b.bg};color:${b.color};">${b.icon} ${pa.party_abbr || pa.party_name}</span>`;
+                }).join('')}
+            </div>
+        </div>` : '';
+
+    // ── Result-sheet photo — only present once nationally certified.
+    const photoSection = station.photo_url ? `
+        <div style="border-top:1px solid #f1f5f9;padding:10px 14px 12px;">
+            <a href="${station.photo_url}" target="_blank" rel="noopener noreferrer" style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:600;color:#0f172a;text-decoration:none;">
+                <span style="font-size:13px;">🧾</span> View certified result sheet
+            </a>
         </div>` : '';
 
     return `
@@ -123,6 +156,8 @@ function buildPopupHtml(station) {
             </div>
             ${statsGrid}
             ${candidatesSection}
+            ${partySection}
+            ${photoSection}
         </div>`;
 }
 
@@ -158,7 +193,6 @@ export default function LeafletMap({
     const markersLayer = useRef(null);
     const geoLayer     = useRef(null);
     const LRef         = useRef(null);
-    // Keep latest props for event handlers bound once.
     const regionsRef   = useRef(regions);
     const onClickRef   = useRef(onRegionClick);
     regionsRef.current = regions;
@@ -177,7 +211,6 @@ export default function LeafletMap({
         }
     }
 
-    // ── Init map (once) ───────────────────────────────────────────────────────
     useEffect(() => {
         if (typeof window === 'undefined' || !mapRef.current) return;
         let cancelled = false;
@@ -200,7 +233,6 @@ export default function LeafletMap({
                 maxZoom: 19,
             }).addTo(map);
 
-            // Choropleth layer
             geoLayer.current = L.geoJSON(GAMBIA_GEO, {
                 style: () => ({ weight: 1, color: '#fff', fillColor: NO_DATA_FILL, fillOpacity: 0.6 }),
                 onEachFeature: (feature, layer) => {
@@ -240,11 +272,9 @@ export default function LeafletMap({
         };
     }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-    // Keep selectedRegion accessible to the once-bound mouseout handler.
     const selectedRegionRef = useRef(selectedRegion);
     selectedRegionRef.current = selectedRegion;
 
-    // ── Show/hide choropleth layer by mode ────────────────────────────────────
     useEffect(() => {
         const map = mapInstance.current;
         if (!map || !mapReady || !geoLayer.current) return;
@@ -255,7 +285,6 @@ export default function LeafletMap({
         }
     }, [mode, mapReady]);
 
-    // ── Restyle choropleth + zoom on data / selection change ──────────────────
     useEffect(() => {
         const map = mapInstance.current;
         if (!mapReady || mode !== 'regions' || !geoLayer.current || !map) return;
@@ -268,7 +297,6 @@ export default function LeafletMap({
             const dimmed = selectedRegion && !isSel;
             const hasLeader = region && region.leader;
             const fill = hasLeader ? firstColor(region.leader.color) : NO_DATA_FILL;
-            // Dim fill by reporting completeness; fade non-selected regions when drilling.
             let opacity = hasLeader ? 0.45 + 0.4 * (Math.min(100, region.reporting_pct) / 100) : 0.55;
             if (dimmed) opacity = 0.12;
             layer.setStyle({
@@ -290,7 +318,6 @@ export default function LeafletMap({
         } catch { /* ignore */ }
     }, [regions, selectedRegion, mode, mapReady]);
 
-    // ── Render station markers (stations mode = all; regions mode = drill set) ─
     useEffect(() => {
         if (!mapReady || !LRef.current || !markersLayer.current) return;
         const L = LRef.current;
@@ -298,8 +325,6 @@ export default function LeafletMap({
         if (mode === 'stations') {
             renderMarkers(L, map, markersLayer.current, stations, true);
         } else if (selectedRegion) {
-            // At constituency/ward level, fit to the (smaller) dot set so the
-            // user sees the zoom-in without the choropleth re-fitting overriding it.
             const fitToDots = drillLevel === 'constituency' || drillLevel === 'ward';
             renderMarkers(L, map, markersLayer.current, drillStations, fitToDots);
         } else {
@@ -333,7 +358,6 @@ export default function LeafletMap({
                 </div>
             )}
 
-            {/* Boundary attribution (CC BY 4.0) */}
             <div className="pointer-events-none absolute bottom-1 left-2 z-[400] text-[10px] text-slate-400">
                 Boundaries © geoBoundaries (CC BY 4.0)
             </div>
@@ -341,7 +365,6 @@ export default function LeafletMap({
     );
 }
 
-// ── Station markers (dots) ────────────────────────────────────────────────────
 function renderMarkers(L, map, layer, stations, fit = true) {
     layer.clearLayers();
     const bounds = [];

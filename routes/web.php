@@ -1,9 +1,7 @@
 <?php
 
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
-use App\Models\AuditLog;
 use App\Http\Controllers\Public\ResultsSummaryController;
 use App\Http\Controllers\Public\ResultsMapController;
 use App\Http\Controllers\Public\ResultsStationsController;
@@ -24,50 +22,20 @@ Route::get('/api/public/map-stations', [ResultsMapController::class, 'stationsJs
 // ─── Auth routes ──────────────────────────────────────────────────────────────
 require __DIR__.'/auth.php';
 
-// ─── Two-Factor (guest only) ──────────────────────────────────────────────────
+// ─── Two-Factor ───────────────────────────────────────────────────────────────
+// GET /show — guest only (no point showing 2FA if already logged in)
 Route::middleware('guest')->group(function () {
     Route::get('/auth/two-factor', [TwoFactorController::class, 'show'])->name('two-factor.show');
-    Route::post('/auth/two-factor', [TwoFactorController::class, 'verify'])->name('two-factor.verify');
-    Route::post('/auth/two-factor/resend', [TwoFactorController::class, 'resend'])->name('two-factor.resend');
 });
 
-// ─── Forced Password Change (authenticated) ───────────────────────────────────
-Route::middleware('auth')->group(function () {
-    Route::get('/auth/change-password', function () {
-        return Inertia::render('Auth/ChangePassword');
-    })->name('password.change');
-
-    Route::post('/auth/change-password', function (Request $request) {
-        $request->validate([
-            'password'              => ['required', 'string', 'min:8', 'confirmed'],
-            'password_confirmation' => ['required'],
-        ]);
-
-        /** @var \App\Models\User $user */
-        $user = $request->user();
-
-        $user->update([
-            'password'             => bcrypt($request->password),
-            'must_change_password' => false,
-        ]);
-
-        AuditLog::record(
-            action: 'auth.password.changed',
-            event:  'updated',
-            module: 'Authentication',
-            extra:  ['outcome' => 'success']
-        );
-
-        return redirect($user->getDashboardUrlAttribute())
-            ->with('success', 'Password updated successfully.');
-    })->name('password.change.update');
-});
+// POST verify & resend must NOT have guest middleware — the session contains
+// 2fa_user_id which can trick Laravel's guest check into thinking the user
+// is authenticated, causing a 403 on the POST and breaking the flow.
+Route::post('/auth/two-factor', [TwoFactorController::class, 'verify'])->name('two-factor.verify');
+Route::post('/auth/two-factor/resend', [TwoFactorController::class, 'resend'])->name('two-factor.resend');
 
 // ─── Device Registration (auth required) ─────────────────────────────────────
 require __DIR__.'/device.php';
-
-// ─── Admin Device Management (reset/transfer) ───────────────────────────────
-require __DIR__.'/admin_device.php';
 
 // ─── Role-specific dashboards & actions ──────────────────────────────────────
 require __DIR__.'/officer.php';

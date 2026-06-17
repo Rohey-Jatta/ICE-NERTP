@@ -3,29 +3,24 @@
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
-use App\Services\TwoFactorAuthService;
 use App\Services\DeviceBindingService;
+use App\Services\TwoFactorAuthService;
 use App\Models\AuditLog;
-use App\Models\Device;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 
 class TwoFactorController extends Controller
 {
-    protected TwoFactorAuthService $twoFactorService;
-    protected DeviceBindingService $deviceService;
-
-    public function __construct(TwoFactorAuthService $twoFactorService, DeviceBindingService $deviceService)
-    {
-        $this->twoFactorService = $twoFactorService;
-        $this->deviceService    = $deviceService;
-    }
+    public function __construct(
+        protected TwoFactorAuthService $twoFactorService,
+        protected DeviceBindingService $deviceService,
+    ) {}
 
     public function show(Request $request)
     {
-        // Guard: if no pending 2FA session, send back to login
         if (!$request->session()->has('2fa_user_id')) {
             return redirect()->route('login');
         }
@@ -59,7 +54,7 @@ class TwoFactorController extends Controller
             return back()->withErrors(['code' => 'Verification code has expired. Please request a new code.']);
         }
 
-        // Verify the code
+        // Verify the OTP code
         if (!$this->twoFactorService->verifyCode($user, $request->code)) {
             AuditLog::record(
                 action: 'auth.two_factor.failed',
@@ -71,102 +66,77 @@ class TwoFactorController extends Controller
             return back()->withErrors(['code' => 'Invalid verification code. Please try again.']);
         }
 
-        // Before finalizing login, check device binding requirements.
-        $deviceStatus = $this->deviceService->checkDevice($user, $request);
+        // ── OTP is valid — now handle device binding ──────────────────────────
 
-        if ($deviceStatus === 'revoked') {
-            AuditLog::record(
-                action: 'auth.device.revoked_access_attempt',
-                event: 'blocked',
-                module: 'Authentication',
-                auditable: $user,
-                extra: ['outcome' => 'blocked', 'failure_reason' => 'Revoked device attempted login']
-            );
-            return back()->withErrors(['email' => ['This device has been revoked. Contact IEC Administrator.']]);
-        }
+        $role = $user->getRoleNames()->first();
 
-        if ($deviceStatus === 'pending_registration') {
-            $fingerprint = $this->deviceService->extractFingerprint($request);
+        if (\App\Models\Device::roleRequiresBinding($role)) {
+            $deviceStatus = $this->deviceService->checkDevice($user, $request);
 
-            if (!$fingerprint) {
-                return back()->withErrors(['email' => ['Device identifier unavailable. Please enable JavaScript and try again.']]);
-            }
-
-            if ($user->bound_device_id !== null) {
-                AuditLog::record(
-                    action: 'auth.device.binding_mismatch',
-                    event: 'blocked',
-                    module: 'Authentication',
-                    auditable: $user,
-                    extra: ['bound_device_id' => $user->bound_device_id, 'attempted_device_fingerprint' => $fingerprint]
-                );
-
-                return back()->withErrors(['email' => ['This account is already registered to another device and cannot be used on this device.']])->setStatusCode(403);
-            }
-
-            Auth::login($user);
-            $request->session()->regenerate();
-            $request->session()->forget(['2fa_user_id', '2fa_sms_sent', '2fa_expires_at']);
-
-            return redirect()->route('device.verify');
-        }
-
-        // Complete login and then ensure the user's `bound_device_id` is set for already-registered devices.
-        Auth::login($user);
-        $request->session()->regenerate();
-        $request->session()->forget(['2fa_user_id', '2fa_sms_sent', '2fa_expires_at']);
-
-        $fingerprint = $this->deviceService->extractFingerprint($request);
-
-        if ($fingerprint) {
-            $device = Device::where('device_fingerprint', $fingerprint)
-                ->where('user_id', $user->id)
-                ->first();
-
-            if ($device) {
-                if ($user->bound_device_id === null) {
-                    $user->bound_device_id = $device->id;
-                    $user->save();
-
+            switch ($deviceStatus) {
+                case 'mismatch':
+                    // Different device — block login entirely
                     AuditLog::record(
-                        action: 'auth.device.bound',
-                        event: 'created',
-                        module: 'Authentication',
-                        auditable: $user,
-                        extra: ['device_id' => $device->id, 'device_fingerprint' => $device->device_fingerprint]
-                    );
-                } elseif ($user->bound_device_id !== $device->id) {
-                    AuditLog::record(
-                        action: 'auth.device.binding_mismatch',
+                        action: 'auth.login.device_blocked',
                         event: 'blocked',
                         module: 'Authentication',
                         auditable: $user,
-                        extra: ['bound_device_id' => $user->bound_device_id, 'attempted_device_fingerprint' => $device->device_fingerprint]
+                        extra: [
+                            'outcome'        => 'blocked',
+                            'failure_reason' => 'Device mismatch — account bound to a different device',
+                            'ip'             => $request->ip(),
+                        ]
                     );
 
-                    Auth::logout();
-                    $request->session()->invalidate();
-                    $request->session()->regenerateToken();
+                    // Clear 2FA session — do not log the user in
+                    $request->session()->forget(['2fa_user_id', '2fa_sms_sent', '2fa_expires_at']);
 
-                    if ($request->expectsJson()) {
-                        return response()->json([
-                            'message' => 'This account is already registered to another device and cannot be used on this device.'
-                        ], 403);
+                    return redirect()->route('login')->withErrors([
+                        'email' => 'This account is already registered to another device. Please contact the IEC Administrator for assistance.',
+                    ]);
+
+                case 'revoked':
+                    $request->session()->forget(['2fa_user_id', '2fa_sms_sent', '2fa_expires_at']);
+                    return redirect()->route('login')->withErrors([
+                        'email' => 'Your device access has been revoked. Please contact the IEC Administrator.',
+                    ]);
+
+                case 'no_device_bound':
+                    // First login — silently register the current device
+                    try {
+                        $this->deviceService->registerDeviceSilently($user, $request);
+                        Log::info('[Auth] Device registered silently on first login', ['user_id' => $user->id]);
+                    } catch (\Throwable $e) {
+                        Log::error('[Auth] Silent device registration failed', [
+                            'user_id' => $user->id,
+                            'error'   => $e->getMessage(),
+                        ]);
+                        // Do NOT block login if registration fails — log it and continue
                     }
+                    break;
 
-                    return redirect()->route('login')
-                        ->withErrors(['email' => ['This account is already registered to another device and cannot be used on this device.']])
-                        ->setStatusCode(403);
-                }
+                case 'trusted':
+                    // Device already registered and matches — nothing to do
+                    break;
+
+                case 'not_required':
+                    // Role doesn't need device binding (party-representative, election-monitor)
+                    break;
             }
         }
+
+        // ── All checks passed — log the user in ──────────────────────────────
+
+        Auth::login($user);
+        $request->session()->regenerate();
+        $request->session()->forget(['2fa_user_id', '2fa_sms_sent', '2fa_expires_at']);
 
         AuditLog::record(
             action: 'auth.login.success',
             event: 'action',
             module: 'Authentication',
             auditable: $user,
-            extra: ['outcome' => 'success']
+            extra: ['outcome' => 'success', 'ip' => $request->ip()]
         );
 
         return $this->redirectByRole($user);
@@ -184,7 +154,6 @@ class TwoFactorController extends Controller
             return redirect()->route('login');
         }
 
-        // Generate a fresh code and send it
         $code      = $this->twoFactorService->generateCode($user);
         $this->twoFactorService->sendCode($user, $code);
 

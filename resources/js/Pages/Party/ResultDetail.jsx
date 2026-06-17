@@ -91,8 +91,8 @@ export default function ResultDetail({ auth, party, result, myAcceptance }) {
                                 myAcceptance.status === 'accepted'
                                     ? 'bg-iec-pink-500/20 text-iec-pink-600 border-teal-500/40'
                                     : myAcceptance.status === 'rejected'
-                                    ? 'bg-red-500/20 text-red-300 border-red-500/40'
-                                    : 'bg-yellow-500/20 text-yellow-300 border-yellow-500/40'
+                                    ? 'bg-red-500/20 text-red-500 border-red-500/40'
+                                    : 'bg-yellow-500/20 text-yellow-500 border-yellow-500/40'
                             }`}>
                                 {myAcceptance.status === 'accepted' && '✓ You Accepted'}
                                 {myAcceptance.status === 'rejected' && '✗ You Disputed'}
@@ -170,7 +170,7 @@ export default function ResultDetail({ auth, party, result, myAcceptance }) {
                                                                         <span className="ml-2 text-xs text-iec-pink-600">🏆 Leading</span>
                                                                     )}
                                                                 </div>
-                                                                <div className="text-slate-500 text-xs">{cv.party_name}</div>
+                                                                <div className="text-slate-600 text-xs">{cv.party_name}</div>
                                                             </div>
                                                         </div>
                                                         <div className="text-right">
@@ -222,7 +222,7 @@ export default function ResultDetail({ auth, party, result, myAcceptance }) {
                                 </div>
                             ) : (
                                 <div className="p-6 bg-white rounded-lg border border-slate-200 text-center">
-                                    <p className="text-slate-500 text-sm">No result sheet photo attached.</p>
+                                    <p className="text-slate-600 text-sm">No result sheet photo attached.</p>
                                 </div>
                             )}
                         </div>
@@ -236,8 +236,8 @@ export default function ResultDetail({ auth, party, result, myAcceptance }) {
                                         <div key={idx} className="flex items-start gap-3 p-3 bg-slate-50 rounded-lg">
                                             <span className={`px-2 py-0.5 rounded text-xs font-semibold flex-shrink-0 ${
                                                 pa.status === 'accepted' ? 'bg-iec-pink-500/20 text-iec-pink-600' :
-                                                pa.status === 'rejected' ? 'bg-red-500/20 text-red-300' :
-                                                'bg-yellow-500/20 text-yellow-300'
+                                                pa.status === 'rejected' ? 'bg-red-500/20 text-red-600' :
+                                                'bg-yellow-500/20 text-yellow-600'
                                             }`}>
                                                 {pa.abbr}
                                             </span>
@@ -245,10 +245,10 @@ export default function ResultDetail({ auth, party, result, myAcceptance }) {
                                                 <div className="text-slate-600 text-sm font-medium">
                                                     {pa.status === 'accepted' ? '✓ Accepted' :
                                                      pa.status === 'rejected' ? '✗ Disputed' : '⚠ Accepted with Reservation'}
-                                                    {' — '}<span className="text-slate-500 font-normal">{pa.party_name}</span>
+                                                    {' — '}<span className="text-slate-600 font-normal">{pa.party_name}</span>
                                                 </div>
                                                 {pa.comments && (
-                                                    <div className="text-slate-500 text-xs mt-0.5 italic">"{pa.comments}"</div>
+                                                    <div className="text-slate-600 text-xs mt-0.5 italic">"{pa.comments}"</div>
                                                 )}
                                             </div>
                                         </div>
@@ -274,20 +274,20 @@ export default function ResultDetail({ auth, party, result, myAcceptance }) {
                                     }`}>
                                         <div className={`text-lg font-bold mb-1 ${
                                             myAcceptance.status === 'accepted' ? 'text-iec-pink-600' :
-                                            myAcceptance.status === 'rejected' ? 'text-red-300' : 'text-yellow-300'
+                                            myAcceptance.status === 'rejected' ? 'text-red-600' : 'text-yellow-600'
                                         }`}>
                                             {myAcceptance.status === 'accepted' && '✓ Accepted'}
                                             {myAcceptance.status === 'rejected' && '✗ Disputed'}
                                             {myAcceptance.status === 'accepted_with_reservation' && '⚠ Accepted with Reservation'}
                                         </div>
-                                        <div className="text-slate-500 text-xs">Recorded on {myAcceptance.decided_at}</div>
+                                        <div className="text-slate-600 text-xs">Recorded on {myAcceptance.decided_at}</div>
                                         {myAcceptance.comments && (
                                             <div className="mt-3 p-3 bg-white rounded-lg text-slate-600 text-sm italic">
                                                 "{myAcceptance.comments}"
                                             </div>
                                         )}
                                     </div>
-                                    <p className="text-slate-500 text-xs text-center">
+                                    <p className="text-slate-600 text-xs text-center">
                                         Your decision is final and has been logged in the audit trail.
                                     </p>
                                     <Link href="/party/pending-acceptance"
@@ -299,7 +299,7 @@ export default function ResultDetail({ auth, party, result, myAcceptance }) {
                                 /* Decision form */
                                 <div className="bg-white rounded-xl border border-amber-500/30 p-5">
                                     <h2 className="text-iec-navy font-bold text-lg mb-2">Your Decision</h2>
-                                    <p className="text-slate-500 text-xs mb-5 leading-relaxed">
+                                    <p className="text-slate-600 text-xs mb-5 leading-relaxed">
                                         Review the vote counts and result sheet photo carefully before making your decision.
                                         Your decision will be logged and visible to IEC officials.
                                     </p>
@@ -321,13 +321,13 @@ export default function ResultDetail({ auth, party, result, myAcceptance }) {
                                                 <div className={`font-bold text-sm ${
                                                     selectedDecision === key
                                                         ? key === 'accepted' ? 'text-iec-pink-600'
-                                                        : key === 'rejected' ? 'text-red-300'
-                                                        : 'text-yellow-300'
+                                                        : key === 'rejected' ? 'text-red-600'
+                                                        : 'text-yellow-600'
                                                         : 'text-iec-navy'
                                                 }`}>
                                                     {cfg.icon} {cfg.label}
                                                 </div>
-                                                <div className="text-slate-500 text-xs mt-0.5">{cfg.description}</div>
+                                                <div className="text-slate-600 text-xs mt-0.5">{cfg.description}</div>
                                             </button>
                                         ))}
                                     </div>
@@ -339,7 +339,7 @@ export default function ResultDetail({ auth, party, result, myAcceptance }) {
                                                 <label className="block text-slate-600 text-sm font-semibold mb-2">
                                                     {DECISION_CONFIG[selectedDecision].commentLabel}
                                                     {DECISION_CONFIG[selectedDecision].commentReq && (
-                                                        <span className="text-red-400 ml-1">*</span>
+                                                        <span className="text-red-600 ml-1">*</span>
                                                     )}
                                                 </label>
                                                 <textarea
@@ -357,7 +357,7 @@ export default function ResultDetail({ auth, party, result, myAcceptance }) {
                                                     }
                                                 />
                                                 {errors.comments && (
-                                                    <p className="text-red-400 text-xs mt-1">{errors.comments}</p>
+                                                    <p className="text-red-600 text-xs mt-1">{errors.comments}</p>
                                                 )}
                                             </div>
 

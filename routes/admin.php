@@ -13,10 +13,12 @@ use Inertia\Inertia;
 use App\Models\AdministrativeHierarchy;
 use App\Models\AuditLog;
 use App\Models\Candidate;
+use App\Models\Device;
 use App\Models\Election;
 use App\Models\PollingStation;
 use App\Models\PoliticalParty;
 use App\Models\User;
+use App\Services\DeviceBindingService;
 
 Route::middleware(['auth', 'role:iec-administrator'])
     ->prefix('admin')
@@ -143,6 +145,22 @@ Route::middleware(['auth', 'role:iec-administrator'])
     })->name('users.store')->middleware(['permission:manage-users', 'permission:assign-roles']);
 
     Route::get('/users/{user}/edit', function (User $user) {
+        $devices = Device::where('user_id', $user->id)
+            ->orderByDesc('last_used_at')
+            ->get()
+            ->map(fn($d) => [
+                'id'          => $d->id,
+                'device_name' => $d->device_name,
+                'device_type' => $d->device_type,
+                'os'          => $d->os,
+                'browser'     => $d->browser,
+                'is_trusted'  => $d->is_trusted,
+                'is_revoked'  => $d->is_revoked,
+                'verified_at' => $d->verified_at?->format('Y-m-d H:i:s'),
+                'last_used_at'=> $d->last_used_at?->format('Y-m-d H:i:s'),
+                'last_used_ip'=> $d->last_used_ip,
+            ]);
+
         return Inertia::render('Admin/UserEdit', [
             'auth'            => ['user' => Auth::user()],
             'user'            => $user->load('roles'),
@@ -152,6 +170,8 @@ Route::middleware(['auth', 'role:iec-administrator'])
             'constituencies'  => AdministrativeHierarchy::where('level', 'constituency')->select('id', 'name')->get(),
             'adminAreas'      => AdministrativeHierarchy::where('level', 'admin_area')->select('id', 'name')->get(),
             'parties'         => PoliticalParty::select('id', 'name')->get(),
+            'devices'         => $devices,
+            'requiresDeviceBinding' => Device::roleRequiresBinding($user->getRoleNames()->first() ?? ''),
         ]);
     })->name('users.edit')->middleware(['permission:manage-users', 'permission:assign-roles']);
 
@@ -203,6 +223,32 @@ Route::middleware(['auth', 'role:iec-administrator'])
         }
     })->name('users.destroy')->middleware(['permission:manage-users', 'permission:deactivate-user']);
 
+    // ── Device Management (Admin) ─────────────────────────────────────────────
+
+    /**
+     * Reset (revoke) ALL devices for a user — allows them to re-register on next login.
+     */
+    Route::post('/users/{user}/devices/reset', function (User $user, DeviceBindingService $deviceService) {
+        try {
+            $deviceService->revokeAllDevices($user, Auth::id());
+            return back()->with('success', "Device binding reset for {$user->name}. They can now log in from a new device.");
+        } catch (\Exception $e) {
+            return back()->withErrors(['error' => 'Failed to reset device: ' . $e->getMessage()]);
+        }
+    })->name('users.devices.reset')->middleware('permission:manage-users');
+
+    /**
+     * Revoke a specific device.
+     */
+    Route::delete('/devices/{device}', function (Device $device, DeviceBindingService $deviceService) {
+        try {
+            $deviceService->revokeDevice(Auth::user(), $device->id);
+            return back()->with('success', 'Device revoked successfully.');
+        } catch (\Exception $e) {
+            return back()->withErrors(['error' => 'Failed to revoke device: ' . $e->getMessage()]);
+        }
+    })->name('devices.revoke')->middleware('permission:manage-users');
+
     // ── Party Representatives ─────────────────────────────────────────────────
     Route::get('/party-representatives', function () {
         return Inertia::render('Admin/PartyRepresentatives', [
@@ -213,13 +259,11 @@ Route::middleware(['auth', 'role:iec-administrator'])
     })->name('party-representatives')->middleware('permission:register-parties');
 
     Route::get('/party-representatives/create', function () {
-        // Fall back to any non-archived election if no active one
         $election = Election::where('status', 'active')->latest()->first()
             ?? Election::whereNotIn('status', ['archived'])->latest()->first();
 
         return Inertia::render('Admin/PartyRepresentativeCreate', [
             'auth'            => ['user' => Auth::user()],
-            // Removed whereDoesntHave — too restrictive; same user can rep across elections
             'users'           => User::role('party-representative')
                 ->select('id', 'name', 'email')
                 ->get(),
@@ -280,7 +324,6 @@ Route::middleware(['auth', 'role:iec-administrator'])
             'designation'           => 'nullable|string|max:255',
         ]);
         try {
-            // Fall back to any non-archived election if no active one exists
             $election = Election::where('status', 'active')->first()
                 ?? Election::whereNotIn('status', ['archived'])->latest()->first();
 
@@ -310,7 +353,6 @@ Route::middleware(['auth', 'role:iec-administrator'])
         }
     })->name('party-representatives.store')->middleware('permission:register-parties');
 
-    // ── DELETE Party Representative ───────────────────────────────────────────
     Route::delete('/party-representatives/{id}', function ($id) {
         try {
             $rep = \App\Models\PartyRepresentative::findOrFail($id);
@@ -334,13 +376,11 @@ Route::middleware(['auth', 'role:iec-administrator'])
     })->name('election-monitors')->middleware('permission:manage-election-monitors');
 
     Route::get('/election-monitors/create', function () {
-        // Fall back to any non-archived election if no active one
         $election = Election::where('status', 'active')->latest()->first()
             ?? Election::whereNotIn('status', ['archived'])->latest()->first();
 
         return Inertia::render('Admin/ElectionMonitorCreate', [
             'auth'            => ['user' => Auth::user()],
-            // Removed whereDoesntHave — too restrictive
             'users'           => User::role('election-monitor')
                 ->select('id', 'name', 'email')->get(),
             'pollingStations' => PollingStation::select('id', 'name', 'code')->get(),
@@ -397,7 +437,6 @@ Route::middleware(['auth', 'role:iec-administrator'])
             'polling_station_ids.*' => 'exists:polling_stations,id',
         ]);
         try {
-            // Fall back to any non-archived election if no active one exists
             $election = Election::where('status', 'active')->first()
                 ?? Election::whereNotIn('status', ['archived'])->latest()->first();
 
@@ -427,7 +466,6 @@ Route::middleware(['auth', 'role:iec-administrator'])
         }
     })->name('election-monitors.store')->middleware('permission:manage-election-monitors');
 
-    // ── DELETE Election Monitor ───────────────────────────────────────────────
     Route::delete('/election-monitors/{id}', function ($id) {
         try {
             $monitor = \App\Models\ElectionMonitor::findOrFail($id);
@@ -516,17 +554,10 @@ Route::middleware(['auth', 'role:iec-administrator'])
                 ->first();
 
             if ($existingElection) {
-                \Log::warning('Duplicate election slug detected', ['slug' => $slug]);
                 return back()->withErrors([
                     'error' => 'An election with the name "' . $request->name . '" already exists. Please use a different name.'
                 ]);
             }
-
-            \Log::info('Creating election', [
-                'name' => $request->name,
-                'type' => $typeMap[$request->type] ?? $request->type,
-                'slug' => $slug,
-            ]);
 
             $election = Election::create([
                 'name'       => $request->name,
@@ -539,23 +570,13 @@ Route::middleware(['auth', 'role:iec-administrator'])
                 'created_by' => Auth::id(),
             ]);
 
-            \Log::info('Election created successfully', ['election_id' => $election->id, 'name' => $election->name]);
-
             if ($request->party_ids && count($request->party_ids) > 0) {
                 $election->participatingParties()->sync($request->party_ids);
-                \Log::info('Parties synced', ['count' => count($request->party_ids)]);
             }
 
             AuditLog::record(action: 'election.created', event: 'created', module: 'ElectionManagement', auditable: $election);
-
-            \Log::info('Redirecting to elections list');
             return redirect()->route('admin.elections')->with('success', 'Election created successfully!');
         } catch (\Exception $e) {
-            \Log::error('Election creation failed', [
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
-                'request' => $request->all(),
-            ]);
             return back()->withErrors(['error' => 'Failed to create election: ' . $e->getMessage()]);
         }
     })->name('elections.store')->middleware('permission:create-election');
@@ -610,7 +631,7 @@ Route::middleware(['auth', 'role:iec-administrator'])
             );
             $election->delete();
             return redirect()->route('admin.elections')
-                ->with('success', "Election \"{$election->name}\" deleted. All related data (parties, stations, candidates) has been preserved.");
+                ->with('success', "Election \"{$election->name}\" deleted.");
         } catch (\Exception $e) {
             return redirect()->route('admin.elections')
                 ->with('error', 'Failed to delete election: ' . $e->getMessage());
@@ -624,15 +645,11 @@ Route::middleware(['auth', 'role:iec-administrator'])
                 action: 'election.force_deleted',
                 event: 'deleted',
                 module: 'ElectionManagement',
-                extra: [
-                    'outcome'       => 'success',
-                    'election_id'   => $election->id,
-                    'election_name' => $election->name,
-                ]
+                extra: ['outcome' => 'success', 'election_id' => $election->id, 'election_name' => $election->name]
             );
             $election->delete();
             return redirect()->route('admin.elections')
-                ->with('success', "Election \"{$election->name}\" deleted successfully. All related data has been preserved.");
+                ->with('success', "Election \"{$election->name}\" deleted successfully.");
         } catch (\Exception $e) {
             return back()->withErrors(['error' => 'Failed to delete election: ' . $e->getMessage()]);
         }
@@ -682,7 +699,7 @@ Route::middleware(['auth', 'role:iec-administrator'])
 
         $election = Election::where('status', 'active')->first();
         if (!$election) {
-            return back()->withErrors(['error' => 'No active election found. Please create and activate an election before registering polling stations.']);
+            return back()->withErrors(['error' => 'No active election found.']);
         }
 
         try {
@@ -754,7 +771,7 @@ Route::middleware(['auth', 'role:iec-administrator'])
         try {
             $station = PollingStation::findOrFail($id);
             if ($station->results()->exists()) {
-                return back()->withErrors(['error' => 'Cannot delete: this station has submitted results. Remove results first.']);
+                return back()->withErrors(['error' => 'Cannot delete: this station has submitted results.']);
             }
             $station->delete();
             AuditLog::record(action: 'polling_station.deleted', event: 'deleted', module: 'PollingStation');
@@ -783,14 +800,7 @@ Route::middleware(['auth', 'role:iec-administrator'])
                             'ballot_number' => $c->ballot_number,
                             'photo_url'     => $c->photo_path ? asset('storage/' . $c->photo_path) : null,
                         ])
-                    : Candidate::where('political_party_id', $party->id)
-                        ->get()
-                        ->map(fn($c) => [
-                            'id'            => $c->id,
-                            'name'          => $c->name,
-                            'ballot_number' => $c->ballot_number,
-                            'photo_url'     => $c->photo_path ? asset('storage/' . $c->photo_path) : null,
-                        ]);
+                    : collect();
 
                 return [
                     'id'                      => $party->id,
@@ -853,7 +863,7 @@ Route::middleware(['auth', 'role:iec-administrator'])
         $election = Election::where('status', 'active')->first();
         if (!$election) {
             return back()->withErrors([
-                'error' => 'No active election found. Please create and activate an election before registering parties.',
+                'error' => 'No active election found.',
             ]);
         }
 
@@ -935,7 +945,6 @@ Route::middleware(['auth', 'role:iec-administrator'])
 
     Route::post('/parties/{id}/update', function (Request $request, $id) {
         $party = PoliticalParty::findOrFail($id);
-
         $request->validate([
             'name'         => 'required|string|max:255',
             'abbreviation' => 'required|string|max:10',
@@ -1178,7 +1187,7 @@ Route::middleware(['auth', 'role:iec-administrator'])
         try {
             $area = AdministrativeHierarchy::findOrFail($id);
             if ($area->children()->count() > 0) {
-                return back()->withErrors(['error' => 'Cannot delete: this admin area has constituencies. Delete them first.']);
+                return back()->withErrors(['error' => 'Cannot delete: this admin area has constituencies.']);
             }
             $area->delete();
             return redirect()->route('admin.hierarchy.admin-areas')->with('success', 'Admin Area deleted.');
@@ -1261,7 +1270,7 @@ Route::middleware(['auth', 'role:iec-administrator'])
         try {
             $c = AdministrativeHierarchy::findOrFail($id);
             if ($c->children()->count() > 0) {
-                return back()->withErrors(['error' => 'Cannot delete: this constituency has wards. Delete them first.']);
+                return back()->withErrors(['error' => 'Cannot delete: this constituency has wards.']);
             }
             $c->delete();
             return redirect()->route('admin.hierarchy.constituencies')->with('success', 'Constituency deleted.');
@@ -1353,7 +1362,7 @@ Route::middleware(['auth', 'role:iec-administrator'])
         try {
             $ward = AdministrativeHierarchy::findOrFail($id);
             if (PollingStation::where('ward_id', $id)->exists()) {
-                return back()->withErrors(['error' => 'Cannot delete: this ward has polling stations. Remove them first.']);
+                return back()->withErrors(['error' => 'Cannot delete: this ward has polling stations.']);
             }
             $ward->delete();
             return redirect()->route('admin.hierarchy.wards')->with('success', 'Ward deleted.');
@@ -1410,15 +1419,11 @@ Route::middleware(['auth', 'role:iec-administrator'])
             'audit_retention_days'   => 'required|integer|min:30|max:2555',
             'session_timeout_minutes'=> 'required|integer|min:5|max:240',
         ]);
-        Log::info('System settings updated', $request->all());
         AuditLog::record(
             action: 'settings.updated',
             event: 'updated',
             module: 'System',
-            extra: [
-                'outcome' => 'success',
-                'new_values' => $request->except(['_token']),
-            ]
+            extra: ['outcome' => 'success', 'new_values' => $request->except(['_token'])]
         );
         return back()->with('success', 'Settings saved successfully!');
     })->name('settings.update')->middleware('permission:system-settings');

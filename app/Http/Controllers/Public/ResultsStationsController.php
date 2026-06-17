@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Public;
 
 use App\Http\Controllers\Controller;
 use App\Models\Election;
+use App\Models\Result;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -34,9 +35,6 @@ class ResultsStationsController extends Controller
         if ($selectedId && $availableElections->contains('id', $selectedId)) {
             $election = Election::find($selectedId);
         }
-        if (!$selectedId && $election === null) {
-            // No explicit selection — find best active/certified election
-        }
         if (!$election) {
             // Try with the flag first (matches dropdown)
             $election = Election::where('allow_provisional_public_display', true)
@@ -60,15 +58,18 @@ class ResultsStationsController extends Controller
                 'elections'          => $availableElections,
                 'selectedElectionId' => null,
                 'stations'           => [],
-                'isPublished'        => false,
                 'filterOptions'      => ['wards' => [], 'constituencies' => [], 'adminAreas' => []],
             ]);
         }
 
-        $isPublished = $election->status === 'certified';
-        $cacheKey    = "results_stations_{$election->id}_" . ($isPublished ? 'pub' : 'prov');
+        // NOTE: visibility of vote totals / result-sheet photo / party
+        // reactions is now decided PER STATION (based on that result's own
+        // certification_status — see computeStations()), not on the whole
+        // election's status. The cache key therefore only needs the
+        // election id; it no longer needs a pub/prov suffix.
+        $cacheKey = "results_stations_v2_{$election->id}";
 
-        $data = Cache::remember($cacheKey, 30, fn() => $this->computeStations($election, $isPublished));
+        $data = Cache::remember($cacheKey, 30, fn() => $this->computeStations($election));
 
         $filterOptions = Cache::remember("stations_filters_{$election->id}", 300, fn() => [
             'wards'          => DB::table('administrative_hierarchy')
@@ -94,12 +95,23 @@ class ResultsStationsController extends Controller
         return Inertia::render('Public/ResultsStations', array_merge($data, [
             'elections'          => $availableElections,
             'selectedElectionId' => $election->id,
-            'isPublished'        => $isPublished,
             'filterOptions'      => $filterOptions,
         ]));
     }
 
-    private function computeStations(Election $election, bool $isPublished): array
+    /**
+     * Build the public stations list.
+     *
+     * Every station always shows its place in the certification pipeline
+     * (status badge: Certified / Provisional / Pending / Not reported).
+     *
+     * Vote totals, the candidate breakdown, the result-sheet photo, and
+     * party representative reactions are ONLY EVER included once that
+     * specific result has been NATIONALLY CERTIFIED — i.e. published by
+     * the IEC Chairman. Before that point the public sees nothing beyond
+     * the pipeline status for that station.
+     */
+    private function computeStations(Election $election): array
     {
         $latestResults = <<<SQL
 SELECT DISTINCT ON (polling_station_id)
@@ -142,14 +154,20 @@ SQL;
             ORDER BY COALESCE(aa.name,''), COALESCE(c.name,''), COALESCE(w.name,''), ps.code
         ", [$election->id, $election->id]);
 
-        $resultIds = collect($stations)->filter(fn($s) => $s->result_id !== null)
-            ->pluck('result_id')->unique()->values()->toArray();
+        // Only nationally-certified (chairman-published) results unlock
+        // candidate votes / party reactions.
+        $certifiedResultIds = collect($stations)
+            ->filter(fn($s) => $s->result_id !== null && $s->status === Result::STATUS_NATIONALLY_CERTIFIED)
+            ->pluck('result_id')
+            ->unique()
+            ->values()
+            ->toArray();
 
         $candidateVotesByResult   = [];
         $partyAcceptancesByResult = [];
 
-        if (!empty($resultIds)) {
-            $placeholders = implode(',', array_fill(0, count($resultIds), '?'));
+        if (!empty($certifiedResultIds)) {
+            $placeholders = implode(',', array_fill(0, count($certifiedResultIds), '?'));
 
             $cvRows = DB::select("
                 SELECT
@@ -164,7 +182,7 @@ SQL;
                 LEFT JOIN political_parties pp ON pp.id = c.political_party_id
                 WHERE rcv.result_id IN ({$placeholders})
                 ORDER BY rcv.result_id, rcv.votes DESC
-            ", $resultIds);
+            ", $certifiedResultIds);
 
             foreach ($cvRows as $row) {
                 $candidateVotesByResult[$row->result_id][] = [
@@ -176,57 +194,60 @@ SQL;
                 ];
             }
 
-            // Only show party acceptance details for officially published elections
-            if ($isPublished) {
-                $paRows = DB::select("
-                    SELECT
-                        pa.result_id,
-                        pp.name         AS party_name,
-                        pp.abbreviation AS party_abbr,
-                        pa.status,
-                        pa.comments
-                    FROM party_acceptances pa
-                    JOIN political_parties pp ON pp.id = pa.political_party_id
-                    WHERE pa.result_id IN ({$placeholders})
-                ", $resultIds);
+            // Party representative reactions go public alongside the
+            // result sheet once the result is nationally certified.
+            $paRows = DB::select("
+                SELECT
+                    pa.result_id,
+                    pp.name         AS party_name,
+                    pp.abbreviation AS party_abbr,
+                    pa.status,
+                    pa.comments,
+                    pa.decided_at
+                FROM party_acceptances pa
+                JOIN political_parties pp ON pp.id = pa.political_party_id
+                WHERE pa.result_id IN ({$placeholders})
+            ", $certifiedResultIds);
 
-                foreach ($paRows as $row) {
-                    $partyAcceptancesByResult[$row->result_id][] = [
-                        'party_name' => $row->party_name,
-                        'party_abbr' => $row->party_abbr,
-                        'status'     => $row->status,
-                        'comments'   => $row->comments,
-                    ];
-                }
+            foreach ($paRows as $row) {
+                $partyAcceptancesByResult[$row->result_id][] = [
+                    'party_name' => $row->party_name,
+                    'party_abbr' => $row->party_abbr,
+                    'status'     => $row->status,
+                    'comments'   => $row->comments,
+                    'decided_at' => $row->decided_at,
+                ];
             }
         }
 
         $mappedStations = collect($stations)->map(function ($station) use (
-            $isPublished,
             $candidateVotesByResult,
             $partyAcceptancesByResult
         ) {
-            $resultId = $station->result_id;
+            $resultId    = $station->result_id;
+            $isCertified = $resultId !== null && $station->status === Result::STATUS_NATIONALLY_CERTIFIED;
+
             return [
                 'id'                => $station->id,
                 'code'              => $station->code,
                 'name'              => $station->name,
                 'registered_voters' => $station->registered_voters,
                 'status'            => $station->status,
+                'is_certified'      => $isCertified,
                 'ward_id'           => $station->ward_id,
                 'ward_name'         => $station->ward_name,
                 'constituency_id'   => $station->constituency_id,
                 'constituency_name' => $station->constituency_name,
                 'admin_area_id'     => $station->admin_area_id,
                 'admin_area_name'   => $station->admin_area_name,
-                'total_votes_cast'  => $station->total_votes_cast,
-                'valid_votes'       => $station->valid_votes,
-                'rejected_votes'    => $station->rejected_votes,
-                'candidate_votes'   => $resultId ? ($candidateVotesByResult[$resultId] ?? []) : [],
-                'party_acceptances' => ($isPublished && $resultId)
-                    ? ($partyAcceptancesByResult[$resultId] ?? [])
-                    : [],
-                'photo_url' => ($isPublished && $station->result_sheet_photo_path)
+
+                // Published-only fields:
+                'total_votes_cast'  => $isCertified ? $station->total_votes_cast : null,
+                'valid_votes'       => $isCertified ? $station->valid_votes : null,
+                'rejected_votes'    => $isCertified ? $station->rejected_votes : null,
+                'candidate_votes'   => $isCertified ? ($candidateVotesByResult[$resultId] ?? []) : [],
+                'party_acceptances' => $isCertified ? ($partyAcceptancesByResult[$resultId] ?? []) : [],
+                'photo_url'         => ($isCertified && $station->result_sheet_photo_path)
                     ? asset('storage/' . $station->result_sheet_photo_path)
                     : null,
             ];

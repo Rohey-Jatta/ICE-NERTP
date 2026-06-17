@@ -49,9 +49,10 @@ export default function Login() {
                 <div className="bg-white/95 backdrop-blur-sm rounded-xl shadow-2xl p-8">
                     <h2 className="text-2xl font-bold text-gray-800 mb-6 text-center">Sign in to your account</h2>
 
-                    {errors.email && (
-                        <div className="mb-4 p-3 bg-red-100 border border-red-300 text-red-800 rounded-lg text-sm">
-                            {errors.email}
+                    {(errors.email || errors.password) && (
+                        <div className="mb-4 p-4 bg-red-100 border-l-4 border-red-600 text-red-800 rounded-lg text-sm">
+                            <strong>⚠ Login Error</strong>
+                            <p>{errors.email || errors.password}</p>
                         </div>
                     )}
 

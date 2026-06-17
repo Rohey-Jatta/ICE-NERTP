@@ -29,35 +29,48 @@ class EnsureDeviceBound
             return $next($request);
         }
 
-        $fingerprint = $this->deviceService->extractFingerprint($request);
-
-        if (!$fingerprint) {
-            return response()->json([
-                'message' => 'Device not recognized. Please log in again.',
-                'code' => 'DEVICE_NOT_FOUND',
-            ], 403);
-        }
+        // Use the server-side fingerprint (not a cookie)
+        $fingerprint = $this->deviceService->deriveServerFingerprint($request);
 
         $device = Device::where('user_id', $user->id)
-            ->where('device_fingerprint', $fingerprint)
             ->where('is_revoked', false)
             ->whereNotNull('verified_at')
             ->first();
 
         if (!$device) {
+            // No device registered — this shouldn't happen post-login but handle gracefully
             AuditLog::record(
-                action: 'auth.device.unbound_request',
+                action: 'auth.device.no_binding',
                 event: 'blocked',
                 module: 'Authentication',
                 extra: [
-                    'outcome' => 'blocked',
-                    'failure_reason' => 'Request from unregistered device',
+                    'outcome'        => 'blocked',
+                    'failure_reason' => 'No registered device found for user',
+                    'user_id'        => $user->id,
                 ]
             );
 
             return response()->json([
-                'message' => 'Unrecognized device. Please complete device registration.',
-                'code' => 'DEVICE_UNBOUND',
+                'message' => 'No registered device found. Please log in again.',
+                'code'    => 'DEVICE_NOT_FOUND',
+            ], 403);
+        }
+
+        if (!hash_equals($device->device_fingerprint, $fingerprint)) {
+            AuditLog::record(
+                action: 'auth.device.mismatch_request',
+                event: 'blocked',
+                module: 'Authentication',
+                extra: [
+                    'outcome'        => 'blocked',
+                    'failure_reason' => 'Request from unregistered device',
+                    'user_id'        => $user->id,
+                ]
+            );
+
+            return response()->json([
+                'message' => 'This account is already registered to another device. Please contact the IEC Administrator for assistance.',
+                'code'    => 'DEVICE_MISMATCH',
             ], 403);
         }
 

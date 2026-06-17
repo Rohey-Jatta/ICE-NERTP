@@ -68,9 +68,12 @@ class Election extends Model
 
         Cache::forget("results_summary_v2_{$electionId}");
         Cache::forget("results_map_{$electionId}");
+        Cache::forget("results_map_v2_{$electionId}");
         Cache::forget("results_map_agg_v3_{$electionId}");
+        Cache::forget("results_map_agg_v4_{$electionId}");
         Cache::forget("results_stations_{$electionId}_pub");
         Cache::forget("results_stations_{$electionId}_prov");
+        Cache::forget("results_stations_v2_{$electionId}");
         Cache::forget("stations_filters_{$electionId}");
     }
 
@@ -86,9 +89,12 @@ class Election extends Model
             Cache::forget("results_summary_v3_{$this->id}_{$status}");
         }
         Cache::forget("results_map_{$this->id}");
+        Cache::forget("results_map_v2_{$this->id}");
         Cache::forget("results_map_agg_v3_{$this->id}");
+        Cache::forget("results_map_agg_v4_{$this->id}");
         Cache::forget("results_stations_{$this->id}_pub");
         Cache::forget("results_stations_{$this->id}_prov");
+        Cache::forget("results_stations_v2_{$this->id}");
         Cache::forget("stations_filters_{$this->id}");
         Cache::forget('public_results_data');
         Cache::forget('chairman_dashboard_stats');
@@ -114,18 +120,6 @@ class Election extends Model
     public function isNationallyCertified(): bool { return $this->status === 'certified'; }
     public function isClosed(): bool { return in_array($this->status, ['certified', 'archived']); }
 
-    /**
-     * Whether this election is currently accepting new result submissions.
-     *
-     * Submissions are accepted during any "open" phase of the election:
-     *   - active:          Normal open state
-     *   - results_pending: Chairman has published results publicly; still accepting submissions
-     *   - certifying:      Intermediate certification phase; still accepting submissions
-     *
-     * Submissions are BLOCKED when the Chairman explicitly closes the election:
-     *   - certified: Explicitly closed by Chairman via "Close Election" action
-     *   - archived:  Archived by administrator
-     */
     public function allowsResultSubmission(): bool
     {
         return in_array($this->status, ['active', 'results_pending', 'certifying']);

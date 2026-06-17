@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Public;
 
 use App\Http\Controllers\Controller;
 use App\Models\Election;
+use App\Models\Result;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -12,8 +13,6 @@ use Inertia\Inertia;
 
 class ResultsMapController extends Controller
 {
-    // Named party-color fallbacks (mirrors ResultsSummaryController) so the
-    // choropleth shows distinct party colors even when pp.color is unset.
     private const PARTY_COLOR_FALLBACKS = [
         'NPP'   => '#155AA6',
         'UDP'   => '#D0AC4C',
@@ -37,7 +36,6 @@ class ResultsMapController extends Controller
     {
         $selectedId = (int) $request->get('election', 0);
 
-        // Dropdown only shows elections the admin has marked for public display
         $availableElections = Election::where('allow_provisional_public_display', true)
             ->whereIn('status', ['active', 'certifying', 'results_pending', 'certified'])
             ->orderByDesc('start_date')
@@ -58,15 +56,13 @@ class ResultsMapController extends Controller
                 'election'           => null,
                 'elections'          => $availableElections,
                 'selectedElectionId' => null,
-                'isPublished'        => false,
             ]);
         }
 
-        $isPublished = $election->status === 'certified';
-        $cacheKey = "results_map_{$election->id}_" . ($isPublished ? 'pub' : 'prov');
-        $stations = Cache::remember($cacheKey, 30, fn() => $this->computeStationsData($election, $isPublished));
+        $cacheKey = "results_map_v2_{$election->id}";
+        $stations = Cache::remember($cacheKey, 30, fn() => $this->computeStationsData($election));
 
-        $aggKey = "results_map_agg_v3_{$election->id}";
+        $aggKey = "results_map_agg_v4_{$election->id}";
         $agg    = Cache::remember($aggKey, 300, fn() => $this->computeRegionAggregates($election));
 
         return Inertia::render('Public/ResultsMap', [
@@ -82,15 +78,10 @@ class ResultsMapController extends Controller
             ],
             'elections'          => $availableElections,
             'selectedElectionId' => $election->id,
-            'isPublished'        => $isPublished,
         ]);
     }
 
     // ── JSON endpoint for the embedded map on the Results homepage ────────────
-    // This is called by Results.jsx via fetch('/api/public/map-stations?election=X')
-    // It MUST resolve the election the same way the summary page does — without
-    // requiring allow_provisional_public_display — so the map always matches
-    // the summary data shown on that page.
 
     public function stationsJson(Request $request): JsonResponse
     {
@@ -98,28 +89,17 @@ class ResultsMapController extends Controller
         $election   = $this->resolvePublicElection($selectedId);
 
         if (!$election) {
-            return response()->json(['stations' => [], 'isPublished' => false]);
+            return response()->json(['stations' => []]);
         }
 
-        $isPublished = $election->status === 'certified';
-        $cacheKey = "results_map_{$election->id}_" . ($isPublished ? 'pub' : 'prov');
-        $stations = Cache::remember($cacheKey, 30, fn() => $this->computeStationsData($election, $isPublished));
+        $cacheKey = "results_map_v2_{$election->id}";
+        $stations = Cache::remember($cacheKey, 30, fn() => $this->computeStationsData($election));
 
-        return response()->json(['stations' => $stations, 'isPublished' => $isPublished]);
+        return response()->json(['stations' => $stations]);
     }
 
     // ── Private helpers ───────────────────────────────────────────────────────
 
-    /**
-     * Resolve which election to display on public pages.
-     *
-     * NOTE: We do NOT filter by allow_provisional_public_display here because:
-     *  - The summary page (ResultsSummaryController) never requires that flag
-     *  - The embedded map is rendered inside the summary page using the same election
-     *  - If the summary shows data, the map must also show data for the same election
-     *
-     * allow_provisional_public_display is used only for the dropdown selectors.
-     */
     private function resolvePublicElection(int $selectedId): ?Election
     {
         if ($selectedId) {
@@ -129,7 +109,6 @@ class ResultsMapController extends Controller
             if ($election) return $election;
         }
 
-        // Prefer live/in-progress, fall back to latest certified
         return Election::whereIn('status', ['active', 'certifying', 'results_pending'])
             ->latest('start_date')
             ->first()
@@ -140,9 +119,13 @@ class ResultsMapController extends Controller
 
     /**
      * Build the stations array for the Leaflet map.
-     * Includes all stations with their current pipeline status and candidate votes.
+     *
+     * Every station always shows its pipeline status. Vote totals, the
+     * candidate breakdown, the result-sheet photo, and party representative
+     * reactions are ONLY included once that result has been NATIONALLY
+     * CERTIFIED (published by the IEC Chairman).
      */
-    private function computeStationsData(Election $election, bool $isPublished = false): array
+    private function computeStationsData(Election $election): array
     {
         $latestResults = <<<SQL
 SELECT DISTINCT ON (polling_station_id)
@@ -184,12 +167,14 @@ SQL;
             ->whereNotNull('ps.longitude')
             ->get();
 
-        $resultIds = $stationsRaw->pluck('result_id')->filter()->unique()->values()->all();
+        $certifiedResultIds = $stationsRaw
+            ->filter(fn($s) => $s->result_id !== null && $s->status === Result::STATUS_NATIONALLY_CERTIFIED)
+            ->pluck('result_id')->unique()->values()->all();
 
-        $votesByResult = collect();
-        $partyAcceptancesByResult = [];
+        $votesByResult            = collect();
+        $partyAcceptancesByResult = collect();
 
-        if (!empty($resultIds)) {
+        if (!empty($certifiedResultIds)) {
             $votesByResult = DB::table('result_candidate_votes as rcv')
                 ->selectRaw("
                     rcv.result_id,
@@ -200,78 +185,67 @@ SQL;
                 ")
                 ->join('candidates as c', 'c.id', '=', 'rcv.candidate_id')
                 ->leftJoin('political_parties as pp', 'pp.id', '=', 'c.political_party_id')
-                ->whereIn('rcv.result_id', $resultIds)
+                ->whereIn('rcv.result_id', $certifiedResultIds)
                 ->orderByDesc('rcv.votes')
                 ->get()
                 ->groupBy('result_id');
 
-            // Only load party acceptances for published elections
-            if ($isPublished) {
-                $paRows = DB::table('party_acceptances as pa')
-                    ->selectRaw("
-                        pa.result_id,
-                        pp.name         AS party_name,
-                        pp.abbreviation AS party_abbr,
-                        pa.status,
-                        pa.comments
-                    ")
-                    ->join('political_parties as pp', 'pp.id', '=', 'pa.political_party_id')
-                    ->whereIn('pa.result_id', $resultIds)
-                    ->get();
-
-                foreach ($paRows as $row) {
-                    if (!isset($partyAcceptancesByResult[$row->result_id])) {
-                        $partyAcceptancesByResult[$row->result_id] = [];
-                    }
-                    $partyAcceptancesByResult[$row->result_id][] = [
-                        'party_name' => $row->party_name,
-                        'party_abbr' => $row->party_abbr,
-                        'status'     => $row->status,
-                        'comments'   => $row->comments,
-                    ];
-                }
-            }
+            $partyAcceptancesByResult = DB::table('party_acceptances as pa')
+                ->selectRaw('pa.result_id, pp.name AS party_name, pp.abbreviation AS party_abbr, pa.status, pa.comments')
+                ->join('political_parties as pp', 'pp.id', '=', 'pa.political_party_id')
+                ->whereIn('pa.result_id', $certifiedResultIds)
+                ->get()
+                ->groupBy('result_id');
         }
 
-        return $stationsRaw->map(function ($station) use ($votesByResult, $partyAcceptancesByResult, $isPublished) {
-            $votes = $votesByResult->get($station->result_id, collect());
+        return $stationsRaw->map(function ($station) use ($votesByResult, $partyAcceptancesByResult) {
+            $isCertified = $station->result_id !== null && $station->status === Result::STATUS_NATIONALLY_CERTIFIED;
+
+            $votes = $isCertified ? $votesByResult->get($station->result_id, collect()) : collect();
             $station->candidate_votes = $votes->map(fn($v) => [
                 'name'  => $v->name,
                 'party' => $v->party,
                 'color' => $this->partyColor($v->party, $v->color),
                 'votes' => $v->votes,
             ])->values()->all();
-            
-            $station->party_acceptances = ($isPublished && $station->result_id)
-                ? ($partyAcceptancesByResult[$station->result_id] ?? [])
-                : [];
-            
-            $station->photo_url = ($isPublished && $station->result_sheet_photo_path)
+
+            $acceptances = $isCertified ? $partyAcceptancesByResult->get($station->result_id, collect()) : collect();
+            $station->party_acceptances = $acceptances->map(fn($pa) => [
+                'party_name' => $pa->party_name,
+                'party_abbr' => $pa->party_abbr,
+                'status'     => $pa->status,
+                'comments'   => $pa->comments,
+            ])->values()->all();
+
+            $station->is_certified     = $isCertified;
+            $station->total_votes_cast = $isCertified ? $station->total_votes_cast : null;
+            $station->valid_votes      = $isCertified ? $station->valid_votes : null;
+            $station->rejected_votes   = $isCertified ? $station->rejected_votes : null;
+            $station->photo_url        = ($isCertified && $station->result_sheet_photo_path)
                 ? asset('storage/' . $station->result_sheet_photo_path)
                 : null;
+            unset($station->result_sheet_photo_path);
 
             return $station;
         })->toArray();
     }
 
     /**
-     * Per-region (admin_area) leading candidate + candidate breakdown, plus a
-     * national scorecard. Powers the CNN-style choropleth and header.
-     *
-     * Unlike the public summary, the live map reflects ALL reported results
-     * regardless of certification level (provisional + certified), matching the
-     * existing per-station map behaviour.
+     * Per-region (admin_area) leading candidate + candidate breakdown, plus
+     * a national scorecard. Only NATIONALLY CERTIFIED (published) results
+     * are aggregated — provisional / in-pipeline results never contribute
+     * to the public leaderboard or "reporting" percentages.
      */
     private function computeRegionAggregates(Election $election): array
     {
-        // Candidate votes per admin_area (any reported result).
         $voteRows = DB::table('polling_stations as ps')
             ->join('administrative_hierarchy as w',   'ps.ward_id',    '=', 'w.id')
             ->join('administrative_hierarchy as con', 'w.parent_id',   '=', 'con.id')
             ->join('administrative_hierarchy as aa',  'con.parent_id', '=', 'aa.id')
             ->join('results as r', function ($join) use ($election) {
                 $join->on('r.polling_station_id', '=', 'ps.id')
-                     ->where('r.election_id', $election->id);
+                     ->where('r.election_id', $election->id)
+                     ->where('r.certification_status', Result::STATUS_NATIONALLY_CERTIFIED);
             })
             ->join('result_candidate_votes as rcv', 'rcv.result_id', '=', 'r.id')
             ->join('candidates as c', 'c.id', '=', 'rcv.candidate_id')
@@ -289,14 +263,14 @@ SQL;
             ")
             ->get();
 
-        // Station counts per admin_area (total + reported).
         $countRows = DB::table('polling_stations as ps')
             ->join('administrative_hierarchy as w',   'ps.ward_id',    '=', 'w.id')
             ->join('administrative_hierarchy as con', 'w.parent_id',   '=', 'con.id')
             ->join('administrative_hierarchy as aa',  'con.parent_id', '=', 'aa.id')
             ->leftJoin('results as r', function ($join) use ($election) {
                 $join->on('r.polling_station_id', '=', 'ps.id')
-                     ->where('r.election_id', $election->id);
+                     ->where('r.election_id', $election->id)
+                     ->where('r.certification_status', Result::STATUS_NATIONALLY_CERTIFIED);
             })
             ->where('ps.election_id', $election->id)
             ->groupBy('aa.name')
@@ -308,7 +282,6 @@ SQL;
             ->get()
             ->keyBy('region_name');
 
-        // Group candidate votes by region.
         $byRegion = [];
         foreach ($voteRows as $row) {
             $byRegion[$row->region_name]['total'] = ($byRegion[$row->region_name]['total'] ?? 0) + (int) $row->votes;
@@ -347,7 +320,6 @@ SQL;
             ];
         }
 
-        // National scorecard — sum candidate votes across all regions.
         $national = [];
         foreach ($voteRows as $row) {
             $key = $row->candidate_name;
@@ -389,9 +361,7 @@ SQL;
 
     /**
      * Per-constituency leader + totals, keyed by parent region (admin_area)
-     * name. Powers the region drill-down breakdown panel.
-     *
-     * @return array<string, array<int, array<string, mixed>>>
+     * name. Only nationally-certified results are counted.
      */
     private function computeConstituencies(Election $election): array
     {
@@ -401,7 +371,8 @@ SQL;
             ->join('administrative_hierarchy as aa',  'con.parent_id', '=', 'aa.id')
             ->join('results as r', function ($join) use ($election) {
                 $join->on('r.polling_station_id', '=', 'ps.id')
-                     ->where('r.election_id', $election->id);
+                     ->where('r.election_id', $election->id)
+                     ->where('r.certification_status', Result::STATUS_NATIONALLY_CERTIFIED);
             })
             ->join('result_candidate_votes as rcv', 'rcv.result_id', '=', 'r.id')
             ->join('candidates as c', 'c.id', '=', 'rcv.candidate_id')
@@ -424,7 +395,8 @@ SQL;
             ->join('administrative_hierarchy as aa',  'con.parent_id', '=', 'aa.id')
             ->leftJoin('results as r', function ($join) use ($election) {
                 $join->on('r.polling_station_id', '=', 'ps.id')
-                     ->where('r.election_id', $election->id);
+                     ->where('r.election_id', $election->id)
+                     ->where('r.certification_status', Result::STATUS_NATIONALLY_CERTIFIED);
             })
             ->where('ps.election_id', $election->id)
             ->groupBy('aa.name', 'con.name')
@@ -436,7 +408,6 @@ SQL;
             ')
             ->get();
 
-        // Accumulate votes per constituency.
         $acc = [];
         foreach ($voteRows as $row) {
             $key = $row->region_name . '||' . $row->con_name;
@@ -449,7 +420,6 @@ SQL;
             ];
         }
 
-        // Also compute ward-level breakdown keyed by region||constituency.
         $wards = $this->computeWards($election);
 
         $byRegion = [];
@@ -474,7 +444,6 @@ SQL;
             ];
         }
 
-        // Largest constituencies first within each region.
         foreach ($byRegion as &$list) {
             usort($list, fn($a, $b) => $b['total_votes'] <=> $a['total_votes']);
         }
@@ -483,8 +452,7 @@ SQL;
     }
 
     /**
-     * Per-ward leader + totals, keyed by [region_name][constituency_name].
-     * Powers the constituency → ward drill-down panel.
+     * Per-ward leader + totals. Only nationally-certified results counted.
      */
     private function computeWards(Election $election): array
     {
@@ -494,7 +462,8 @@ SQL;
             ->join('administrative_hierarchy as aa',  'con.parent_id', '=', 'aa.id')
             ->join('results as r', function ($join) use ($election) {
                 $join->on('r.polling_station_id', '=', 'ps.id')
-                     ->where('r.election_id', $election->id);
+                     ->where('r.election_id', $election->id)
+                     ->where('r.certification_status', Result::STATUS_NATIONALLY_CERTIFIED);
             })
             ->join('result_candidate_votes as rcv', 'rcv.result_id', '=', 'r.id')
             ->join('candidates as c', 'c.id', '=', 'rcv.candidate_id')
@@ -518,7 +487,8 @@ SQL;
             ->join('administrative_hierarchy as aa',  'con.parent_id', '=', 'aa.id')
             ->leftJoin('results as r', function ($join) use ($election) {
                 $join->on('r.polling_station_id', '=', 'ps.id')
-                     ->where('r.election_id', $election->id);
+                     ->where('r.election_id', $election->id)
+                     ->where('r.certification_status', Result::STATUS_NATIONALLY_CERTIFIED);
             })
             ->where('ps.election_id', $election->id)
             ->groupBy('aa.name', 'con.name', 'w.name')
@@ -531,7 +501,6 @@ SQL;
             ')
             ->get();
 
-        // Accumulate votes per ward.
         $acc = [];
         foreach ($voteRows as $row) {
             $key = $row->region_name . '||' . $row->con_name . '||' . $row->ward_name;
@@ -565,7 +534,6 @@ SQL;
             ];
         }
 
-        // Sort wards by vote count descending within each constituency.
         foreach ($byConKey as &$conMap) {
             foreach ($conMap as &$wardList) {
                 usort($wardList, fn($a, $b) => $b['total_votes'] <=> $a['total_votes']);

@@ -1,21 +1,10 @@
 import { Button, Field, PageHeader, Panel, inputClass, roleLabel } from '@/Components/AdminUI';
 import AppLayout from '@/Layouts/AppLayout';
-import { useForm } from '@inertiajs/react';
+import { useForm, router } from '@inertiajs/react';
 import { useState } from 'react';
 import SearchableSelect from '@/Components/SearchableSelect';
 
-function generatePassword(length = 14) {
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#$%^&*';
-    return Array.from(crypto.getRandomValues(new Uint8Array(length)))
-        .map(b => chars[b % chars.length])
-        .join('');
-}
-
-export default function UserEdit({ auth, user, roles, pollingStations, wards, constituencies, adminAreas }) {
-    const [showPasswordSection, setShowPasswordSection] = useState(false);
-    const [showPassword, setShowPassword] = useState(false);
-    const [copied, setCopied] = useState(false);
-
+export default function UserEdit({ auth, user, roles, pollingStations, wards, constituencies, adminAreas, devices = [], requiresDeviceBinding = false }) {
     const { data, setData, put, processing, errors } = useForm({
         name:                user.name   || '',
         email:               user.email  || '',
@@ -31,34 +20,38 @@ export default function UserEdit({ auth, user, roles, pollingStations, wards, co
         designation:         '',
         organization:        '',
         monitor_type:        'domestic',
-        // Password reset fields (optional)
-        new_password:        '',
-        must_change_password: user.must_change_password ?? false,
     });
 
     const [selectedRole, setSelectedRole] = useState(data.role);
+    const [resettingDevice, setResettingDevice] = useState(false);
+    const [revokingDeviceId, setRevokingDeviceId] = useState(null);
 
     const handleRoleChange = (role) => {
         setSelectedRole(role);
         setData('role', role);
     };
 
-    const handleGeneratePassword = () => {
-        const pwd = generatePassword();
-        setData('new_password', pwd);
-        setShowPassword(true);
-    };
-
-    const handleCopyPassword = () => {
-        navigator.clipboard.writeText(data.new_password).then(() => {
-            setCopied(true);
-            setTimeout(() => setCopied(false), 2000);
-        });
-    };
-
     const handleSubmit = (event) => {
         event.preventDefault();
         put(`/admin/users/${user.id}`);
+    };
+
+    const handleResetAllDevices = () => {
+        if (!window.confirm(`Reset device binding for "${user.name}"? They will be able to register a new device on next login.`)) return;
+        setResettingDevice(true);
+        router.post(`/admin/users/${user.id}/devices/reset`, {}, {
+            preserveScroll: true,
+            onFinish: () => setResettingDevice(false),
+        });
+    };
+
+    const handleRevokeDevice = (deviceId) => {
+        if (!window.confirm('Revoke this device? The user will not be able to use it anymore.')) return;
+        setRevokingDeviceId(deviceId);
+        router.delete(`/admin/devices/${deviceId}`, {
+            preserveScroll: true,
+            onFinish: () => setRevokingDeviceId(null),
+        });
     };
 
     const renderRoleSpecificFields = () => {
@@ -121,6 +114,9 @@ export default function UserEdit({ auth, user, roles, pollingStations, wards, co
         return null;
     };
 
+    const activeDevices = devices.filter(d => !d.is_revoked);
+    const revokedDevices = devices.filter(d => d.is_revoked);
+
     return (
         <AppLayout user={auth?.user}>
             <div className="ws-container max-w-3xl">
@@ -131,7 +127,7 @@ export default function UserEdit({ auth, user, roles, pollingStations, wards, co
                     backLabel="Back to Users"
                 />
 
-                <Panel className="p-5">
+                <Panel className="p-5 mb-5">
                     <form onSubmit={handleSubmit} className="space-y-5">
                         <Field label="Name">
                             <input type="text" value={data.name} onChange={(event) => setData('name', event.target.value)} className={inputClass} placeholder="Full name" required />
@@ -179,90 +175,99 @@ export default function UserEdit({ auth, user, roles, pollingStations, wards, co
 
                         {renderRoleSpecificFields()}
 
-                        {/* ── Password Reset Section ──────────────────────────── */}
-                        <div className="border border-slate-200 rounded-xl overflow-hidden">
-                            <button
-                                type="button"
-                                onClick={() => setShowPasswordSection(v => !v)}
-                                className="w-full flex items-center justify-between p-4 bg-slate-50 hover:bg-slate-100 text-left transition-colors"
-                            >
-                                <div>
-                                    <span className="font-semibold text-slate-700 text-sm">🔑 Reset Password</span>
-                                    <span className="text-slate-500 text-xs ml-2">
-                                        {user.must_change_password ? '(User must change on next login)' : '(Optional — leave blank to keep current)'}
-                                    </span>
-                                </div>
-                                <span className="text-slate-400">{showPasswordSection ? '▲' : '▼'}</span>
-                            </button>
-
-                            {showPasswordSection && (
-                                <div className="p-4 space-y-4">
-                                    {user.must_change_password && (
-                                        <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-amber-700 text-xs">
-                                            ⚠ This user is currently required to change their password on next login.
-                                        </div>
-                                    )}
-
-                                    <div>
-                                        <div className="flex items-center justify-between mb-1.5">
-                                            <label className="text-sm font-semibold text-slate-600">New Password</label>
-                                            <button
-                                                type="button"
-                                                onClick={handleGeneratePassword}
-                                                className="px-3 py-1 bg-iec-pink-600 hover:bg-iec-pink-700 text-white text-xs rounded-lg"
-                                            >
-                                                🎲 Generate
-                                            </button>
-                                        </div>
-                                        <div className="relative">
-                                            <input
-                                                type={showPassword ? 'text' : 'password'}
-                                                value={data.new_password}
-                                                onChange={(e) => setData('new_password', e.target.value)}
-                                                className={`${inputClass} font-mono pr-20`}
-                                                placeholder="Leave blank to keep current password"
-                                                autoComplete="new-password"
-                                            />
-                                            <div className="absolute right-2 top-1/2 -translate-y-1/2 flex gap-1">
-                                                <button type="button" onClick={() => setShowPassword(v => !v)}
-                                                    className="px-2 py-1 text-slate-400 hover:text-slate-600 text-xs">
-                                                    {showPassword ? '🙈' : '👁'}
-                                                </button>
-                                                {data.new_password && (
-                                                    <button type="button" onClick={handleCopyPassword}
-                                                        className="px-2 py-1 text-xs bg-slate-100 hover:bg-slate-200 rounded">
-                                                        {copied ? '✓' : '📋'}
-                                                    </button>
-                                                )}
-                                            </div>
-                                        </div>
-                                        {errors.new_password && <p className="text-rose-600 text-xs mt-1">{errors.new_password}</p>}
-                                        <p className="text-slate-400 text-xs mt-1">Minimum 8 characters. Leave blank to keep current password unchanged.</p>
-                                    </div>
-
-                                    {/* Force change toggle */}
-                                    <label className="flex items-start gap-3 p-3 bg-amber-50 border border-amber-200 rounded-lg cursor-pointer">
-                                        <input
-                                            type="checkbox"
-                                            checked={data.must_change_password}
-                                            onChange={(e) => setData('must_change_password', e.target.checked)}
-                                            className="mt-0.5 h-4 w-4 text-iec-pink-600 bg-white border-slate-200 rounded"
-                                        />
-                                        <div>
-                                            <div className="text-amber-800 font-semibold text-xs">Force password change on next login</div>
-                                            <div className="text-amber-600 text-xs mt-0.5">User will be redirected to change their password immediately after the next successful login.</div>
-                                        </div>
-                                    </label>
-                                </div>
-                            )}
-                        </div>
-
                         <div className="flex flex-wrap gap-3 pt-2">
                             <Button type="submit" disabled={processing}>{processing ? 'Updating...' : 'Update User'}</Button>
                             <Button href="/admin/users" variant="secondary">Cancel</Button>
                         </div>
                     </form>
                 </Panel>
+
+                {/* ── Device Management Panel ──────────────────────────────── */}
+                {requiresDeviceBinding && (
+                    <Panel className="p-5">
+                        <div className="mb-4 flex items-center justify-between">
+                            <div>
+                                <h2 className="ws-section-title">Device Binding</h2>
+                                <p className="ws-section-desc mt-1">
+                                    This role requires single-device binding. The user can only log in from their registered device.
+                                </p>
+                            </div>
+                            {activeDevices.length > 0 && (
+                                <Button
+                                    variant="danger"
+                                    onClick={handleResetAllDevices}
+                                    disabled={resettingDevice}
+                                >
+                                    {resettingDevice ? 'Resetting…' : 'Reset Device Binding'}
+                                </Button>
+                            )}
+                        </div>
+
+                        {activeDevices.length === 0 && revokedDevices.length === 0 && (
+                            <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-700">
+                                No device registered yet. The device will be automatically bound on first login after OTP verification.
+                            </div>
+                        )}
+
+                        {activeDevices.length > 0 && (
+                            <div className="mb-4">
+                                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">Active Device</p>
+                                <div className="space-y-2">
+                                    {activeDevices.map((device) => (
+                                        <div key={device.id} className="flex items-center justify-between rounded-lg border border-emerald-200 bg-emerald-50 p-4">
+                                            <div>
+                                                <p className="text-sm font-semibold text-slate-800">{device.device_name}</p>
+                                                <p className="text-xs text-slate-500 mt-0.5">
+                                                    {device.os} · {device.browser} · {device.device_type}
+                                                </p>
+                                                <p className="text-xs text-slate-400 mt-0.5">
+                                                    Registered: {device.verified_at} · Last used: {device.last_used_at || 'Never'} · IP: {device.last_used_ip || '—'}
+                                                </p>
+                                            </div>
+                                            <div className="flex items-center gap-2 ml-4">
+                                                <span className="inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-700">
+                                                    ✓ Active
+                                                </span>
+                                                <Button
+                                                    variant="danger"
+                                                    onClick={() => handleRevokeDevice(device.id)}
+                                                    disabled={revokingDeviceId === device.id}
+                                                >
+                                                    {revokingDeviceId === device.id ? 'Revoking…' : 'Revoke'}
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {revokedDevices.length > 0 && (
+                            <div>
+                                <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">Revoked Devices</p>
+                                <div className="space-y-2">
+                                    {revokedDevices.map((device) => (
+                                        <div key={device.id} className="flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50 p-3 opacity-60">
+                                            <div>
+                                                <p className="text-sm font-medium text-slate-600">{device.device_name}</p>
+                                                <p className="text-xs text-slate-400">{device.os} · {device.browser}</p>
+                                            </div>
+                                            <span className="inline-flex items-center rounded-full bg-slate-200 px-2.5 py-1 text-xs font-semibold text-slate-500">
+                                                Revoked
+                                            </span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        <div className="mt-4 rounded-lg border border-blue-100 bg-blue-50 p-3 text-xs text-blue-600">
+                            <strong>How it works:</strong> On first login after OTP verification, the device is automatically bound to this account. 
+                            If the user tries to log in from a different device, they will be blocked and asked to contact the administrator. 
+                            Use "Reset Device Binding" to allow the user to register a new device.
+                        </div>
+                    </Panel>
+                )}
             </div>
         </AppLayout>
     );
