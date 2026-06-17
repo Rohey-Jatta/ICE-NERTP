@@ -188,7 +188,7 @@ function DrillRow({ color, title, sub, right, onClick }) {
 
 // ── 3-level drill panel ───────────────────────────────────────────────────────
 // drill: { region, constituency, ward }  — null at each unselected level
-function DrillPanel({ regions, drill, onDrill, stations, param, isPublished = false }) {
+function DrillPanel({ regions, drill, onDrill, stations, param }) {
     const { region: selRegion, constituency: selCon, ward: selWard } = drill;
 
     const region = selRegion ? regions.find((r) => r.name === selRegion) : null;
@@ -256,8 +256,8 @@ function DrillPanel({ regions, drill, onDrill, stations, param, isPublished = fa
                                         </div>
                                     </div>
 
-                                    {/* Result sheet photo (published only) */}
-                                    {isPublished && s.photo_url && (
+                                    {/* Result sheet photo — only present once nationally certified */}
+                                    {s.is_certified && s.photo_url && (
                                         <div className="border-t border-slate-100 px-5 py-3">
                                             <img
                                                 src={s.photo_url}
@@ -267,8 +267,8 @@ function DrillPanel({ regions, drill, onDrill, stations, param, isPublished = fa
                                         </div>
                                     )}
 
-                                    {/* Party acceptances (published only) */}
-                                    {isPublished && s.party_acceptances?.length > 0 && (
+                                    {/* Party acceptances — only present once nationally certified */}
+                                    {s.is_certified && s.party_acceptances?.length > 0 && (
                                         <div className="border-t border-slate-100 px-5 py-2">
                                             <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500 mb-2">Party Acceptances</div>
                                             <div className="flex flex-col gap-1">
@@ -278,7 +278,7 @@ function DrillPanel({ regions, drill, onDrill, stations, param, isPublished = fa
                                                         <span className={`flex-shrink-0 rounded-full px-2 py-0.5 text-[9px] font-semibold capitalize ${
                                                             pa.status === 'accepted' ? 'bg-emerald-100 text-emerald-700' : 
                                                             pa.status === 'rejected' ? 'bg-red-100 text-red-700' : 
-                                                            'bg-slate-100 text-slate-600'
+                                                            'bg-amber-100 text-amber-800'
                                                         }`}>
                                                             {pa.status}
                                                         </span>
@@ -417,7 +417,7 @@ function DrillPanel({ regions, drill, onDrill, stations, param, isPublished = fa
 }
 
 // ── Main ──────────────────────────────────────────────────────────────────────
-export default function ResultsMap({ election, elections = [], selectedElectionId, stations = [], regions = [], national = null, isPublished = false }) {
+export default function ResultsMap({ election, elections = [], selectedElectionId, stations = [], regions = [], national = null }) {
     const param = selectedElectionId ? `?election=${selectedElectionId}` : '';
 
     const [mode,        setMode]        = useState('regions');   // 'regions' | 'stations'
@@ -565,7 +565,6 @@ export default function ResultsMap({ election, elections = [], selectedElectionI
                                 onDrill={setDrill}
                                 stations={stationList}
                                 param={param}
-                                isPublished={isPublished}
                             />
                         </aside>
                     ) : (
@@ -593,7 +592,6 @@ export default function ResultsMap({ election, elections = [], selectedElectionI
                                     onDrill={setDrill}
                                     stations={stationList}
                                     param={param}
-                                    isPublished={isPublished}
                                 />
 
                                 <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">

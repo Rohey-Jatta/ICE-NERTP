@@ -15,9 +15,13 @@ function firstColor(value, fallback = '#6b7280') {
 }
 
 // Collapse the fine-grained certification_status into the three public buckets.
+// NOTE: this is purely STATUS-based now (not "do we have a total_votes_cast"),
+// because vote figures, the result sheet, and party reactions are only ever
+// sent by the backend once a result has been NATIONALLY CERTIFIED. A station
+// can be "provisional" (in the pipeline) while still showing no figures.
 function stationBucket(station) {
     if (station.status === RESULT_STATUS.NATIONALLY_CERTIFIED) return 'certified';
-    if (station.status === RESULT_STATUS.NOT_REPORTED || station.total_votes_cast == null) return 'pending';
+    if (!station.status || station.status === RESULT_STATUS.NOT_REPORTED) return 'pending';
     return 'provisional';
 }
 
@@ -118,7 +122,7 @@ function StationItem({ station, isActive, onSelect }) {
             </div>
 
             <div className="hidden min-w-0 items-center gap-2 text-[13px] sm:flex">
-                {bucket === 'pending' || !leader ? (
+                {!leader ? (
                     <span className="text-[12px] text-[#5f6773]">—</span>
                 ) : (
                     <>
@@ -132,7 +136,7 @@ function StationItem({ station, isActive, onSelect }) {
             </div>
 
             <div className="hidden text-[12px] tabular-nums text-[#5f6773] sm:block">
-                {bucket === 'pending' ? '—' : `${numeric(station.valid_votes).toLocaleString()} valid`}
+                {station.valid_votes == null ? '—' : `${numeric(station.valid_votes).toLocaleString()} valid`}
             </div>
 
             <div className="flex justify-end">
@@ -170,10 +174,12 @@ function CertificationTimeline({ bucket }) {
     );
 }
 
-function StationDetail({ station, isPublished }) {
+function StationDetail({ station }) {
     const bucket = stationBucket(station);
     const turnout = stationTurnout(station);
     const hierarchy = stationHierarchy(station);
+    const isCertified = !!station.is_certified;
+    const hasFigures = station.total_votes_cast != null;
     const validVotes = numeric(station.valid_votes);
     const candidates = station.candidate_votes || [];
     const [imgError, setImgError] = useState(false);
@@ -195,10 +201,10 @@ function StationDetail({ station, isPublished }) {
                 </div>
             </div>
 
-            {/* Result sheet photo */}
+            {/* Result sheet photo — only present once nationally certified */}
             <div className="border-b border-[#e6e8ec] px-7 py-5">
                 <h4 className="mb-3.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-[#5f6773]">Result Sheet</h4>
-                {isPublished && station.photo_url && !imgError ? (
+                {isCertified && station.photo_url && !imgError ? (
                     <img
                         src={station.photo_url}
                         alt={`Result sheet for ${station.name}`}
@@ -214,7 +220,7 @@ function StationDetail({ station, isPublished }) {
                                 <path d="m21 16-5-5-7 7" />
                             </svg>
                             <div className="mt-2 text-[12px] font-medium">
-                                {isPublished ? 'No photo on file' : 'Available once published'}
+                                {isCertified ? 'No photo on file' : 'Available once nationally certified'}
                             </div>
                         </div>
                     </div>
@@ -232,13 +238,13 @@ function StationDetail({ station, isPublished }) {
                     </div>
                     <div>
                         <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-[#5f6773]">Cast</div>
-                        <div className="font-serif text-[22px] font-bold leading-none tracking-tight tabular-nums text-[#0e1014]">{bucket === 'pending' ? '—' : numeric(station.total_votes_cast).toLocaleString()}</div>
-                        <div className="mt-1 text-[11.5px] text-[#5f6773]">{turnout ? `${turnout}% turnout` : 'Not reported'}</div>
+                        <div className="font-serif text-[22px] font-bold leading-none tracking-tight tabular-nums text-[#0e1014]">{hasFigures ? numeric(station.total_votes_cast).toLocaleString() : '—'}</div>
+                        <div className="mt-1 text-[11.5px] text-[#5f6773]">{turnout ? `${turnout}% turnout` : 'Not yet published'}</div>
                     </div>
                     <div>
                         <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-[#5f6773]">Valid</div>
-                        <div className="font-serif text-[22px] font-bold leading-none tracking-tight tabular-nums text-[#0e8c5a]">{bucket === 'pending' ? '—' : validVotes.toLocaleString()}</div>
-                        <div className="mt-1 text-[11.5px] text-[#5f6773]">{bucket === 'pending' ? '' : `${numeric(station.rejected_votes).toLocaleString()} rejected`}</div>
+                        <div className="font-serif text-[22px] font-bold leading-none tracking-tight tabular-nums text-[#0e8c5a]">{hasFigures ? validVotes.toLocaleString() : '—'}</div>
+                        <div className="mt-1 text-[11.5px] text-[#5f6773]">{hasFigures ? `${numeric(station.rejected_votes).toLocaleString()} rejected` : ''}</div>
                     </div>
                 </div>
             </div>
@@ -248,7 +254,9 @@ function StationDetail({ station, isPublished }) {
                 <h4 className="mb-3.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-[#5f6773]">Candidate Breakdown</h4>
                 {candidates.length === 0 ? (
                     <p className="m-0 text-[13px] leading-6 text-[#5f6773]">
-                        This station has not yet reported results. Candidate totals will appear once results are submitted and validated.
+                        {bucket === 'provisional'
+                            ? 'This result is moving through the certification pipeline. Candidate totals, the result sheet, and party responses publish once the IEC Chairman certifies it nationally.'
+                            : 'This station has not yet reported results. Candidate totals will appear once results are submitted and validated.'}
                     </p>
                 ) : (
                     candidates.map((c, idx) => {
@@ -275,8 +283,8 @@ function StationDetail({ station, isPublished }) {
                 )}
             </div>
 
-            {/* Party acceptances (published only) */}
-            {isPublished && station.party_acceptances?.length > 0 && (
+            {/* Party acceptances — only present once nationally certified */}
+            {isCertified && station.party_acceptances?.length > 0 && (
                 <div className="border-b border-[#e6e8ec] px-7 py-5">
                     <h4 className="mb-3.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-[#5f6773]">Party Acceptances</h4>
                     <div className="flex flex-col gap-2">
@@ -284,7 +292,7 @@ function StationDetail({ station, isPublished }) {
                             <div key={`${pa.party_abbr}-${idx}`} className="flex items-center justify-between gap-3 text-[13px]">
                                 <span className="truncate font-semibold text-[#1f2329]">{pa.party_abbr} <span className="font-normal text-[#5f6773]">· {pa.party_name}</span></span>
                                 <span className={`flex-shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold capitalize ${
-                                    pa.status === 'accepted' ? 'bg-[#e2f2ea] text-[#0e8c5a]' : pa.status === 'rejected' ? 'bg-[#fde8e8] text-[#b91c1c]' : 'bg-[#f5f6f8] text-[#5f6773]'
+                                    pa.status === 'accepted' ? 'bg-[#e2f2ea] text-[#0e8c5a]' : pa.status === 'rejected' ? 'bg-[#fde8e8] text-[#b91c1c]' : 'bg-[#fef3c7] text-[#b45309]'
                                 }`}>
                                     {pa.status}
                                 </span>
@@ -304,7 +312,7 @@ function StationDetail({ station, isPublished }) {
 }
 
 // ── Page ──────────────────────────────────────────────────────────────────────
-export default function ResultsStations({ election, elections = [], selectedElectionId, stations, isPublished = false }) {
+export default function ResultsStations({ election, elections = [], selectedElectionId, stations }) {
     const param = selectedElectionId ? `?election=${selectedElectionId}` : '';
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState('all');
@@ -393,12 +401,6 @@ export default function ResultsStations({ election, elections = [], selectedElec
                     </div>
                 </div>
 
-                {!isPublished && (
-                    <div className="border-b border-[#fde8c2] bg-[#fffaf0] px-7 py-2.5 text-center text-[13px] font-medium text-[#b45309]">
-                        Displaying provisional station status. Result-sheet photos and party decisions appear once results are officially published.
-                    </div>
-                )}
-
                 <div className="lg:grid lg:grid-cols-[1fr_480px]">
                     {/* ── List pane ─────────────────────────────────────────── */}
                     <div className="flex flex-col border-r border-[#e6e8ec] lg:h-[calc(100vh-68px)]">
@@ -473,7 +475,7 @@ export default function ResultsStations({ election, elections = [], selectedElec
                     {/* ── Detail pane ───────────────────────────────────────── */}
                     <aside className="bg-[#fafafb] lg:h-[calc(100vh-68px)] lg:overflow-y-auto">
                         {selected ? (
-                            <StationDetail station={selected} isPublished={isPublished} />
+                            <StationDetail station={selected} />
                         ) : (
                             <div className="grid h-full place-items-center px-8 py-16 text-center text-[#5f6773]">
                                 <p className="text-sm">Select a station to view its full breakdown.</p>
