@@ -60,16 +60,38 @@ function Avatar({ candidate, size = 48 }) {
 }
 
 // ── National scorecard (CNN-style header) ─────────────────────────────────────
-function ScoreCard({ national, election }) {
+function ScoreCard({ national, election, stations = [] }) {
     const cands = national?.candidates || [];
     const top = cands.slice(0, 4);
     const totalVotes = numeric(national?.total_votes);
     const reporting = numeric(national?.reporting_pct);
 
+    // Count how many stations have ANY result (not just certified)
+    const stationsWithResults = stations.filter(s =>
+        s.status && s.status !== 'not_reported'
+    ).length;
+    const totalStations = stations.length;
+
+    // Show message based on actual station data, not just certified results
     if (cands.length === 0) {
+        const hasAnyResults = stationsWithResults > 0;
         return (
             <div className="border-b border-slate-200 bg-white px-4 py-4">
-                <p className="text-center text-sm text-slate-500">No results have been reported yet for {publicElectionTitle(election)}.</p>
+                {hasAnyResults ? (
+                    <div className="text-center">
+                        <p className="text-sm text-slate-600 font-medium">
+                            Results are being processed for <strong>{publicElectionTitle(election)}</strong>.
+                        </p>
+                        <p className="text-xs text-slate-500 mt-1">
+                            {stationsWithResults} of {totalStations} stations have submitted results.
+                            Candidate totals appear once results are nationally certified.
+                        </p>
+                    </div>
+                ) : (
+                    <p className="text-center text-sm text-slate-500">
+                        No results have been submitted yet for {publicElectionTitle(election)}.
+                    </p>
+                )}
             </div>
         );
     }
@@ -117,7 +139,6 @@ function ScoreCard({ national, election }) {
 // ── Shared sub-components ─────────────────────────────────────────────────────
 
 function BackBreadcrumb({ crumbs, onNav }) {
-    // crumbs: [{ label, level }]  — click navigates back to that level
     return (
         <div className="flex items-center gap-1.5 border-b border-slate-200 px-4 py-3 text-xs">
             {crumbs.map((c, i) => (
@@ -187,8 +208,7 @@ function DrillRow({ color, title, sub, right, onClick }) {
 }
 
 // ── 3-level drill panel ───────────────────────────────────────────────────────
-// drill: { region, constituency, ward }  — null at each unselected level
-function DrillPanel({ regions, drill, onDrill, stations, param }) {
+function DrillPanel({ regions, drill, onDrill, stations, param, isPublished = false }) {
     const { region: selRegion, constituency: selCon, ward: selWard } = drill;
 
     const region = selRegion ? regions.find((r) => r.name === selRegion) : null;
@@ -256,8 +276,7 @@ function DrillPanel({ regions, drill, onDrill, stations, param }) {
                                         </div>
                                     </div>
 
-                                    {/* Result sheet photo — only present once nationally certified */}
-                                    {s.is_certified && s.photo_url && (
+                                    {isPublished && s.photo_url && (
                                         <div className="border-t border-slate-100 px-5 py-3">
                                             <img
                                                 src={s.photo_url}
@@ -267,8 +286,7 @@ function DrillPanel({ regions, drill, onDrill, stations, param }) {
                                         </div>
                                     )}
 
-                                    {/* Party acceptances — only present once nationally certified */}
-                                    {s.is_certified && s.party_acceptances?.length > 0 && (
+                                    {isPublished && s.party_acceptances?.length > 0 && (
                                         <div className="border-t border-slate-100 px-5 py-2">
                                             <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500 mb-2">Party Acceptances</div>
                                             <div className="flex flex-col gap-1">
@@ -276,9 +294,9 @@ function DrillPanel({ regions, drill, onDrill, stations, param }) {
                                                     <div key={`${pa.party_abbr}-${idx}`} className="flex items-center justify-between gap-2 text-[11px]">
                                                         <span className="truncate font-semibold text-slate-800">{pa.party_abbr}</span>
                                                         <span className={`flex-shrink-0 rounded-full px-2 py-0.5 text-[9px] font-semibold capitalize ${
-                                                            pa.status === 'accepted' ? 'bg-emerald-100 text-emerald-700' : 
-                                                            pa.status === 'rejected' ? 'bg-red-100 text-red-700' : 
-                                                            'bg-amber-100 text-amber-800'
+                                                            pa.status === 'accepted' ? 'bg-emerald-100 text-emerald-700' :
+                                                            pa.status === 'rejected' ? 'bg-red-100 text-red-700' :
+                                                            'bg-slate-100 text-slate-600'
                                                         }`}>
                                                             {pa.status}
                                                         </span>
@@ -362,6 +380,15 @@ function DrillPanel({ regions, drill, onDrill, stations, param }) {
                         {region.candidates.map((c) => <CandidateBar key={c.name} c={c} />)}
                     </div>
                 )}
+                {region.candidates?.length === 0 && (
+                    <div className="border-t border-slate-100 px-5 py-4">
+                        <p className="text-xs text-slate-500">
+                            {numeric(region.reported_stations) > 0
+                                ? 'Results submitted — candidate totals publish once nationally certified.'
+                                : 'No results submitted yet for this region.'}
+                        </p>
+                    </div>
+                )}
                 <div className="border-t border-slate-100 px-5 py-2 text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">
                     Constituencies ({region.constituencies?.length ?? 0})
                 </div>
@@ -373,7 +400,7 @@ function DrillPanel({ regions, drill, onDrill, stations, param }) {
                             title={c.name}
                             sub={c.leader
                                 ? `${c.leader.party} leads · ${c.leader_pct}%`
-                                : 'Awaiting results'}
+                                : 'Awaiting certified results'}
                             right={`${c.total_stations} stn · ${c.reporting_pct}%`}
                             onClick={() => onDrill({ region: selRegion, constituency: c.name, ward: null })}
                         />
@@ -391,6 +418,15 @@ function DrillPanel({ regions, drill, onDrill, stations, param }) {
 
     // ── Level 0: All regions list ─────────────────────────────────────────────
     const sorted = [...regions].sort((a, b) => numeric(b.total_votes) - numeric(a.total_votes));
+
+    // Also show regions with submitted (non-certified) results
+    const sortedWithActivity = [...regions].sort((a, b) => {
+        // Prioritize regions with certified votes first, then by reported stations
+        const aScore = numeric(b.total_votes) * 1000 + numeric(b.reported_stations);
+        const bScore = numeric(a.total_votes) * 1000 + numeric(a.reported_stations);
+        return aScore - bScore;
+    });
+
     return (
         <div className="flex h-full flex-col">
             <div className="border-b border-slate-200 px-5 py-3">
@@ -406,7 +442,9 @@ function DrillPanel({ regions, drill, onDrill, stations, param }) {
                         title={r.name}
                         sub={r.leader
                             ? `${r.leader.party} leads · ${r.leader.pct}%`
-                            : 'Awaiting results'}
+                            : r.reported_stations > 0
+                                ? `${r.reported_stations} station(s) reported — pending certification`
+                                : 'Awaiting results'}
                         right={`${r.reporting_pct}%`}
                         onClick={() => onDrill({ region: r.name, constituency: null, ward: null })}
                     />
@@ -417,11 +455,10 @@ function DrillPanel({ regions, drill, onDrill, stations, param }) {
 }
 
 // ── Main ──────────────────────────────────────────────────────────────────────
-export default function ResultsMap({ election, elections = [], selectedElectionId, stations = [], regions = [], national = null }) {
+export default function ResultsMap({ election, elections = [], selectedElectionId, stations = [], regions = [], national = null, isPublished = false }) {
     const param = selectedElectionId ? `?election=${selectedElectionId}` : '';
 
-    const [mode,        setMode]        = useState('regions');   // 'regions' | 'stations'
-    // drill state: which region / constituency / ward is selected
+    const [mode,        setMode]        = useState('regions');
     const [drill,       setDrill]       = useState({ region: null, constituency: null, ward: null });
     const [searchTerm,  setSearchTerm]  = useState('');
     const [selStationReg, setSelStationReg] = useState('all');
@@ -437,7 +474,6 @@ export default function ResultsMap({ election, elections = [], selectedElectionI
 
     const stationList = stations || [];
 
-    // Station-mode filtering (unchanged behaviour)
     const regionOptions = useMemo(() => buildOptions(stationList, 'admin_area_name'), [stationList]);
     const regionScoped = useMemo(() => (
         selStationReg === 'all' ? stationList : stationList.filter((s) => s.admin_area_name === selStationReg)
@@ -470,12 +506,10 @@ export default function ResultsMap({ election, elections = [], selectedElectionI
     const clearFilters = useCallback(() => { setSearchTerm(''); setSelStationReg('all'); setSelConst('all'); setSelWard('all'); setStatusFilter('all'); }, []);
     const hasFilters = searchTerm || selStationReg !== 'all' || selConst !== 'all' || selWard !== 'all' || statusFilter !== 'all';
 
-    // Map-click on a region polygon → select that region (level 1)
     const handleRegionClick = useCallback((regionName) => {
         setDrill({ region: regionName, constituency: null, ward: null });
     }, []);
 
-    // Drill stations: filter by the deepest selected level
     const drillStations = useMemo(() => {
         if (!drill.region) return [];
         let filtered = stationList.filter((s) => s.admin_area_name === drill.region);
@@ -495,6 +529,19 @@ export default function ResultsMap({ election, elections = [], selectedElectionI
                 </div>
             </AppLayout>
         );
+    }
+
+    // Determine banner message based on actual data
+    const stationsWithAnyResult = stationList.filter(s => s.status && s.status !== 'not_reported').length;
+    const stationsWithCertified = stationList.filter(s => s.status === 'nationally_certified').length;
+    const hasCertifiedResults = stationsWithCertified > 0;
+    const hasAnyResults = stationsWithAnyResult > 0;
+
+    let bannerMessage = null;
+    if (!hasCertifiedResults && hasAnyResults) {
+        bannerMessage = `${stationsWithAnyResult} of ${stationList.length} station(s) have submitted results — candidate totals will appear once the IEC Chairman certifies them.`;
+    } else if (!hasAnyResults) {
+        bannerMessage = `No results have been submitted yet for ${publicElectionTitle(election)}.`;
     }
 
     return (
@@ -535,7 +582,14 @@ export default function ResultsMap({ election, elections = [], selectedElectionI
                 </div>
 
                 {/* ── National scorecard ──────────────────────────────────── */}
-                <ScoreCard national={national} election={election} />
+                <ScoreCard national={national} election={election} stations={stationList} />
+
+                {/* ── Contextual banner — only show when there's something useful to say ── */}
+                {bannerMessage && (
+                    <div className="border-b border-slate-100 bg-slate-50 px-4 py-2.5 text-center text-sm text-slate-500">
+                        {bannerMessage}
+                    </div>
+                )}
 
                 {/* ── Body: map + panel ───────────────────────────────────── */}
                 <div className="relative flex flex-1 min-h-0" style={{ height: 'calc(100vh - 230px)' }}>
@@ -565,6 +619,7 @@ export default function ResultsMap({ election, elections = [], selectedElectionI
                                 onDrill={setDrill}
                                 stations={stationList}
                                 param={param}
+                                isPublished={isPublished}
                             />
                         </aside>
                     ) : (
@@ -592,8 +647,17 @@ export default function ResultsMap({ election, elections = [], selectedElectionI
                                     onDrill={setDrill}
                                     stations={stationList}
                                     param={param}
+                                    isPublished={isPublished}
                                 />
+                            </div>
+                        </div>
+                    )}
 
+                    {/* Mobile stations filter drawer */}
+                    {mode === 'stations' && sidebarOpen && (
+                        <div className="fixed inset-0 z-50 flex lg:hidden">
+                            <div className="absolute inset-0 bg-black/30" onClick={() => setSidebarOpen(false)} />
+                            <div className="relative ml-auto flex h-full w-72 flex-col bg-white">
                                 <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
                                     <span className="text-xs font-bold uppercase tracking-widest text-slate-400">Filters</span>
                                     <button onClick={() => setSidebarOpen(false)} className="text-lg text-slate-400 hover:text-slate-900">✕</button>

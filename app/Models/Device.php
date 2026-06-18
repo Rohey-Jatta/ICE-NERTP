@@ -19,7 +19,7 @@ class Device extends Model
     ];
 
     protected $fillable = [
-        'user_id', 'device_fingerprint', 'device_name', 'device_type',
+        'user_id', 'device_fingerprint', 'device_fingerprint_data', 'device_name', 'device_type',
         'os', 'browser', 'token_id',
         'verified_at', 'verified_by_ip',
         'last_used_at', 'last_used_ip',
@@ -44,9 +44,13 @@ class Device extends Model
         return $this->verified_at !== null && !$this->is_revoked;
     }
 
-    public static function roleRequiresBinding(string $role): bool
+    /**
+     * @param string|null $role Nullable — a user with no assigned role
+     *                           must never bind a device, not crash.
+     */
+    public static function roleRequiresBinding(?string $role): bool
     {
-        return in_array($role, self::ROLES_REQUIRING_DEVICE_BINDING);
+        return $role !== null && in_array($role, self::ROLES_REQUIRING_DEVICE_BINDING, true);
     }
 
     public function verify(string $ip): void

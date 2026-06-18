@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react';
 import { useForm, router, usePage } from '@inertiajs/react';
+import { generateDeviceFingerprint, serializeFingerprint } from '../../Utils/deviceFingerprint';
 
 export default function TwoFactor({ expiresAt, status }) {
     const { props } = usePage();
 
     const { data, setData, post, processing, errors } = useForm({
         code: '',
+        deviceFingerprint: '',
     });
 
     const computeCountdown = (expiry) => {
@@ -16,6 +18,12 @@ export default function TwoFactor({ expiresAt, status }) {
     const [countdown, setCountdown] = useState(() => computeCountdown(expiresAt));
     const [isResending, setIsResending] = useState(false);
     const [resendMessage, setResendMessage] = useState(status || '');
+
+    // Collect device fingerprint on component mount
+    useEffect(() => {
+        const fingerprint = generateDeviceFingerprint();
+        setData('deviceFingerprint', serializeFingerprint(fingerprint));
+    }, []);
 
     // Update countdown whenever the server sends a fresh expiresAt (e.g. after resend)
     useEffect(() => {
@@ -150,6 +158,7 @@ export default function TwoFactor({ expiresAt, status }) {
                     )}
 
                     <form onSubmit={handleSubmit}>
+                        <input type="hidden" name="deviceFingerprint" value={data.deviceFingerprint} />
                         <div className="mb-6">
                             <label className="block text-sm font-medium text-gray-700 mb-2 text-center">
                                 Verification Code

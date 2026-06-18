@@ -63,7 +63,7 @@ class ResultsMapController extends Controller
         $stations = Cache::remember($cacheKey, 30, fn() => $this->computeStationsData($election));
 
         $aggKey = "results_map_agg_v4_{$election->id}";
-        $agg    = Cache::remember($aggKey, 300, fn() => $this->computeRegionAggregates($election));
+        $agg    = Cache::remember($aggKey, 30, fn() => $this->computeRegionAggregates($election));
 
         return Inertia::render('Public/ResultsMap', [
             'stations'           => $stations,
@@ -232,12 +232,19 @@ SQL;
 
     /**
      * Per-region (admin_area) leading candidate + candidate breakdown, plus
-     * a national scorecard. Only NATIONALLY CERTIFIED (published) results
-     * are aggregated — provisional / in-pipeline results never contribute
-     * to the public leaderboard or "reporting" percentages.
+     * a national scorecard.
+     *
+     * VOTE TOTALS (candidates/national scorecard): Only NATIONALLY CERTIFIED
+     * results — these are the "official" published numbers.
+     *
+     * REPORTING COUNTS (total_stations, reported_stations, reporting_pct):
+     * Uses ALL results that have been submitted (any status except not_reported)
+     * so the UI accurately reflects how many stations have filed results,
+     * even if not all are nationally certified yet.
      */
     private function computeRegionAggregates(Election $election): array
     {
+        // ── Candidate vote totals: only nationally certified ──────────────────
         $voteRows = DB::table('polling_stations as ps')
             ->join('administrative_hierarchy as w',   'ps.ward_id',    '=', 'w.id')
             ->join('administrative_hierarchy as con', 'w.parent_id',   '=', 'con.id')
@@ -263,24 +270,34 @@ SQL;
             ")
             ->get();
 
+        // ── Station counts: total vs certified (for the reporting % bar) ──────
+        // reported_stations = stations with ANY result (submitted or above)
+        // certified_stations = nationally certified only
         $countRows = DB::table('polling_stations as ps')
             ->join('administrative_hierarchy as w',   'ps.ward_id',    '=', 'w.id')
             ->join('administrative_hierarchy as con', 'w.parent_id',   '=', 'con.id')
             ->join('administrative_hierarchy as aa',  'con.parent_id', '=', 'aa.id')
-            ->leftJoin('results as r', function ($join) use ($election) {
-                $join->on('r.polling_station_id', '=', 'ps.id')
-                     ->where('r.election_id', $election->id)
-                     ->where('r.certification_status', Result::STATUS_NATIONALLY_CERTIFIED);
-            })
+            ->leftJoin(DB::raw("(
+                SELECT DISTINCT ON (polling_station_id)
+                    polling_station_id, certification_status
+                FROM results
+                WHERE election_id = {$election->id}
+                  AND certification_status != 'rejected'
+                ORDER BY polling_station_id,
+                    CASE WHEN certification_status = 'nationally_certified' THEN 0 ELSE 1 END,
+                    submitted_at DESC
+            ) as r"), 'r.polling_station_id', '=', 'ps.id')
             ->where('ps.election_id', $election->id)
             ->groupBy('aa.name')
-            ->selectRaw('
-                aa.name                AS region_name,
-                COUNT(DISTINCT ps.id)  AS total_stations,
-                COUNT(DISTINCT r.id)   AS reported_stations
-            ')
-            ->get()
-            ->keyBy('region_name');
+            ->selectRaw("
+                aa.name                                                                      AS region_name,
+                COUNT(DISTINCT ps.id)                                                        AS total_stations,
+                COUNT(DISTINCT CASE WHEN r.certification_status IS NOT NULL THEN ps.id END)  AS reported_stations,
+                COUNT(DISTINCT CASE WHEN r.certification_status = 'nationally_certified' THEN ps.id END) AS certified_stations
+            ")
+            ->get();
+
+        $constituencies = $this->computeConstituencies($election);
 
         $byRegion = [];
         foreach ($voteRows as $row) {
@@ -293,11 +310,9 @@ SQL;
             ];
         }
 
-        $constituencies = $this->computeConstituencies($election);
-
         $regions = [];
-        foreach ($countRows as $name => $cnt) {
-            $agg    = $byRegion[$name] ?? null;
+        foreach ($countRows as $cnt) {
+            $agg    = $byRegion[$cnt->region_name] ?? null;
             $total  = $agg['total'] ?? 0;
             $cands  = $agg['cands'] ?? [];
             usort($cands, fn($a, $b) => $b['votes'] <=> $a['votes']);
@@ -306,20 +321,27 @@ SQL;
                 'pct' => $total > 0 ? round($c['votes'] / $total * 100, 1) : 0,
             ], $cands);
 
+            $totalStations      = (int) $cnt->total_stations;
+            $reportedStations   = (int) $cnt->reported_stations;   // any submitted result
+            $certifiedStations  = (int) $cnt->certified_stations;  // nationally certified only
+
             $regions[] = [
-                'name'              => $name,
-                'total_stations'    => (int) $cnt->total_stations,
-                'reported_stations' => (int) $cnt->reported_stations,
-                'reporting_pct'     => $cnt->total_stations > 0
-                    ? round($cnt->reported_stations / $cnt->total_stations * 100)
+                'name'               => $cnt->region_name,
+                'total_stations'     => $totalStations,
+                'reported_stations'  => $reportedStations,   // stations with any result
+                'certified_stations' => $certifiedStations,  // nationally certified
+                // reporting_pct shows stations that have submitted ANY result
+                'reporting_pct'      => $totalStations > 0
+                    ? round($reportedStations / $totalStations * 100)
                     : 0,
-                'total_votes'       => $total,
-                'leader'            => $cands[0] ?? null,
-                'candidates'        => $cands,
-                'constituencies'    => $constituencies[$name] ?? [],
+                'total_votes'        => $total,              // certified votes only
+                'leader'             => $cands[0] ?? null,
+                'candidates'         => $cands,
+                'constituencies'     => $constituencies[$cnt->region_name] ?? [],
             ];
         }
 
+        // ── National scorecard ────────────────────────────────────────────────
         $national = [];
         foreach ($voteRows as $row) {
             $key = $row->candidate_name;
@@ -343,7 +365,7 @@ SQL;
         ], $national);
 
         $totalStations    = (int) $countRows->sum('total_stations');
-        $reportedStations = (int) $countRows->sum('reported_stations');
+        $reportedStations = (int) $countRows->sum('reported_stations');  // any result submitted
 
         return [
             'regions'  => $regions,
@@ -360,8 +382,9 @@ SQL;
     }
 
     /**
-     * Per-constituency leader + totals, keyed by parent region (admin_area)
-     * name. Only nationally-certified results are counted.
+     * Per-constituency leader + totals, keyed by parent region (admin_area) name.
+     * Vote totals: only nationally-certified results.
+     * Station counts: any submitted result.
      */
     private function computeConstituencies(Election $election): array
     {
@@ -393,19 +416,24 @@ SQL;
             ->join('administrative_hierarchy as w',   'ps.ward_id',    '=', 'w.id')
             ->join('administrative_hierarchy as con', 'w.parent_id',   '=', 'con.id')
             ->join('administrative_hierarchy as aa',  'con.parent_id', '=', 'aa.id')
-            ->leftJoin('results as r', function ($join) use ($election) {
-                $join->on('r.polling_station_id', '=', 'ps.id')
-                     ->where('r.election_id', $election->id)
-                     ->where('r.certification_status', Result::STATUS_NATIONALLY_CERTIFIED);
-            })
+            ->leftJoin(DB::raw("(
+                SELECT DISTINCT ON (polling_station_id)
+                    polling_station_id, certification_status
+                FROM results
+                WHERE election_id = {$election->id}
+                  AND certification_status != 'rejected'
+                ORDER BY polling_station_id,
+                    CASE WHEN certification_status = 'nationally_certified' THEN 0 ELSE 1 END,
+                    submitted_at DESC
+            ) as r"), 'r.polling_station_id', '=', 'ps.id')
             ->where('ps.election_id', $election->id)
             ->groupBy('aa.name', 'con.name')
-            ->selectRaw('
+            ->selectRaw("
                 aa.name                AS region_name,
                 con.name               AS con_name,
                 COUNT(DISTINCT ps.id)  AS total_stations,
-                COUNT(DISTINCT r.id)   AS reported_stations
-            ')
+                COUNT(DISTINCT CASE WHEN r.certification_status IS NOT NULL THEN ps.id END) AS reported_stations
+            ")
             ->get();
 
         $acc = [];
@@ -452,7 +480,9 @@ SQL;
     }
 
     /**
-     * Per-ward leader + totals. Only nationally-certified results counted.
+     * Per-ward leader + totals.
+     * Vote totals: nationally-certified only.
+     * Station counts: any submitted result.
      */
     private function computeWards(Election $election): array
     {
@@ -485,20 +515,25 @@ SQL;
             ->join('administrative_hierarchy as w',   'ps.ward_id',    '=', 'w.id')
             ->join('administrative_hierarchy as con', 'w.parent_id',   '=', 'con.id')
             ->join('administrative_hierarchy as aa',  'con.parent_id', '=', 'aa.id')
-            ->leftJoin('results as r', function ($join) use ($election) {
-                $join->on('r.polling_station_id', '=', 'ps.id')
-                     ->where('r.election_id', $election->id)
-                     ->where('r.certification_status', Result::STATUS_NATIONALLY_CERTIFIED);
-            })
+            ->leftJoin(DB::raw("(
+                SELECT DISTINCT ON (polling_station_id)
+                    polling_station_id, certification_status
+                FROM results
+                WHERE election_id = {$election->id}
+                  AND certification_status != 'rejected'
+                ORDER BY polling_station_id,
+                    CASE WHEN certification_status = 'nationally_certified' THEN 0 ELSE 1 END,
+                    submitted_at DESC
+            ) as r"), 'r.polling_station_id', '=', 'ps.id')
             ->where('ps.election_id', $election->id)
             ->groupBy('aa.name', 'con.name', 'w.name')
-            ->selectRaw('
+            ->selectRaw("
                 aa.name                AS region_name,
                 con.name               AS con_name,
                 w.name                 AS ward_name,
                 COUNT(DISTINCT ps.id)  AS total_stations,
-                COUNT(DISTINCT r.id)   AS reported_stations
-            ')
+                COUNT(DISTINCT CASE WHEN r.certification_status IS NOT NULL THEN ps.id END) AS reported_stations
+            ")
             ->get();
 
         $acc = [];
