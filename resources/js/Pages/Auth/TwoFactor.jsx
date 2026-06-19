@@ -17,7 +17,8 @@ export default function TwoFactor({ expiresAt, status }) {
 
     const [countdown, setCountdown] = useState(() => computeCountdown(expiresAt));
     const [isResending, setIsResending] = useState(false);
-    const [resendMessage, setResendMessage] = useState(status || '');
+    const [resendMessage, setResendMessage] = useState('');
+    const [resendError, setResendError] = useState('');
 
     // Collect device fingerprint on component mount
     useEffect(() => {
@@ -30,10 +31,13 @@ export default function TwoFactor({ expiresAt, status }) {
         setCountdown(computeCountdown(expiresAt));
     }, [expiresAt]);
 
-    // Reflect the flash status message returned by the resend action
+    // Reflect the flash status message returned by the resend action.
+    // Only treat this as a SUCCESS message — never show a stale status
+    // alongside a fresh verification error.
     useEffect(() => {
         if (status) {
             setResendMessage(status);
+            setResendError('');
         }
     }, [status]);
 
@@ -42,8 +46,19 @@ export default function TwoFactor({ expiresAt, status }) {
         const flash = props.flash;
         if (flash?.success) {
             setResendMessage(flash.success);
+            setResendError('');
         }
     }, [props.flash]);
+
+    // Whenever a fresh verification-code error arrives from the server,
+    // clear out any leftover resend success/error messages so the two
+    // banners never stack on top of each other.
+    useEffect(() => {
+        if (errors.code) {
+            setResendMessage('');
+            setResendError('');
+        }
+    }, [errors.code]);
 
     // Countdown timer
     useEffect(() => {
@@ -55,7 +70,16 @@ export default function TwoFactor({ expiresAt, status }) {
 
     const handleSubmit = (e) => {
         e.preventDefault();
-        post('/auth/two-factor');
+        // Clear any stale resend messages before a fresh verify attempt
+        setResendMessage('');
+        setResendError('');
+        post('/auth/two-factor', {
+            onError: () => {
+                // Reset the code field on failure so "Verifying..." never
+                // gets stuck and the person can immediately retype.
+                setData('code', '');
+            },
+        });
     };
 
     const handleResend = (e) => {
@@ -64,6 +88,7 @@ export default function TwoFactor({ expiresAt, status }) {
 
         setIsResending(true);
         setResendMessage('');
+        setResendError('');
 
         router.post(
             '/auth/two-factor/resend',
@@ -74,7 +99,7 @@ export default function TwoFactor({ expiresAt, status }) {
                     setResendMessage('A new verification code has been sent to your phone.');
                 },
                 onError: () => {
-                    setResendMessage('Failed to resend code. Please try again.');
+                    setResendError('Failed to resend code. Please try again.');
                 },
                 onFinish: () => {
                     setIsResending(false);
@@ -144,9 +169,17 @@ export default function TwoFactor({ expiresAt, status }) {
                             </div>
                         )}
 
-                        {resendMessage && (
+                        {/* Success message — only shown when there's no active error */}
+                        {resendMessage && !errors.code && (
                             <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-lg">
                                 <p className="text-sm text-green-700">{resendMessage}</p>
+                            </div>
+                        )}
+
+                        {/* Resend failure — separate, correctly styled as an error */}
+                        {resendError && !errors.code && (
+                            <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg">
+                                <p className="text-sm text-red-700">{resendError}</p>
                             </div>
                         )}
                     </div>
