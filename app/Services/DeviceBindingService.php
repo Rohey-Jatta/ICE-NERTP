@@ -12,36 +12,63 @@ use Illuminate\Support\Facades\Log;
 class DeviceBindingService
 {
     /**
-     * Derive a stable server-side fingerprint from request signals.
+     * Derive a stable, device-level fingerprint.
      *
-     * Uses User-Agent only (NOT IP address) because:
-     * - IP addresses change frequently (mobile networks, VPNs, DHCP)
-     * - Including IP caused "mismatch" on every network change
-     * - User-Agent is stable across a device's browser sessions
+     * PRIMARY SOURCE: a long-lived, client-generated device id.
+     * resources/js/bootstrap.js creates a random UUID on first visit and
+     * stores it in:
+     *   - a 365-day cookie named "iec_device_id" (read here via
+     *     $request->cookie())
+     *   - localStorage as a backup
+     *   - the "X-DEVICE-ID" header on axios requests (kept as a secondary
+     *     check below — note this header is NOT attached to plain fetch()
+     *     calls or to Inertia's own request pipeline in this app, so the
+     *     cookie is the signal that actually matters in practice)
      *
-     * The fingerprint is a SHA-256 hash so it's consistent and non-reversible.
+     * This value never changes because of browser/OS updates, VPNs, mobile
+     * carrier NAT, or Accept-Language settings — which is exactly what was
+     * causing legitimate repeat logins on the SAME browser/device to be
+     * flagged as "a different device" under the old User-Agent + IP +
+     * Accept-Language hash.
+     *
+     * IMPORTANT: for $request->cookie('iec_device_id') to return anything,
+     * "iec_device_id" MUST be excluded from Laravel's EncryptCookies
+     * middleware (see bootstrap/app.php) — it's a plain cookie written
+     * directly by JavaScript, not one of Laravel's encrypted cookies, so
+     * without that exception Laravel silently nulls it out on every request.
      */
     public function deriveServerFingerprint(Request $request): string
     {
-        $ua   = $request->userAgent() ?? 'unknown-ua';
-        $lang = $request->header('Accept-Language', 'unknown-lang');
+        $clientDeviceId = $request->header('X-DEVICE-ID');
 
-        // Normalise UA slightly to avoid micro-version noise
-        // but keep it specific enough to differentiate devices
-        $normalised = trim($ua) . '|' . trim($lang);
+        if (empty($clientDeviceId)) {
+            $clientDeviceId = $request->cookie('iec_device_id');
+        }
 
-        return hash('sha256', $normalised);
+        if (!empty($clientDeviceId)) {
+            return hash('sha256', 'client:' . $clientDeviceId);
+        }
+
+        // FALLBACK ONLY — used when no client device id was sent at all
+        // (e.g. a raw API client, or cookies/localStorage/JS disabled).
+        // Intentionally the OLD, less-stable scheme; should not be hit for
+        // normal browser logins once the cookie above is present.
+        $ua       = $request->userAgent() ?? 'unknown';
+        $lang     = $request->header('Accept-Language', 'unknown');
+        $ipParts  = explode('.', $request->ip());
+        $ipSubnet = implode('.', array_slice($ipParts, 0, 3));
+
+        return hash('sha256', 'fallback:' . $ua . '|' . $lang . '|' . $ipSubnet);
     }
 
     /**
      * Check whether the current device is allowed for this user.
      *
-     * Returns one of:
+     * Returns:
      *   'not_required'       — role doesn't need device binding
      *   'no_device_bound'    — first login, no device registered yet
      *   'trusted'            — fingerprint matches
-     *   'mismatch'           — modern fingerprint that doesn't match
-     *   'legacy_device'      — stored fingerprint is old UUID style
+     *   'mismatch'           — fingerprint doesn't match registered device
      *   'revoked'            — device was revoked
      */
     public function checkDevice(User $user, Request $request): string
@@ -54,13 +81,14 @@ class DeviceBindingService
 
         $fingerprint = $this->deriveServerFingerprint($request);
 
+        // Find any active (non-revoked) device for this user
         $device = Device::where('user_id', $user->id)
             ->where('is_revoked', false)
             ->whereNotNull('verified_at')
-            ->latest('last_used_at')
             ->first();
 
         if (!$device) {
+            // Store pending fingerprint so registration can use it
             $this->storePendingFingerprint($user, $request, $fingerprint);
             return 'no_device_bound';
         }
@@ -76,6 +104,7 @@ class DeviceBindingService
             return 'revoked';
         }
 
+        // Compare server-derived fingerprint with stored one
         if (hash_equals($device->device_fingerprint, $fingerprint)) {
             $device->recordUsage($request->ip());
 
@@ -90,12 +119,7 @@ class DeviceBindingService
             return 'trusted';
         }
 
-        // Stored fingerprint looks like a legacy UUID — treat as re-registration
-        if ($this->isLegacyFingerprint($device->device_fingerprint)) {
-            return 'legacy_device';
-        }
-
-        // Modern fingerprint mismatch — different device
+        // Fingerprint mismatch — different device
         AuditLog::record(
             action: 'auth.device.mismatch',
             event: 'blocked',
@@ -114,43 +138,35 @@ class DeviceBindingService
 
     /**
      * Register a new device for a user silently (called after OTP verification).
-     * Revokes all previous devices first, enforcing one-device-per-user.
+     * This is the ONLY place where device registration happens.
      */
     public function registerDeviceSilently(User $user, Request $request): Device
     {
         $fingerprint = $this->deriveServerFingerprint($request);
+        $pending     = $this->getPendingFingerprint($user);
 
-        // Revoke all existing devices — one device per user rule
-        $revokedCount = Device::where('user_id', $user->id)
+        // If there's already an active device, revoke it first (admin reset scenario)
+        Device::where('user_id', $user->id)
             ->where('is_revoked', false)
-            ->count();
-
-        Device::where('user_id', $user->id)->update([
-            'is_revoked' => true,
-            'revoked_at' => now(),
-            'is_trusted' => false,
-        ]);
-
-        if ($revokedCount > 0) {
-            Log::info('[DeviceBinding] Revoked previous devices on re-registration', [
-                'user_id' => $user->id,
-                'count'   => $revokedCount,
+            ->update([
+                'is_revoked' => true,
+                'revoked_at' => now(),
+                'is_trusted' => false,
             ]);
-        }
 
         $device = Device::create([
-            'user_id'            => $user->id,
+            'user_id'          => $user->id,
             'device_fingerprint' => $fingerprint,
-            'device_name'        => $this->detectDeviceName($request),
-            'device_type'        => $this->detectDeviceType($request),
-            'os'                 => $this->detectOs($request),
-            'browser'            => $this->detectBrowser($request),
-            'verified_at'        => now(),
-            'verified_by_ip'     => $request->ip(),
-            'last_used_at'       => now(),
-            'last_used_ip'       => $request->ip(),
-            'is_trusted'         => true,
-            'is_revoked'         => false,
+            'device_name'      => $this->detectDeviceName($request),
+            'device_type'      => $this->detectDeviceType($request),
+            'os'               => $this->detectOs($request),
+            'browser'          => $this->detectBrowser($request),
+            'verified_at'      => now(),
+            'verified_by_ip'   => $request->ip(),
+            'last_used_at'     => now(),
+            'last_used_ip'     => $request->ip(),
+            'is_trusted'       => true,
+            'is_revoked'       => false,
         ]);
 
         $this->clearPendingFingerprint($user);
@@ -161,26 +177,25 @@ class DeviceBindingService
             module: 'Authentication',
             auditable: $device,
             extra: [
-                'outcome'     => 'success',
-                'device_type' => $device->device_type,
-                'os'          => $device->os,
-                'browser'     => $device->browser,
-                'ip'          => $request->ip(),
+                'outcome'            => 'success',
+                'device_type'        => $device->device_type,
+                'os'                 => $device->os,
+                'browser'            => $device->browser,
+                'ip'                 => $request->ip(),
             ]
         );
 
         Log::info('[DeviceBinding] Device registered silently', [
-            'user_id'     => $user->id,
-            'device_id'   => $device->id,
-            'os'          => $device->os,
-            'fingerprint' => substr($fingerprint, 0, 16) . '...',
+            'user_id'   => $user->id,
+            'device_id' => $device->id,
+            'os'        => $device->os,
         ]);
 
         return $device;
     }
 
     /**
-     * Admin: revoke (reset) all device bindings for a user.
+     * Admin: revoke (reset) a user's device binding so they can re-register.
      */
     public function revokeAllDevices(User $user, int $adminId): void
     {
@@ -199,10 +214,10 @@ class DeviceBindingService
             event: 'updated',
             module: 'DeviceManagement',
             extra: [
-                'outcome'         => 'success',
-                'target_user_id'  => $user->id,
-                'admin_id'        => $adminId,
-                'devices_revoked' => $count,
+                'outcome'          => 'success',
+                'target_user_id'   => $user->id,
+                'admin_id'         => $adminId,
+                'devices_revoked'  => $count,
             ]
         );
 
@@ -245,15 +260,7 @@ class DeviceBindingService
             ->get();
     }
 
-    // ── Pending fingerprint (stored briefly during 2FA flow) ──────────────────
-
-    /**
-     * Public alias so TwoFactorController can call this without exposing internals.
-     */
-    public function storePendingFingerprintPublic(User $user, Request $request, string $fingerprint): void
-    {
-        $this->storePendingFingerprint($user, $request, $fingerprint);
-    }
+    // ── Pending fingerprint (stored in cache during 2FA flow) ─────────────────
 
     private function storePendingFingerprint(User $user, Request $request, string $fingerprint): void
     {
@@ -280,28 +287,11 @@ class DeviceBindingService
         Cache::forget('pending_device_' . $user->id);
     }
 
-    // ── Fingerprint helpers ───────────────────────────────────────────────────
+    // ── Helpers ───────────────────────────────────────────────────────────────
 
     /**
-     * Detect whether a stored fingerprint is from the old cookie-based system.
-     * Old: UUID (36 chars with dashes) or "iec-" prefixed random string.
-     * New: SHA-256 hash (exactly 64 lowercase hex characters).
-     */
-    public function isLegacyFingerprint(string $fingerprint): bool
-    {
-        if (preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i', $fingerprint)) {
-            return true;
-        }
-        if (str_starts_with($fingerprint, 'iec-')) {
-            return true;
-        }
-        // Not a 64-char hex string = legacy
-        return !preg_match('/^[0-9a-f]{64}$/', $fingerprint);
-    }
-
-    /**
-     * Legacy alias.
-     * @deprecated Use deriveServerFingerprint()
+     * Legacy method kept for backward compatibility with existing code.
+     * @deprecated Use deriveServerFingerprint() instead.
      */
     public function extractFingerprint(Request $request): ?string
     {
@@ -313,13 +303,11 @@ class DeviceBindingService
         return $this->deriveServerFingerprint($request);
     }
 
-    // ── UA detection helpers ──────────────────────────────────────────────────
-
     private function detectDeviceName(Request $request): string
     {
         $os   = $this->detectOs($request);
         $type = $this->detectDeviceType($request);
-        return ucfirst($type) . ' — ' . $os;
+        return ucfirst($type) . ' – ' . $os;
     }
 
     private function detectDeviceType(Request $request): string
@@ -344,10 +332,10 @@ class DeviceBindingService
     private function detectBrowser(Request $request): string
     {
         $ua = $request->userAgent() ?? '';
-        if (str_contains($ua, 'Edg'))     return 'Edge';
-        if (str_contains($ua, 'Chrome'))  return 'Chrome';
+        if (str_contains($ua, 'Edg')) return 'Edge';
+        if (str_contains($ua, 'Chrome')) return 'Chrome';
         if (str_contains($ua, 'Firefox')) return 'Firefox';
-        if (str_contains($ua, 'Safari'))  return 'Safari';
+        if (str_contains($ua, 'Safari')) return 'Safari';
         return 'Unknown';
     }
 }

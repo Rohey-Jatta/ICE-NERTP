@@ -23,6 +23,17 @@ return Application::configure(basePath: dirname(__DIR__))
             '*',
         ]);
 
+        // "iec_device_id" is written directly by JavaScript (see
+        // resources/js/bootstrap.js) as a plain, unencrypted cookie used for
+        // device-binding fingerprinting. Without this exception, Laravel's
+        // EncryptCookies middleware tries to decrypt it on every request,
+        // fails, and silently sets it to null — which made
+        // DeviceBindingService::deriveServerFingerprint() unable to ever
+        // see it server-side.
+        $middleware->encryptCookies(except: [
+            'iec_device_id',
+        ]);
+
         $middleware->web(append: [
             HandleInertiaRequests::class,
             AuditRequestMiddleware::class,

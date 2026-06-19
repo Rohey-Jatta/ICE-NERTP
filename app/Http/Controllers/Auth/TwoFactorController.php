@@ -6,7 +6,6 @@ use App\Http\Controllers\Controller;
 use App\Services\DeviceBindingService;
 use App\Services\TwoFactorAuthService;
 use App\Models\AuditLog;
-use App\Models\Device;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -40,14 +39,12 @@ class TwoFactorController extends Controller
 
         $userId = $request->session()->get('2fa_user_id');
         if (!$userId) {
-            return redirect()->route('login')
-                ->withErrors(['email' => 'Session expired. Please log in again.']);
+            return back()->withErrors(['code' => 'Session expired. Please log in again.']);
         }
 
         $user = User::find($userId);
         if (!$user) {
-            return redirect()->route('login')
-                ->withErrors(['email' => 'User not found. Please log in again.']);
+            return back()->withErrors(['code' => 'User not found. Please log in again.']);
         }
 
         // Check code expiry
@@ -70,20 +67,15 @@ class TwoFactorController extends Controller
         }
 
         // ── OTP is valid — now handle device binding ──────────────────────────
+
         $role = $user->getRoleNames()->first();
 
-        if (Device::roleRequiresBinding($role)) {
-            $deviceStatus = $this->resolveDeviceStatus($user, $request);
-
-            Log::info('[2FA] Device status resolved', [
-                'user_id' => $user->id,
-                'role'    => $role,
-                'status'  => $deviceStatus,
-                'ip'      => $request->ip(),
-            ]);
+        if (\App\Models\Device::roleRequiresBinding($role)) {
+            $deviceStatus = $this->deviceService->checkDevice($user, $request);
 
             switch ($deviceStatus) {
                 case 'mismatch':
+                    // Different device — block login entirely
                     AuditLog::record(
                         action: 'auth.login.device_blocked',
                         event: 'blocked',
@@ -96,89 +88,68 @@ class TwoFactorController extends Controller
                         ]
                     );
 
-                    // Clear 2FA session so they can retry login
+                    // Clear 2FA session — do not log the user in
                     $request->session()->forget(['2fa_user_id', '2fa_sms_sent', '2fa_expires_at']);
 
-                    // Store mismatch error in session so login page can show it
-                    return redirect()->route('login')->with('device_error',
-                        'This account is registered to a different device. Please contact the IEC Administrator for assistance.'
-                    );
+                    $mismatchMessage = 'This account is already registered to another device. Please contact the IEC Administrator for assistance.';
+
+                    // Flashed two ways on purpose: `errors.email` for pages that
+                    // read Inertia's shared error bag, and `flash.error` (shared
+                    // globally by HandleInertiaRequests) for pages/layouts that
+                    // render a generic flash banner instead. Without at least
+                    // one of these actually being rendered by the Login page,
+                    // the user sees nothing — if that's still the case, the
+                    // Login page itself needs to display `flash.error`.
+                    return redirect()->route('login')
+                        ->withErrors(['email' => $mismatchMessage])
+                        ->with('error', $mismatchMessage);
 
                 case 'revoked':
                     $request->session()->forget(['2fa_user_id', '2fa_sms_sent', '2fa_expires_at']);
-                    return redirect()->route('login')->with('device_error',
-                        'Your device access has been revoked. Please contact the IEC Administrator.'
-                    );
+
+                    $revokedMessage = 'Your device access has been revoked. Please contact the IEC Administrator.';
+
+                    return redirect()->route('login')
+                        ->withErrors(['email' => $revokedMessage])
+                        ->with('error', $revokedMessage);
 
                 case 'no_device_bound':
-                case 'legacy_device':
-                    // First login or legacy fingerprint — silently register current device
+                    // First login — silently register the current device
                     try {
                         $this->deviceService->registerDeviceSilently($user, $request);
-                        Log::info('[Auth] Device registered silently during 2FA verify', [
-                            'user_id' => $user->id,
-                            'reason'  => $deviceStatus,
-                        ]);
+                        Log::info('[Auth] Device registered silently on first login', ['user_id' => $user->id]);
                     } catch (\Throwable $e) {
-                        // Non-fatal: log but do not block login
                         Log::error('[Auth] Silent device registration failed', [
                             'user_id' => $user->id,
                             'error'   => $e->getMessage(),
-                            'trace'   => $e->getTraceAsString(),
                         ]);
+                        // Do NOT block login if registration fails — log it and continue
                     }
                     break;
 
                 case 'trusted':
-                    // Device matches — nothing extra needed
+                    // Device already registered and matches — nothing to do
                     break;
 
                 case 'not_required':
-                    // Role doesn't require device binding
+                    // Role doesn't need device binding (party-representative, election-monitor)
                     break;
             }
         }
 
         // ── All checks passed — log the user in ──────────────────────────────
-        try {
-            Auth::login($user, false); // false = don't "remember me"
 
-            // Regenerate session to prevent session fixation
-            $request->session()->regenerate();
+        Auth::login($user);
+        $request->session()->regenerate();
+        $request->session()->forget(['2fa_user_id', '2fa_sms_sent', '2fa_expires_at']);
 
-            // Clear 2FA session data
-            $request->session()->forget(['2fa_user_id', '2fa_sms_sent', '2fa_expires_at']);
-
-            // Update last login info
-            $user->update([
-                'last_login_at' => now(),
-                'last_login_ip' => $request->ip(),
-            ]);
-
-            AuditLog::record(
-                action: 'auth.login.success',
-                event: 'action',
-                module: 'Authentication',
-                auditable: $user,
-                extra: ['outcome' => 'success', 'ip' => $request->ip()]
-            );
-
-            // Force session save before redirect
-            $request->session()->save();
-
-            Log::info('[Auth] Login successful, redirecting', [
-                'user_id'  => $user->id,
-                'role'     => $role ?? $user->getRoleNames()->first(),
-                'auth_check' => Auth::check(),
-            ]);
-
-        } catch (\Throwable $e) {
-            Log::error('[Auth] Login failed after 2FA verify', [
-                'user_id' => $user->id,
-                'error'   => $e->getMessage(),
-            ]);
-            return back()->withErrors(['code' => 'An error occurred completing your login. Please try again.']);
-        }
+        AuditLog::record(
+            action: 'auth.login.success',
+            event: 'action',
+            module: 'Authentication',
+            auditable: $user,
+            extra: ['outcome' => 'success', 'ip' => $request->ip()]
+        );
 
         return $this->redirectByRole($user);
     }
@@ -201,101 +172,12 @@ class TwoFactorController extends Controller
         $expiresAt = now()->addMinutes(10);
         $request->session()->put('2fa_sms_sent', true);
         $request->session()->put('2fa_expires_at', $expiresAt->timestamp);
-        $request->session()->save();
 
         return back()->with('status', 'A new verification code has been sent to your phone.');
     }
 
-    /**
-     * Resolve device binding status for the given user and request.
-     *
-     * Returns one of:
-     *   'not_required'    — role doesn't need device binding
-     *   'no_device_bound' — no active device registered yet (first login)
-     *   'trusted'         — fingerprint matches registered device
-     *   'legacy_device'   — stored fingerprint is from old cookie system, needs re-registration
-     *   'mismatch'        — modern fingerprint but different device
-     *   'revoked'         — device was revoked
-     */
-    protected function resolveDeviceStatus(User $user, Request $request): string
-    {
-        $role = $user->getRoleNames()->first();
-
-        if (!Device::roleRequiresBinding($role)) {
-            return 'not_required';
-        }
-
-        $serverFingerprint = $this->deviceService->deriveServerFingerprint($request);
-
-        // Find the most recently used non-revoked verified device for this user
-        $device = Device::where('user_id', $user->id)
-            ->where('is_revoked', false)
-            ->whereNotNull('verified_at')
-            ->latest('last_used_at')
-            ->first();
-
-        if (!$device) {
-            // No device registered — store pending fingerprint and allow registration
-            $this->deviceService->storePendingFingerprintPublic($user, $request, $serverFingerprint);
-            return 'no_device_bound';
-        }
-
-        if ($device->is_revoked) {
-            return 'revoked';
-        }
-
-        // Exact match against server-derived fingerprint
-        if (hash_equals($device->device_fingerprint, $serverFingerprint)) {
-            $device->recordUsage($request->ip());
-            return 'trusted';
-        }
-
-        // Check if the stored fingerprint is a legacy UUID or "iec-" prefix
-        if ($this->isLegacyFingerprint($device->device_fingerprint)) {
-            Log::info('[Auth] Legacy device fingerprint — will re-register', [
-                'user_id'   => $user->id,
-                'device_id' => $device->id,
-                'stored_len'=> strlen($device->device_fingerprint),
-            ]);
-            return 'legacy_device';
-        }
-
-        // Modern fingerprint but doesn't match — different device
-        return 'mismatch';
-    }
-
-    /**
-     * Detect whether a stored fingerprint is from the old cookie-based system.
-     * Old: UUIDs (36 chars with dashes) or "iec-" prefixed random strings.
-     * New: SHA-256 hashes (exactly 64 lowercase hex characters).
-     */
-    protected function isLegacyFingerprint(string $fingerprint): bool
-    {
-        // UUID format: 8-4-4-4-12
-        if (preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i', $fingerprint)) {
-            return true;
-        }
-
-        // Old "iec-" prefixed random strings
-        if (str_starts_with($fingerprint, 'iec-')) {
-            return true;
-        }
-
-        // SHA-256 hashes are exactly 64 lowercase hex chars — anything else is legacy
-        if (!preg_match('/^[0-9a-f]{64}$/', $fingerprint)) {
-            return true;
-        }
-
-        return false;
-    }
-
     protected function redirectByRole(User $user): \Illuminate\Http\RedirectResponse
     {
-        // Check if user must change password first
-        if ($user->must_change_password ?? false) {
-            return redirect()->route('password.change');
-        }
-
         $role = $user->getRoleNames()->first();
 
         return match ($role) {

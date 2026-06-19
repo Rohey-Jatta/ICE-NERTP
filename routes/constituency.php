@@ -19,12 +19,17 @@ use App\Services\CertificationWorkflowService;
  * restricting to 'active' here caused promoted ward-certified results
  * to silently disappear from the constituency queue/dashboard the
  * moment results were published.
+ *
+ * Wrapped in if (!function_exists()) to prevent PHP fatal errors when
+ * the route file is loaded more than once (OPcache / route caching).
  */
-function constituency_resolve_active_election()
-{
-    return Election::whereIn('status', ['active', 'certifying', 'results_pending'])
-        ->latest('start_date')
-        ->first();
+if (!function_exists('constituency_resolve_active_election')) {
+    function constituency_resolve_active_election()
+    {
+        return Election::whereIn('status', ['active', 'certifying', 'results_pending'])
+            ->latest('start_date')
+            ->first();
+    }
 }
 
 Route::middleware(['auth', 'role:constituency-approver'])
@@ -296,7 +301,7 @@ Route::middleware(['auth', 'role:constituency-approver'])
                     }
                 }
 
-                $turnout     = $totalRegistered > 0
+                $turnout      = $totalRegistered > 0
                     ? round(($totalVotes / $totalRegistered) * 100, 1) : 0;
                 $allCertified = $stationCount > 0 && $certified === $stationCount;
 
@@ -502,8 +507,8 @@ Route::middleware(['auth', 'role:constituency-approver'])
                 <th>Certification Status</th><th>Rejections</th><th>Last Rejection Reason</th>
             </tr></thead><tbody>';
             foreach ($results as $r) {
-                $status  = str_replace('_', ' ', ucwords($r->certification_status));
-                $reason  = htmlspecialchars($r->last_rejection_reason ?? '—');
+                $status    = str_replace('_', ' ', ucwords($r->certification_status));
+                $reason    = htmlspecialchars($r->last_rejection_reason ?? '—');
                 $submitted = $r->submitted_at?->format('d/m/Y H:i') ?? '—';
                 $tableRows .= "<tr>
                     <td>{$r->pollingStation->name}</td>
