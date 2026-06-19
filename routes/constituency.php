@@ -10,6 +10,23 @@ use App\Models\Election;
 use App\Models\Result;
 use App\Services\CertificationWorkflowService;
 
+/**
+ * Resolve the election currently "in flight" for certification.
+ *
+ * IMPORTANT: must NOT be restricted to status === 'active' only.
+ * The Chairman's "Publish Results" action moves the election to
+ * 'results_pending' while submissions/certifications keep happening —
+ * restricting to 'active' here caused promoted ward-certified results
+ * to silently disappear from the constituency queue/dashboard the
+ * moment results were published.
+ */
+function constituency_resolve_active_election()
+{
+    return Election::whereIn('status', ['active', 'certifying', 'results_pending'])
+        ->latest('start_date')
+        ->first();
+}
+
 Route::middleware(['auth', 'role:constituency-approver'])
     ->prefix('constituency')
     ->name('constituency.')
@@ -18,7 +35,7 @@ Route::middleware(['auth', 'role:constituency-approver'])
     // ── Dashboard ─────────────────────────────────────────────────────────────
     Route::get('/dashboard', function () {
         $user           = Auth::user();
-        $activeElection = Election::where('status', 'active')->latest()->first();
+        $activeElection = constituency_resolve_active_election();
         $constituency   = AdministrativeHierarchy::where('assigned_approver_id', $user->id)
             ->where('level', 'constituency')->first();
 
@@ -74,7 +91,7 @@ Route::middleware(['auth', 'role:constituency-approver'])
     // ── Approval Queue ────────────────────────────────────────────────────────
     Route::get('/approval-queue', function (Request $request) {
         $user           = Auth::user();
-        $activeElection = Election::where('status', 'active')->latest()->first();
+        $activeElection = constituency_resolve_active_election();
         $constituency   = AdministrativeHierarchy::where('assigned_approver_id', $user->id)
             ->where('level', 'constituency')->first();
 
@@ -237,7 +254,7 @@ Route::middleware(['auth', 'role:constituency-approver'])
     // ── Ward Breakdowns ───────────────────────────────────────────────────────
     Route::get('/ward-breakdowns', function () {
         $user           = Auth::user();
-        $activeElection = Election::where('status', 'active')->latest()->first();
+        $activeElection = constituency_resolve_active_election();
         $constituency   = AdministrativeHierarchy::where('assigned_approver_id', $user->id)
             ->where('level', 'constituency')->first();
 
@@ -306,7 +323,7 @@ Route::middleware(['auth', 'role:constituency-approver'])
     // ── Reports ───────────────────────────────────────────────────────────────
     Route::get('/reports', function () {
         $user           = Auth::user();
-        $activeElection = Election::where('status', 'active')->latest()->first();
+        $activeElection = constituency_resolve_active_election();
         $constituency   = AdministrativeHierarchy::where('assigned_approver_id', $user->id)
             ->where('level', 'constituency')->first();
 

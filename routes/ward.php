@@ -4,6 +4,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use App\Models\AdministrativeHierarchy;
 use App\Models\Election;
@@ -19,7 +20,9 @@ Route::middleware(['auth', 'role:ward-approver'])
     // ── Dashboard ────────────────────────────────────────────────────────────
     Route::get('/dashboard', function () {
         $user           = Auth::user();
-        $activeElection = Election::where('status', 'active')->latest()->first();
+        $activeElection = Election::whereIn('status', ['active', 'certifying', 'results_pending'])
+            ->latest('start_date')
+            ->first();
 
         $ward = AdministrativeHierarchy::where('assigned_approver_id', $user->id)
             ->where('level', 'ward')
@@ -40,40 +43,72 @@ Route::middleware(['auth', 'role:ward-approver'])
             ]);
         }
 
-        $cacheKey = "ward_dashboard_{$user->id}_{$ward->id}_" . ($activeElection ? $activeElection->id : 'no_election');
+        // NOTE: cache key bumped to v2 to invalidate any previously-cached
+        // (incorrect) stats from before the "tally" fix below.
+        $cacheKey = "ward_dashboard_v2_{$user->id}_{$ward->id}_" . ($activeElection ? $activeElection->id : 'no_election');
         $data = Cache::remember($cacheKey, 60, function () use ($ward, $activeElection) {
-            $stationIds = PollingStation::where('ward_id', $ward->id)->pluck('id');
+            $stationIds    = PollingStation::where('ward_id', $ward->id)->pluck('id');
+            $totalStations = $stationIds->count();
 
-            $baseQuery = fn() => Result::whereIn('polling_station_id', $stationIds)
-                ->when($activeElection, fn($q) => $q->where('election_id', $activeElection->id));
+            if ($stationIds->isEmpty() || !$activeElection) {
+                return [
+                    'statistics' => [
+                        'totalStations' => $totalStations,
+                        'pending'       => 0,
+                        'approved'      => 0,
+                        'rejected'      => 0,
+                        'progress'      => 0,
+                    ],
+                    'pendingResults' => 0,
+                ];
+            }
+
+            // ── Tally fix ────────────────────────────────────────────────
+            // A polling station can have MULTIPLE rows in `results` over
+            // time: every rejection + resubmission creates a brand new row
+            // rather than updating the existing one (see
+            // ResultSubmissionController::submit()). Counting raw result
+            // rows therefore let "certified" exceed "total stations"
+            // (e.g. "7 Ward Certified" out of "5 Total Stations").
+            //
+            // Fix: only consider the single most recent result row per
+            // polling station (highest id == most recently created) so the
+            // counts can never exceed the number of stations in the ward.
+            $latestResultIds = DB::table('results')
+                ->selectRaw('MAX(id) as id')
+                ->whereIn('polling_station_id', $stationIds)
+                ->where('election_id', $activeElection->id)
+                ->groupBy('polling_station_id')
+                ->pluck('id');
+
+            $latestResults = DB::table('results')
+                ->select('certification_status', 'rejection_count')
+                ->whereIn('id', $latestResultIds)
+                ->get();
 
             // Parallel workflow: pending includes both pending_ward and legacy pending_party_acceptance
-            $pendingCount = $baseQuery()
-                ->whereIn('certification_status', [
-                    Result::STATUS_PENDING_WARD,
-                    Result::STATUS_PENDING_PARTY_ACCEPTANCE,
-                ])
-                ->count();
+            $pendingCount = $latestResults->whereIn('certification_status', [
+                Result::STATUS_PENDING_WARD,
+                Result::STATUS_PENDING_PARTY_ACCEPTANCE,
+            ])->count();
 
-            $certifiedCount = $baseQuery()
-                ->whereIn('certification_status', [
-                    Result::STATUS_WARD_CERTIFIED,
-                    Result::STATUS_PENDING_CONSTITUENCY,
-                    Result::STATUS_CONSTITUENCY_CERTIFIED,
-                    Result::STATUS_PENDING_ADMIN_AREA,
-                    Result::STATUS_ADMIN_AREA_CERTIFIED,
-                    Result::STATUS_PENDING_NATIONAL,
-                    Result::STATUS_NATIONALLY_CERTIFIED,
-                ])->count();
+            $certifiedCount = $latestResults->whereIn('certification_status', [
+                Result::STATUS_WARD_CERTIFIED,
+                Result::STATUS_PENDING_CONSTITUENCY,
+                Result::STATUS_CONSTITUENCY_CERTIFIED,
+                Result::STATUS_PENDING_ADMIN_AREA,
+                Result::STATUS_ADMIN_AREA_CERTIFIED,
+                Result::STATUS_PENDING_NATIONAL,
+                Result::STATUS_NATIONALLY_CERTIFIED,
+            ])->count();
 
-            $rejectedCount = $baseQuery()
+            $rejectedCount = $latestResults
                 ->where('certification_status', Result::STATUS_SUBMITTED)
                 ->where('rejection_count', '>', 0)
                 ->count();
 
-            $totalStations = $stationIds->count();
-            $total         = $pendingCount + $certifiedCount;
-            $progress      = $total > 0 ? round(($certifiedCount / $total) * 100) : 0;
+            $total    = $pendingCount + $certifiedCount;
+            $progress = $total > 0 ? round(($certifiedCount / $total) * 100) : 0;
 
             return [
                 'statistics' => [

@@ -6,7 +6,7 @@ import { RESULT_STATUS, getResultStatusMeta } from '@/Utils/resultStatus';
 const PARTY_STATUS_CONFIG = {
     accepted:                  { label: 'Accepted',             color: 'bg-iec-pink-500/20 text-iec-pink-600 border-teal-500/30',     icon: '✓' },
     accepted_with_reservation: { label: 'Accepted (Reserved)',  color: 'bg-iec-pink-50 text-iec-pink-600 border-iec-pink-200',         icon: '⚠' },
-    rejected:                  { label: 'Rejected',             color: 'bg-red-500/20 text-red-300 border-red-500/30',                icon: '✗' },
+    rejected:                  { label: 'Rejected',             color: 'bg-red-100 text-red-800 border-red-200',                      icon: '✗' },
     pending:                   { label: 'Pending',              color: 'bg-slate-100 text-slate-500 border-slate-200',               icon: '…' },
 };
 
@@ -115,17 +115,8 @@ export default function WardApprovalQueue({ auth, ward, results = [], filter = '
 
                 {/* Header */}
                 <div className="mb-6">
-                    {/* <Link href="/ward/dashboard" className="text-slate-500 hover:text-iec-navy text-sm mb-2 inline-flex items-center gap-1">
-                        ← Ward Dashboard
-                    </Link> */}
                     <h1 className="text-3xl font-bold text-iec-navy">Ward Approval Queue</h1>
                     {ward?.name && <p className="text-iec-pink-600 mt-1">{ward.name}</p>}
-                    {/* Parallel workflow info — shown once, not on every card */}
-                    {/* <div className="mt-2 inline-flex items-center gap-2 px-3 py-1.5 bg-iec-pink-500/10 border border-iec-pink-500/20 rounded-lg">
-                        <span className="text-iec-pink-600 text-xs font-semibold">
-                            ⚡ Parallel Review — Ward Approvers and Party Representatives review simultaneously. Party responses are informational and do not block your actions.
-                        </span>
-                    </div> */}
                 </div>
 
                 {flash && !selectedResult && (
@@ -198,7 +189,7 @@ export default function WardApprovalQueue({ auth, ward, results = [], filter = '
                                                     {statusCfg.label}
                                                 </span>
                                                 {result.rejection_count > 0 && (
-                                                    <span className="px-2 py-0.5 rounded-full text-xs bg-orange-500/20 text-orange-300">
+                                                    <span className="px-2 py-0.5 rounded-full text-xs bg-orange-100 text-orange-800">
                                                         Rejected {result.rejection_count}×
                                                     </span>
                                                 )}
@@ -294,19 +285,21 @@ export default function WardApprovalQueue({ auth, ward, results = [], filter = '
                                         </div>
                                     )}
 
-                                    {/* Prior rejection reason */}
+                                    {/* Prior rejection reason — was nearly invisible (text-red-300 on a pale red
+                                        background). Switched to a solid light bg + dark text combo so it's legible. */}
                                     {result.last_rejection_reason && (
-                                        <div className="mx-5 mb-4 p-3 bg-red-500/10 border border-red-500/30 rounded-lg">
-                                            <div className="text-xs text-red-400 mb-1 font-semibold">Previous Rejection Reason</div>
-                                            <div className="text-red-300 text-sm">{result.last_rejection_reason}</div>
+                                        <div className="mx-5 mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+                                            <div className="text-xs text-red-700 mb-1 font-semibold">Previous Rejection Reason</div>
+                                            <div className="text-red-800 text-sm font-medium">{result.last_rejection_reason}</div>
                                         </div>
                                     )}
 
-                                    {/* Ward cert comments (shown in approved tab) */}
+                                    {/* Ward cert comments (shown in approved tab) — was nearly invisible
+                                        (text-teal-200 on a pale pink background). Fixed contrast below. */}
                                     {result.ward_comments && (
-                                        <div className="mx-5 mb-4 p-3 bg-iec-pink-500/10 border border-teal-500/30 rounded-lg">
-                                            <div className="text-xs text-iec-pink-600 mb-1 font-semibold">Ward Certification Note</div>
-                                            <div className="text-teal-200 text-sm">{result.ward_comments}</div>
+                                        <div className="mx-5 mb-4 p-3 bg-teal-50 border border-teal-200 rounded-lg">
+                                            <div className="text-xs text-teal-700 mb-1 font-semibold">Ward Certification Note</div>
+                                            <div className="text-teal-900 text-sm font-medium">{result.ward_comments}</div>
                                         </div>
                                     )}
 
@@ -377,7 +370,7 @@ export default function WardApprovalQueue({ auth, ward, results = [], filter = '
                             </div>
 
                             {flash && (
-                                <div className={`p-3 rounded-lg text-sm ${flash.type === 'error' ? 'bg-red-500/20 text-red-300' : 'bg-iec-pink-500/20 text-iec-pink-600'}`}>
+                                <div className={`p-3 rounded-lg text-sm ${flash.type === 'error' ? 'bg-red-100 text-red-800' : 'bg-iec-pink-500/20 text-iec-pink-600'}`}>
                                     {flash.text}
                                 </div>
                             )}

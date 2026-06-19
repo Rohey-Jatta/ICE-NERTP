@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Services\DeviceBindingService;
 use App\Services\TwoFactorAuthService;
 use App\Models\AuditLog;
+use App\Models\Device;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -70,12 +71,12 @@ class TwoFactorController extends Controller
 
         $role = $user->getRoleNames()->first();
 
-        if (\App\Models\Device::roleRequiresBinding($role)) {
-            $deviceStatus = $this->deviceService->checkDevice($user, $request);
+        if (Device::roleRequiresBinding($role)) {
+            $deviceStatus = $this->resolveDeviceStatus($user, $request);
 
             switch ($deviceStatus) {
                 case 'mismatch':
-                    // Different device — block login entirely
+                    // Hard mismatch against a known modern fingerprint — block login
                     AuditLog::record(
                         action: 'auth.login.device_blocked',
                         event: 'blocked',
@@ -88,7 +89,6 @@ class TwoFactorController extends Controller
                         ]
                     );
 
-                    // Clear 2FA session — do not log the user in
                     $request->session()->forget(['2fa_user_id', '2fa_sms_sent', '2fa_expires_at']);
 
                     return redirect()->route('login')->withErrors([
@@ -102,16 +102,20 @@ class TwoFactorController extends Controller
                     ]);
 
                 case 'no_device_bound':
-                    // First login — silently register the current device
+                case 'legacy_device':
+                    // First login or legacy UUID fingerprint — silently register current device
                     try {
                         $this->deviceService->registerDeviceSilently($user, $request);
-                        Log::info('[Auth] Device registered silently on first login', ['user_id' => $user->id]);
+                        Log::info('[Auth] Device registered silently', [
+                            'user_id' => $user->id,
+                            'reason'  => $deviceStatus,
+                        ]);
                     } catch (\Throwable $e) {
                         Log::error('[Auth] Silent device registration failed', [
                             'user_id' => $user->id,
                             'error'   => $e->getMessage(),
                         ]);
-                        // Do NOT block login if registration fails — log it and continue
+                        // Do NOT block login if registration fails
                     }
                     break;
 
@@ -120,7 +124,7 @@ class TwoFactorController extends Controller
                     break;
 
                 case 'not_required':
-                    // Role doesn't need device binding (party-representative, election-monitor)
+                    // Role doesn't need device binding
                     break;
             }
         }
@@ -162,6 +166,75 @@ class TwoFactorController extends Controller
         $request->session()->put('2fa_expires_at', $expiresAt->timestamp);
 
         return back()->with('status', 'A new verification code has been sent to your phone.');
+    }
+
+    /**
+     * Resolve device status, treating legacy UUID-based fingerprints
+     * (stored from the old cookie system) as needing re-registration
+     * rather than a hard mismatch block.
+     */
+    protected function resolveDeviceStatus(User $user, Request $request): string
+    {
+        $serverFingerprint = $this->deviceService->deriveServerFingerprint($request);
+
+        $device = Device::where('user_id', $user->id)
+            ->where('is_revoked', false)
+            ->whereNotNull('verified_at')
+            ->first();
+
+        if (!$device) {
+            $this->deviceService->storePendingFingerprintPublic($user, $request, $serverFingerprint);
+            return 'no_device_bound';
+        }
+
+        if ($device->is_revoked) {
+            return 'revoked';
+        }
+
+        // Exact match — trusted
+        if (hash_equals($device->device_fingerprint, $serverFingerprint)) {
+            $device->recordUsage($request->ip());
+            return 'trusted';
+        }
+
+        // Check if the stored fingerprint looks like a legacy UUID
+        // (old cookie-based: "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" or "iec-xxxx-xxxx")
+        if ($this->isLegacyFingerprint($device->device_fingerprint)) {
+            Log::info('[Auth] Legacy device fingerprint detected — re-registering', [
+                'user_id'   => $user->id,
+                'device_id' => $device->id,
+                'stored'    => substr($device->device_fingerprint, 0, 16) . '...',
+            ]);
+            return 'legacy_device';
+        }
+
+        // Modern fingerprint but different device
+        return 'mismatch';
+    }
+
+    /**
+     * Detect whether a stored fingerprint is from the old cookie-based system.
+     * Old fingerprints were UUIDs (36 chars with dashes) or "iec-" prefixed random strings.
+     * New fingerprints are SHA-256 hashes (64 hex chars).
+     */
+    protected function isLegacyFingerprint(string $fingerprint): bool
+    {
+        // UUID format: 8-4-4-4-12
+        if (preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i', $fingerprint)) {
+            return true;
+        }
+
+        // Old "iec-" prefixed random strings
+        if (str_starts_with($fingerprint, 'iec-')) {
+            return true;
+        }
+
+        // SHA-256 hashes are exactly 64 hex characters — if it's NOT that, treat as legacy
+        if (!preg_match('/^[0-9a-f]{64}$/', $fingerprint)) {
+            return true;
+        }
+
+        return false;
     }
 
     protected function redirectByRole(User $user): \Illuminate\Http\RedirectResponse

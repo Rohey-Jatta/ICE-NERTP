@@ -32,6 +32,20 @@ export default function OfficerDashboard({
         },
     });
 
+    const rejected = statistics.rejected > 0;
+
+    // The "results are being published" banner used to show a hard-coded
+    // "you can still submit results" message regardless of whether this
+    // station had already submitted — which is misleading/inaccurate once
+    // `hasSubmitted` is true (the officer literally can't submit again
+    // unless their result was rejected). The text below is now derived
+    // from the same state the rest of the page already uses.
+    const publishedBannerText = rejected
+        ? 'The election remains open — your result for this station was rejected and needs to be corrected and resubmitted.'
+        : hasSubmitted
+        ? 'The election remains open. You have already submitted results for this station — no further action is needed unless it is rejected.'
+        : 'The election remains open — you can still submit results for your station.';
+
     return (
         <AppLayout user={auth.user}>
             <ToastContainer toasts={toasts} onRemoveToast={removeNotification} />
@@ -66,7 +80,7 @@ export default function OfficerDashboard({
                     <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-xl flex items-center gap-3">
                         <span className="w-3 h-3 bg-amber-500 rounded-full flex-shrink-0" />
                         <p className="text-amber-800 text-sm">
-                            <strong>Results are being published.</strong> The election remains open — you can still submit results for your station.
+                            <strong>Results are being published.</strong> {publishedBannerText}
                         </p>
                     </div>
                 )}
