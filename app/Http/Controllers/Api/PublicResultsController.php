@@ -8,6 +8,7 @@ use App\Models\Election;
 use App\Models\PollingStation;
 use App\Models\Result;
 use App\Models\ResultCandidateVote;
+use App\Services\CurrentElectionResolver;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -15,6 +16,10 @@ use Inertia\Inertia;
 
 class PublicResultsController extends Controller
 {
+    public function __construct(
+        private readonly CurrentElectionResolver $electionResolver = new CurrentElectionResolver(),
+    ) {}
+
     public function index()
     {
         try {
@@ -36,12 +41,17 @@ class PublicResultsController extends Controller
 
     private function getResultsData(): array
     {
-        $election = Election::where('allow_provisional_public_display', true)
-            ->where('status', 'active')
-            ->latest()
-            ->first();
+        // Previously: Election::where('allow_provisional_public_display', true)
+        //   ->where('status', 'active')->latest()->first();
+        //
+        // Now: resolve the CURRENT operational election (active, submitting,
+        // or certifying) rather than hardcoding a single 'active' status
+        // check. Polling stations are no longer filtered by election_id —
+        // every active station is considered part of whichever election is
+        // currently operational.
+        $election = $this->electionResolver->currentOrNull();
 
-        if (!$election) {
+        if (!$election || !$election->allow_provisional_public_display) {
             return [
                 'election'        => null,
                 'aggregation'     => null,
@@ -65,7 +75,9 @@ class PublicResultsController extends Controller
             ')
             ->first();
 
-        $stationStats = PollingStation::where('election_id', $election->id)
+        // Station totals are no longer scoped by polling_stations.election_id.
+        // Every active station counts toward the current election's totals.
+        $stationStats = PollingStation::active()
             ->selectRaw('COUNT(*) as total_stations, COALESCE(SUM(registered_voters), 0) as total_registered')
             ->first();
 
@@ -112,8 +124,9 @@ class PublicResultsController extends Controller
             ];
         })->filter()->values();
 
-        // Polling stations — use a single raw query instead of Eloquent with eager loading
-        // This avoids loading all relationships into memory for potentially thousands of stations
+        // Polling stations — use a single raw query instead of Eloquent with eager loading.
+        // No longer filtered by ps.election_id at all: every active station is
+        // included, and we join results scoped to the current election's id.
         $stationsRaw = DB::select("
             SELECT
                 ps.id,
@@ -132,11 +145,10 @@ class PublicResultsController extends Controller
                 ON r.polling_station_id = ps.id
                 AND r.election_id = ?
                 AND r.certification_status = ANY(?)
-            WHERE ps.election_id = ?
+            WHERE ps.is_active = true
         ", [
             $election->id,
             '{' . implode(',', $certificationStatuses) . '}',
-            $election->id,
         ]);
 
         // Batch-load party acceptances for results that exist

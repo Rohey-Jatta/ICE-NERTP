@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Public;
 use App\Http\Controllers\Controller;
 use App\Models\Election;
 use App\Models\Result;
+use App\Services\CurrentElectionResolver;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -22,39 +23,16 @@ class ResultsMapController extends Controller
         'NUP'   => '#7A3D9A',
     ];
 
+    public function __construct(
+        private readonly CurrentElectionResolver $electionResolver = new CurrentElectionResolver(),
+    ) {}
+
     private function partyColor(?string $abbreviation, ?string $databaseColor): string
     {
         if ($databaseColor) {
             return $databaseColor;
         }
         return self::PARTY_COLOR_FALLBACKS[strtoupper((string) $abbreviation)] ?? '#6B7280';
-    }
-
-    /**
-     * Scope a polling-station-based query builder to a given election.
-     *
-     * Some `results` rows were submitted with an `election_id` that does
-     * NOT match the `election_id` stored on the related `polling_stations`
-     * row (e.g. a station's own election_id is 1, but the result attached
-     * to it was recorded under election_id 11 — the election actually
-     * being viewed publicly). `computeStationsData()` already accounted
-     * for this with an OR-fallback ("station belongs to this election, OR
-     * it has a result recorded under this election"); the region /
-     * constituency / ward aggregation queries below were missing that
-     * same fallback, which silently produced a completely empty region
-     * list whenever this mismatch occurred — even though the exact same
-     * stations showed up fine in Stations mode.
-     */
-    private function scopeStationsToElection($query, Election $election)
-    {
-        return $query->where(function ($q) use ($election) {
-            $q->where('ps.election_id', $election->id)
-              ->orWhereIn('ps.id', function ($sub) use ($election) {
-                  $sub->select('polling_station_id')
-                      ->from('results')
-                      ->where('election_id', $election->id);
-              });
-        });
     }
 
     // ── Full map page ─────────────────────────────────────────────────────────
@@ -64,7 +42,7 @@ class ResultsMapController extends Controller
         $selectedId = (int) $request->get('election', 0);
 
         $availableElections = Election::where('allow_provisional_public_display', true)
-            ->whereIn('status', ['active', 'certifying', 'results_pending', 'certified'])
+            ->whereIn('status', ['active', 'submitting', 'certifying', 'results_pending', 'certified'])
             ->orderByDesc('start_date')
             ->get(['id', 'name', 'type', 'status', 'start_date'])
             ->map(fn($e) => [
@@ -130,15 +108,19 @@ class ResultsMapController extends Controller
     private function resolvePublicElection(int $selectedId): ?Election
     {
         if ($selectedId) {
-            $election = Election::whereIn('status', ['active', 'certifying', 'results_pending', 'certified'])
+            $election = Election::whereIn('status', ['active', 'submitting', 'certifying', 'results_pending', 'certified'])
                 ->where('id', $selectedId)
                 ->first();
             if ($election) return $election;
         }
 
-        return Election::whereIn('status', ['active', 'certifying', 'results_pending'])
-            ->latest('start_date')
-            ->first()
+        // Prefer the CURRENT operational election; fall back to the most
+        // recent results_pending/certified if nothing is currently active/
+        // submitting/certifying, so the public page is never blank.
+        return $this->electionResolver->currentOrNull()
+            ?? Election::where('status', 'results_pending')
+                ->latest('start_date')
+                ->first()
             ?? Election::where('status', 'certified')
                 ->latest('start_date')
                 ->first();
@@ -149,8 +131,12 @@ class ResultsMapController extends Controller
      *
      * Every station always shows its pipeline status. Vote totals, the
      * candidate breakdown, the result-sheet photo, and party representative
-     * reactions are ONLY included once that result has been NATIONALLY
+     * reactions are ONLY INCLUDED once that result has been NATIONALLY
      * CERTIFIED (published by the IEC Chairman).
+     *
+     * Stations are no longer filtered by polling_stations.election_id —
+     * every active station with coordinates is included; only the LEFT
+     * JOIN to `results` is scoped to the election being viewed.
      */
     private function computeStationsData(Election $election): array
     {
@@ -182,19 +168,12 @@ SQL;
             ->leftJoin('administrative_hierarchy as cst', 'cst.id', '=', 'w.parent_id')
             ->leftJoin('administrative_hierarchy as aa',  'aa.id',  '=', 'cst.parent_id')
             ->leftJoin(DB::raw("({$latestResults}) as r"), 'r.polling_station_id', '=', 'ps.id')
-            ->where(function ($query) use ($election) {
-                $query->where('ps.election_id', $election->id)
-                      ->orWhereIn('ps.id', function ($query) use ($election) {
-                          $query->select('polling_station_id')
-                                ->from('results')
-                                ->where('election_id', $election->id);
-                      });
-            })
+            ->where('ps.is_active', true)
             ->whereNotNull('ps.latitude')
             ->whereNotNull('ps.longitude')
             ->get();
 
-        $certifiedResultIds = $stationsRaw
+        $certifiedResultIds = collect($stationsRaw)
             ->filter(fn($s) => $s->result_id !== null && $s->status === Result::STATUS_NATIONALLY_CERTIFIED)
             ->pluck('result_id')->unique()->values()->all();
 
@@ -260,8 +239,9 @@ SQL;
     /**
      * Per-region (admin_area) leading candidate + candidate breakdown, plus
      * a national scorecard. Only NATIONALLY CERTIFIED (published) results
-     * are aggregated — provisional / in-pipeline results never contribute
-     * to the public leaderboard or "reporting" percentages.
+     * are aggregated. Stations are no longer scoped by election_id — every
+     * active station counts toward the totals/denominators; only the
+     * `results` join is scoped to this specific election.
      */
     private function computeRegionAggregates(Election $election): array
     {
@@ -277,14 +257,7 @@ SQL;
             ->join('result_candidate_votes as rcv', 'rcv.result_id', '=', 'r.id')
             ->join('candidates as c', 'c.id', '=', 'rcv.candidate_id')
             ->leftJoin('political_parties as pp', 'pp.id', '=', 'c.political_party_id')
-            ->where(function ($query) use ($election) {
-                $query->where('ps.election_id', $election->id)
-                      ->orWhereIn('ps.id', function ($query) use ($election) {
-                          $query->select('polling_station_id')
-                                ->from('results')
-                                ->where('election_id', $election->id);
-                      });
-            })
+            ->where('ps.is_active', true)
             ->groupBy('aa.name', 'c.id', 'c.name', 'c.photo_path', 'pp.leader_photo_path', 'pp.abbreviation', 'pp.color')
             ->selectRaw("
                 aa.name                          AS region_name,
@@ -306,14 +279,7 @@ SQL;
                      ->where('r.election_id', $election->id)
                      ->where('r.certification_status', Result::STATUS_NATIONALLY_CERTIFIED);
             })
-            ->where(function ($query) use ($election) {
-                $query->where('ps.election_id', $election->id)
-                      ->orWhereIn('ps.id', function ($query) use ($election) {
-                          $query->select('polling_station_id')
-                                ->from('results')
-                                ->where('election_id', $election->id);
-                      });
-            })
+            ->where('ps.is_active', true)
             ->groupBy('aa.name')
             ->selectRaw('
                 aa.name                AS region_name,
@@ -402,7 +368,8 @@ SQL;
 
     /**
      * Per-constituency leader + totals, keyed by parent region (admin_area)
-     * name. Only nationally-certified results are counted.
+     * name. Only nationally-certified results are counted. Stations are
+     * universal (is_active = true) — only the results join is election-specific.
      */
     private function computeConstituencies(Election $election): array
     {
@@ -418,14 +385,7 @@ SQL;
             ->join('result_candidate_votes as rcv', 'rcv.result_id', '=', 'r.id')
             ->join('candidates as c', 'c.id', '=', 'rcv.candidate_id')
             ->leftJoin('political_parties as pp', 'pp.id', '=', 'c.political_party_id')
-            ->where(function ($query) use ($election) {
-                $query->where('ps.election_id', $election->id)
-                      ->orWhereIn('ps.id', function ($query) use ($election) {
-                          $query->select('polling_station_id')
-                                ->from('results')
-                                ->where('election_id', $election->id);
-                      });
-            })
+            ->where('ps.is_active', true)
             ->groupBy('aa.name', 'con.name', 'c.name', 'pp.abbreviation', 'pp.color')
             ->selectRaw("
                 aa.name                          AS region_name,
@@ -446,14 +406,7 @@ SQL;
                      ->where('r.election_id', $election->id)
                      ->where('r.certification_status', Result::STATUS_NATIONALLY_CERTIFIED);
             })
-            ->where(function ($query) use ($election) {
-                $query->where('ps.election_id', $election->id)
-                      ->orWhereIn('ps.id', function ($query) use ($election) {
-                          $query->select('polling_station_id')
-                                ->from('results')
-                                ->where('election_id', $election->id);
-                      });
-            })
+            ->where('ps.is_active', true)
             ->groupBy('aa.name', 'con.name')
             ->selectRaw('
                 aa.name                AS region_name,
@@ -508,6 +461,7 @@ SQL;
 
     /**
      * Per-ward leader + totals. Only nationally-certified results counted.
+     * Stations are universal (is_active = true).
      */
     private function computeWards(Election $election): array
     {
@@ -523,14 +477,7 @@ SQL;
             ->join('result_candidate_votes as rcv', 'rcv.result_id', '=', 'r.id')
             ->join('candidates as c', 'c.id', '=', 'rcv.candidate_id')
             ->leftJoin('political_parties as pp', 'pp.id', '=', 'c.political_party_id')
-            ->where(function ($query) use ($election) {
-                $query->where('ps.election_id', $election->id)
-                      ->orWhereIn('ps.id', function ($query) use ($election) {
-                          $query->select('polling_station_id')
-                                ->from('results')
-                                ->where('election_id', $election->id);
-                      });
-            })
+            ->where('ps.is_active', true)
             ->groupBy('aa.name', 'con.name', 'w.name', 'c.name', 'pp.abbreviation', 'pp.color')
             ->selectRaw("
                 aa.name                          AS region_name,
@@ -552,14 +499,7 @@ SQL;
                      ->where('r.election_id', $election->id)
                      ->where('r.certification_status', Result::STATUS_NATIONALLY_CERTIFIED);
             })
-            ->where(function ($query) use ($election) {
-                $query->where('ps.election_id', $election->id)
-                      ->orWhereIn('ps.id', function ($query) use ($election) {
-                          $query->select('polling_station_id')
-                                ->from('results')
-                                ->where('election_id', $election->id);
-                      });
-            })
+            ->where('ps.is_active', true)
             ->groupBy('aa.name', 'con.name', 'w.name')
             ->selectRaw('
                 aa.name                AS region_name,

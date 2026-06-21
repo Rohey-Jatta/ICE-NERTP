@@ -2,11 +2,13 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Exceptions\NoCurrentElectionException;
 use App\Http\Controllers\Controller;
 use App\Jobs\ProcessResultSubmission;
 use App\Models\AuditLog;
 use App\Models\PollingStation;
 use App\Models\Result;
+use App\Services\CurrentElectionResolver;
 use App\Services\PhotoStorageService;
 use App\Services\ResultValidationService;
 use Illuminate\Http\JsonResponse;
@@ -20,19 +22,28 @@ use Illuminate\Support\Str;
  * From architecture: app/Http/Controllers/Api/ResultSubmissionController.php
  *
  * Flow:
- * 1. Validate GPS (handled by EnsureGpsValid middleware)
- * 2. Validate vote counts (ResultValidationService)
- * 3. Store photo (PhotoStorageService)
- * 4. Create Result record
- * 5. Create candidate votes
- * 6. Dispatch background job
- * 7. Return success
+ * 1. Resolve the current operational election (CurrentElectionResolver)
+ * 2. Validate GPS (handled by EnsureGpsValid middleware)
+ * 3. Validate vote counts (ResultValidationService)
+ * 4. Store photo (PhotoStorageService)
+ * 5. Create Result record
+ * 6. Create candidate votes
+ * 7. Dispatch background job
+ * 8. Return success
+ *
+ * IMPORTANT: election_id is no longer trusted from the client. Per the
+ * polling-station election-assignment refactor, the submission ALWAYS
+ * validates against whatever election the CurrentElectionResolver
+ * resolves to at the moment of submission — never the client-supplied
+ * value, and never polling_stations.election_id (which is now just
+ * historical metadata).
  */
 class ResultSubmissionController extends Controller
 {
     public function __construct(
         private readonly ResultValidationService $validationService,
         private readonly PhotoStorageService $photoService,
+        private readonly CurrentElectionResolver $electionResolver,
     ) {}
 
     /**
@@ -42,10 +53,25 @@ class ResultSubmissionController extends Controller
      */
     public function submit(Request $request): JsonResponse
     {
+        // Resolve the current election FIRST. If none qualifies, block the
+        // entire operation per business rule #8 — there is nothing valid
+        // to submit a result against.
+        try {
+            $currentElection = $this->electionResolver->current();
+        } catch (NoCurrentElectionException $e) {
+            return response()->json([
+                'message' => $e->getMessage(),
+                'code'    => 'NO_CURRENT_ELECTION',
+            ], 409);
+        }
+
         $validated = $request->validate([
             'submission_uuid' => ['required', 'uuid'],
             'polling_station_id' => ['required', 'exists:polling_stations,id'],
-            'election_id' => ['required', 'exists:elections,id'],
+            // election_id is still accepted from the client for backward
+            // compatibility with existing frontend payloads, but it is
+            // IGNORED for authorization purposes — see the check below.
+            'election_id' => ['nullable', 'integer'],
             'total_registered_voters' => ['required', 'integer', 'min:1'],
             'total_votes_cast' => ['required', 'integer', 'min:0'],
             'valid_votes' => ['required', 'integer', 'min:0'],
@@ -60,6 +86,34 @@ class ResultSubmissionController extends Controller
             'gps_accuracy_meters' => ['nullable', 'numeric', 'min:0'],
         ]);
 
+        // If the client sent an election_id that does NOT match the
+        // current operational election, reject outright. This is the
+        // "always validate against the resolver's current election"
+        // behavior — clients can no longer submit against a stale or
+        // arbitrary election_id.
+        if (!empty($validated['election_id']) && (int) $validated['election_id'] !== $currentElection->id) {
+            AuditLog::record(
+                action: 'result.submission.stale_election_rejected',
+                event: 'blocked',
+                module: 'Results',
+                extra: [
+                    'outcome'         => 'blocked',
+                    'failure_reason'  => 'Submitted election_id does not match current operational election',
+                    'submitted_election_id' => $validated['election_id'],
+                    'current_election_id'   => $currentElection->id,
+                ]
+            );
+
+            return response()->json([
+                'message' => 'This result was prepared against an election that is no longer current. Please refresh and resubmit.',
+                'code'    => 'STALE_ELECTION_CONTEXT',
+            ], 409);
+        }
+
+        // Always use the resolver's election_id going forward — never the
+        // client-supplied value.
+        $electionId = $currentElection->id;
+
         // Check for duplicate submission (idempotency)
         $existing = Result::where('submission_uuid', $validated['submission_uuid'])->first();
         if ($existing) {
@@ -70,8 +124,15 @@ class ResultSubmissionController extends Controller
             ], 200);
         }
 
-        // Get polling station
+        // Get polling station — no longer filtered by election_id at all,
+        // since stations are not statically owned by an election.
         $station = PollingStation::findOrFail($validated['polling_station_id']);
+
+        if (!$station->is_active) {
+            return response()->json([
+                'message' => 'This polling station is not active.',
+            ], 422);
+        }
 
         // Verify officer is assigned to this station
         if ($station->assigned_officer_id !== $request->user()->id) {
@@ -92,7 +153,7 @@ class ResultSubmissionController extends Controller
         }
 
         $activeSubmissionExists = Result::where('polling_station_id', $station->id)
-            ->where('election_id', $validated['election_id'])
+            ->where('election_id', $electionId)
             ->where('rejection_count', 0)
             ->exists();
 
@@ -103,7 +164,8 @@ class ResultSubmissionController extends Controller
         }
 
         // Validate submission data
-        $validation = $this->validationService->validateSubmission($validated, $station);
+        $submissionForValidation = array_merge($validated, ['election_id' => $electionId]);
+        $validation = $this->validationService->validateSubmission($submissionForValidation, $station);
         if (!$validation['valid']) {
             return response()->json([
                 'message' => 'Validation failed.',
@@ -112,12 +174,12 @@ class ResultSubmissionController extends Controller
         }
 
         // Detect anomalies (warnings only, don't block)
-        $warnings = $this->validationService->detectAnomalies($validated, $station);
+        $warnings = $this->validationService->detectAnomalies($submissionForValidation, $station);
 
         // Store photo
         $photoData = $this->photoService->storeResultPhoto(
             $request->file('result_sheet_photo'),
-            $validated['election_id'],
+            $electionId,
             $station->code,
             $validated['submission_uuid']
         );
@@ -127,7 +189,7 @@ class ResultSubmissionController extends Controller
         try {
             $result = Result::create([
                 'polling_station_id' => $validated['polling_station_id'],
-                'election_id' => $validated['election_id'],
+                'election_id' => $electionId,
                 'submission_uuid' => $validated['submission_uuid'],
                 'total_registered_voters' => $validated['total_registered_voters'],
                 'total_votes_cast' => $validated['total_votes_cast'],
@@ -153,10 +215,14 @@ class ResultSubmissionController extends Controller
             foreach ($validated['candidate_votes'] as $cv) {
                 $result->candidateVotes()->create([
                     'candidate_id' => $cv['candidate_id'],
-                    'election_id' => $validated['election_id'],
+                    'election_id' => $electionId,
                     'votes' => $cv['votes'],
                 ]);
             }
+
+            // Update the station's "last seen election" marker now that it
+            // has a confirmed submission under this election.
+            $station->markSeenUnder($currentElection);
 
             DB::commit();
 

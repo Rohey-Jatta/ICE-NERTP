@@ -21,6 +21,12 @@ use Illuminate\Support\Facades\DB;
  *
  * Party review is parallel and non-blocking. The pending_party_acceptance status
  * is accepted only for legacy ward-level records.
+ *
+ * NOTE: certification operates entirely on `results` rows, which always
+ * carry their own `election_id` set at submission time (resolved via
+ * CurrentElectionResolver — see ResultSubmissionController). This service
+ * never reads polling_stations.election_id, so it needed no changes for
+ * the dynamic-election refactor beyond this clarifying note.
  */
 class CertificationWorkflowService
 {

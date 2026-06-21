@@ -8,6 +8,10 @@ use App\Models\User;
 
 class GPSValidationService
 {
+    public function __construct(
+        private readonly CurrentElectionResolver $electionResolver = new CurrentElectionResolver(),
+    ) {}
+
     public function validateOfficerLocation(
         User $user,
         float $submittedLat,
@@ -24,6 +28,18 @@ class GPSValidationService
             );
         }
 
+        // Resolve against the CURRENT operational election rather than the
+        // station's (potentially stale) historical election relation.
+        // If there is no current election at all, GPS validation cannot
+        // proceed — there's nothing for the officer to submit results for.
+        $currentElection = $this->electionResolver->currentOrNull();
+
+        if (!$currentElection) {
+            return $this->result(false, 'no_current_election',
+                'There is no election currently open for result submission.'
+            );
+        }
+
         if ($accuracyMeters > 200) {
             return $this->result(false, 'gps_accuracy_too_low',
                 "GPS accuracy ({$accuracyMeters}m) is too low. Move to open area and try again.",
@@ -32,7 +48,7 @@ class GPSValidationService
         }
 
         $distanceMeters = $station->getDistanceInMeters($submittedLat, $submittedLng);
-        $allowedRadius = $station->election->gps_validation_radius_meters ?? 100;
+        $allowedRadius = $currentElection->gps_validation_radius_meters ?? 100;
 
         $isValid = $distanceMeters <= $allowedRadius;
 
@@ -56,13 +72,17 @@ class GPSValidationService
             ]
         );
 
+        // Opportunistically update the station's "last seen election"
+        // marker now that we know it's being used under this election.
+        $station->markSeenUnder($currentElection);
+
         AuditLog::record(
             action: $isValid ? 'gps.validation.passed' : 'gps.validation.failed',
             event: $isValid ? 'success' : 'failure',
             module: 'GPSValidation',
             auditable: $station,
             extra: array_merge($result['data'], [
-                'election_id' => $station->election_id,
+                'election_id' => $currentElection->id,
                 'latitude' => $submittedLat,
                 'longitude' => $submittedLng,
                 'outcome' => $isValid ? 'success' : 'failure',

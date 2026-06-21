@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Public;
 use App\Http\Controllers\Controller;
 use App\Models\Election;
 use App\Models\Result;
+use App\Services\CurrentElectionResolver;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -12,13 +13,17 @@ use Inertia\Inertia;
 
 class ResultsStationsController extends Controller
 {
+    public function __construct(
+        private readonly CurrentElectionResolver $electionResolver = new CurrentElectionResolver(),
+    ) {}
+
     public function index(Request $request)
     {
         $selectedId = (int) $request->get('election', 0);
 
         // Dropdown only shows elections the admin has marked for public display
         $availableElections = Election::where('allow_provisional_public_display', true)
-            ->whereIn('status', ['active', 'certifying', 'results_pending', 'certified'])
+            ->whereIn('status', ['active', 'submitting', 'certifying', 'results_pending', 'certified'])
             ->orderByDesc('start_date')
             ->get(['id', 'name', 'type', 'status', 'start_date'])
             ->map(fn($e) => [
@@ -36,15 +41,17 @@ class ResultsStationsController extends Controller
             $election = Election::find($selectedId);
         }
         if (!$election) {
-            // Try with the flag first (matches dropdown)
-            $election = Election::where('allow_provisional_public_display', true)
-                ->whereIn('status', ['active', 'certifying', 'results_pending', 'certified'])
-                ->latest('start_date')
-                ->first();
+            // Prefer the CURRENT operational election (active/submitting/
+            // certifying) that's also flagged for public display.
+            $election = $this->electionResolver->currentOrNull();
+            if ($election && !$election->allow_provisional_public_display) {
+                $election = null;
+            }
         }
         if (!$election) {
-            // Fallback: any active/certified election so page is never blank
-            $election = Election::whereIn('status', ['active', 'certifying', 'results_pending'])
+            // Fallback: any active/certified election so page is never blank,
+            // even if nothing is currently "operational" per the resolver.
+            $election = Election::whereIn('status', ['active', 'submitting', 'certifying', 'results_pending'])
                 ->latest('start_date')
                 ->first()
                 ?? Election::where('status', 'certified')
@@ -63,32 +70,47 @@ class ResultsStationsController extends Controller
         }
 
         // NOTE: visibility of vote totals / result-sheet photo / party
-        // reactions is now decided PER STATION (based on that result's own
-        // certification_status — see computeStations()), not on the whole
-        // election's status. The cache key therefore only needs the
-        // election id; it no longer needs a pub/prov suffix.
+        // reactions is decided PER STATION (based on that result's own
+        // certification_status), not on the whole election's status. The
+        // cache key only needs the election id.
         $cacheKey = "results_stations_v2_{$election->id}";
 
         $data = Cache::remember($cacheKey, 30, fn() => $this->computeStations($election));
 
+        // Filter dropdowns (ward/constituency/admin area) are no longer
+        // scoped by election_id at all — administrative_hierarchy itself
+        // still has an election_id column from the original schema design,
+        // but since polling stations now float freely across elections,
+        // we show the full current hierarchy regardless of which election
+        // created those hierarchy nodes, as long as active stations
+        // reference them.
         $filterOptions = Cache::remember("stations_filters_{$election->id}", 300, fn() => [
-            'wards'          => DB::table('administrative_hierarchy')
-                ->where('election_id', $election->id)
-                ->where('level', 'ward')
-                ->select('id', 'name')
-                ->orderBy('name')
+            'wards'          => DB::table('administrative_hierarchy as ah')
+                ->join('polling_stations as ps', 'ps.ward_id', '=', 'ah.id')
+                ->where('ah.level', 'ward')
+                ->where('ps.is_active', true)
+                ->select('ah.id', 'ah.name')
+                ->distinct()
+                ->orderBy('ah.name')
                 ->get(),
-            'constituencies' => DB::table('administrative_hierarchy')
-                ->where('election_id', $election->id)
-                ->where('level', 'constituency')
-                ->select('id', 'name')
-                ->orderBy('name')
+            'constituencies' => DB::table('administrative_hierarchy as ah')
+                ->join('administrative_hierarchy as w', 'w.parent_id', '=', 'ah.id')
+                ->join('polling_stations as ps', 'ps.ward_id', '=', 'w.id')
+                ->where('ah.level', 'constituency')
+                ->where('ps.is_active', true)
+                ->select('ah.id', 'ah.name')
+                ->distinct()
+                ->orderBy('ah.name')
                 ->get(),
-            'adminAreas'     => DB::table('administrative_hierarchy')
-                ->where('election_id', $election->id)
-                ->where('level', 'admin_area')
-                ->select('id', 'name')
-                ->orderBy('name')
+            'adminAreas'     => DB::table('administrative_hierarchy as ah')
+                ->join('administrative_hierarchy as con', 'con.parent_id', '=', 'ah.id')
+                ->join('administrative_hierarchy as w', 'w.parent_id', '=', 'con.id')
+                ->join('polling_stations as ps', 'ps.ward_id', '=', 'w.id')
+                ->where('ah.level', 'admin_area')
+                ->where('ps.is_active', true)
+                ->select('ah.id', 'ah.name')
+                ->distinct()
+                ->orderBy('ah.name')
                 ->get(),
         ]);
 
@@ -110,6 +132,11 @@ class ResultsStationsController extends Controller
      * specific result has been NATIONALLY CERTIFIED — i.e. published by
      * the IEC Chairman. Before that point the public sees nothing beyond
      * the pipeline status for that station.
+     *
+     * IMPORTANT: stations are no longer filtered by polling_stations.election_id.
+     * Every ACTIVE station is shown, regardless of which election (if any)
+     * it was historically last seen under; only the LEFT JOIN to `results`
+     * is scoped to the specific election being viewed.
      */
     private function computeStations(Election $election): array
     {
@@ -149,10 +176,9 @@ SQL;
             LEFT JOIN administrative_hierarchy aa ON c.parent_id  = aa.id
             LEFT JOIN ({$latestResults}) AS r
                 ON  r.polling_station_id = ps.id
-            WHERE ps.election_id = ?
-               OR ps.id IN (SELECT polling_station_id FROM results WHERE election_id = ?)
+            WHERE ps.is_active = true
             ORDER BY COALESCE(aa.name,''), COALESCE(c.name,''), COALESCE(w.name,''), ps.code
-        ", [$election->id, $election->id]);
+        ", []);
 
         // Only nationally-certified (chairman-published) results unlock
         // candidate votes / party reactions.

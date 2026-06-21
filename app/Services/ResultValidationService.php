@@ -16,6 +16,11 @@ use App\Models\PollingStation;
  * 3. All candidate votes sum to valid votes
  * 4. Turnout is reasonable (not >100%)
  * 5. GPS coordinates are valid
+ *
+ * NOTE: this service no longer cares which election a polling station is
+ * "assigned" to — $data['election_id'] is always supplied by the caller
+ * as the CURRENT operational election (resolved via
+ * CurrentElectionResolver), not read from the station itself.
  */
 class ResultValidationService
 {
@@ -79,6 +84,15 @@ class ResultValidationService
         // Rule 6: Photo hash required
         if (empty($data['result_sheet_photo_hash'])) {
             $errors['photo'] = "Result sheet photo is required";
+        }
+
+        // Rule 7: an election_id must be present and must be resolvable as
+        // an actual election. This is a sanity check only — the caller is
+        // responsible for guaranteeing it is the CURRENT operational
+        // election; this service does not re-resolve it itself to avoid
+        // doing the resolution twice per request.
+        if (empty($data['election_id']) || !Election::whereKey($data['election_id'])->exists()) {
+            $errors['election'] = "A valid current election context is required to submit results.";
         }
 
         return [
