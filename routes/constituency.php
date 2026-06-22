@@ -12,16 +12,6 @@ use App\Services\CertificationWorkflowService;
 
 /**
  * Resolve the election currently "in flight" for certification.
- *
- * IMPORTANT: must NOT be restricted to status === 'active' only.
- * The Chairman's "Publish Results" action moves the election to
- * 'results_pending' while submissions/certifications keep happening —
- * restricting to 'active' here caused promoted ward-certified results
- * to silently disappear from the constituency queue/dashboard the
- * moment results were published.
- *
- * Wrapped in if (!function_exists()) to prevent PHP fatal errors when
- * the route file is loaded more than once (OPcache / route caching).
  */
 if (!function_exists('constituency_resolve_active_election')) {
     function constituency_resolve_active_election()
@@ -46,44 +36,58 @@ Route::middleware(['auth', 'role:constituency-approver'])
 
         $stats = ['pending' => 0, 'certified' => 0, 'rejected' => 0, 'totalWards' => 0, 'progress' => 0];
 
-        if ($constituency && $activeElection) {
-            $wardIds = AdministrativeHierarchy::where('parent_id', $constituency->id)
-                ->where('level', 'ward')->pluck('id');
+        if ($constituency) {
+            // ── Always compute ward count, regardless of election status ──────
+            // The ward hierarchy does not depend on the election being active;
+            // skipping this when $activeElection is null caused the dashboard
+            // to show 0 wards even when ward-breakdowns correctly showed 3+.
+            $totalWardCount = AdministrativeHierarchy::where('parent_id', $constituency->id)
+                ->where('level', 'ward')
+                ->count();
 
-            $stats['totalWards'] = $wardIds->count();
+            $stats['totalWards'] = $totalWardCount;
 
-            $cacheKey = "constituency_dashboard_{$user->id}_{$constituency->id}_{$activeElection->id}";
-            $stats = Cache::remember($cacheKey, 30, function () use ($activeElection, $wardIds) {
-                $base = Result::where('election_id', $activeElection->id)
-                    ->whereHas('pollingStation', fn($q) => $q->whereIn('ward_id', $wardIds));
+            if ($activeElection) {
+                $wardIds = AdministrativeHierarchy::where('parent_id', $constituency->id)
+                    ->where('level', 'ward')->pluck('id');
 
-                $statusCounts = $base->selectRaw(
-                    'SUM(CASE WHEN certification_status = ? THEN 1 ELSE 0 END) as pending, '
-                    . 'SUM(CASE WHEN certification_status IN (?, ?, ?, ?, ?) THEN 1 ELSE 0 END) as certified, '
-                    . 'SUM(CASE WHEN certification_status = ? AND rejection_count > 0 THEN 1 ELSE 0 END) as rejected, '
-                    . 'COUNT(*) as total',
-                    [
-                        Result::STATUS_PENDING_CONSTITUENCY,
-                        Result::STATUS_CONSTITUENCY_CERTIFIED,
-                        Result::STATUS_PENDING_ADMIN_AREA,
-                        Result::STATUS_ADMIN_AREA_CERTIFIED,
-                        Result::STATUS_PENDING_NATIONAL,
-                        Result::STATUS_NATIONALLY_CERTIFIED,
-                        Result::STATUS_PENDING_WARD,
-                    ]
-                )->first();
+                $cacheKey = "constituency_dashboard_{$user->id}_{$constituency->id}_{$activeElection->id}";
+                $cached = Cache::remember($cacheKey, 30, function () use ($activeElection, $wardIds, $totalWardCount) {
+                    $base = Result::where('election_id', $activeElection->id)
+                        ->whereHas('pollingStation', fn($q) => $q->whereIn('ward_id', $wardIds));
 
-                $certified = (int) $statusCounts->certified;
-                $total     = (int) $statusCounts->total;
+                    $statusCounts = $base->selectRaw(
+                        'SUM(CASE WHEN certification_status = ? THEN 1 ELSE 0 END) as pending, '
+                        . 'SUM(CASE WHEN certification_status IN (?, ?, ?, ?, ?) THEN 1 ELSE 0 END) as certified, '
+                        . 'SUM(CASE WHEN certification_status = ? AND rejection_count > 0 THEN 1 ELSE 0 END) as rejected, '
+                        . 'COUNT(*) as total',
+                        [
+                            Result::STATUS_PENDING_CONSTITUENCY,
+                            Result::STATUS_CONSTITUENCY_CERTIFIED,
+                            Result::STATUS_PENDING_ADMIN_AREA,
+                            Result::STATUS_ADMIN_AREA_CERTIFIED,
+                            Result::STATUS_PENDING_NATIONAL,
+                            Result::STATUS_NATIONALLY_CERTIFIED,
+                            Result::STATUS_PENDING_WARD,
+                        ]
+                    )->first();
 
-                return [
-                    'pending'     => (int) $statusCounts->pending,
-                    'certified'   => $certified,
-                    'rejected'    => (int) $statusCounts->rejected,
-                    'totalWards'  => $wardIds->count(),
-                    'progress'    => $total > 0 ? round(($certified / $total) * 100) : 0,
-                ];
-            });
+                    $certified = (int) $statusCounts->certified;
+                    $total     = (int) $statusCounts->total;
+
+                    return [
+                        'pending'    => (int) $statusCounts->pending,
+                        'certified'  => $certified,
+                        'rejected'   => (int) $statusCounts->rejected,
+                        'totalWards' => $totalWardCount,   // passed in so cache stays consistent
+                        'progress'   => $total > 0 ? round(($certified / $total) * 100) : 0,
+                    ];
+                });
+
+                $stats = $cached;
+                // Guarantee the live ward count always wins over a stale cached value
+                $stats['totalWards'] = $totalWardCount;
+            }
         }
 
         return Inertia::render('Constituency/Dashboard', [
@@ -406,14 +410,13 @@ Route::middleware(['auth', 'role:constituency-approver'])
             ->get();
 
         $titles = [
-            'full'         => 'Full Constituency Results',
-            'ward-summary' => 'Ward Summary Report',
-            'turnout'      => 'Turnout Analysis',
-            'certification'=> 'Certification Status Report',
+            'full'          => 'Full Constituency Results',
+            'ward-summary'  => 'Ward Summary Report',
+            'turnout'       => 'Turnout Analysis',
+            'certification' => 'Certification Status Report',
         ];
         $reportTitle = $titles[$type];
 
-        // ── Shared summary stats ───────────────────────────────────────────
         $totalRegistered = $results->sum('total_registered_voters');
         $totalCast       = $results->sum('total_votes_cast');
         $totalValid      = $results->sum('valid_votes');
@@ -421,7 +424,6 @@ Route::middleware(['auth', 'role:constituency-approver'])
         $turnout         = $totalRegistered > 0 ? round(($totalCast / $totalRegistered) * 100, 2) : 0;
         $generatedAt     = now()->format('d M Y, H:i');
 
-        // ── Build report-specific table rows ──────────────────────────────
         $tableRows = '';
 
         if ($type === 'full') {
@@ -522,7 +524,6 @@ Route::middleware(['auth', 'role:constituency-approver'])
             $tableRows .= '</tbody>';
         }
 
-        // ── Assemble HTML ──────────────────────────────────────────────────
         $html = "<!DOCTYPE html>
 <html>
 <head>

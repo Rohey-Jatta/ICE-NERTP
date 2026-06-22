@@ -20,6 +20,17 @@ export default function TwoFactor({ expiresAt, status }) {
     const [resendMessage, setResendMessage] = useState('');
     const [resendError, setResendError] = useState('');
 
+    // ── Auto-dismiss code error after 15 s ────────────────────────────────────
+    const [showCodeError, setShowCodeError] = useState(false);
+
+    useEffect(() => {
+        if (errors.code) {
+            setShowCodeError(true);
+            const t = setTimeout(() => setShowCodeError(false), 15000);
+            return () => clearTimeout(t);
+        }
+    }, [errors.code]);
+
     // Collect device fingerprint on component mount
     useEffect(() => {
         const fingerprint = generateDeviceFingerprint();
@@ -32,8 +43,6 @@ export default function TwoFactor({ expiresAt, status }) {
     }, [expiresAt]);
 
     // Reflect the flash status message returned by the resend action.
-    // Only treat this as a SUCCESS message — never show a stale status
-    // alongside a fresh verification error.
     useEffect(() => {
         if (status) {
             setResendMessage(status);
@@ -50,9 +59,7 @@ export default function TwoFactor({ expiresAt, status }) {
         }
     }, [props.flash]);
 
-    // Whenever a fresh verification-code error arrives from the server,
-    // clear out any leftover resend success/error messages so the two
-    // banners never stack on top of each other.
+    // Whenever a fresh verification-code error arrives, clear resend messages
     useEffect(() => {
         if (errors.code) {
             setResendMessage('');
@@ -70,16 +77,23 @@ export default function TwoFactor({ expiresAt, status }) {
 
     const handleSubmit = (e) => {
         e.preventDefault();
-        // Clear any stale resend messages before a fresh verify attempt
         setResendMessage('');
         setResendError('');
+        setShowCodeError(false);
         post('/auth/two-factor', {
             onError: () => {
-                // Reset the code field on failure so "Verifying..." never
-                // gets stuck and the person can immediately retype.
                 setData('code', '');
             },
         });
+    };
+
+    // Clear error when user starts typing a new code
+    const handleCodeChange = (e) => {
+        const val = e.target.value.replace(/\D/g, '').slice(0, 6);
+        setData('code', val);
+        if (val.length > 0) {
+            setShowCodeError(false);
+        }
     };
 
     const handleResend = (e) => {
@@ -176,7 +190,7 @@ export default function TwoFactor({ expiresAt, status }) {
                             </div>
                         )}
 
-                        {/* Resend failure — separate, correctly styled as an error */}
+                        {/* Resend failure */}
                         {resendError && !errors.code && (
                             <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg">
                                 <p className="text-sm text-red-700">{resendError}</p>
@@ -184,7 +198,8 @@ export default function TwoFactor({ expiresAt, status }) {
                         )}
                     </div>
 
-                    {errors.code && (
+                    {/* Code error — auto-dismisses after 15 s */}
+                    {showCodeError && errors.code && (
                         <div className="mb-4 p-3 bg-red-100 border border-red-300 text-red-700 rounded-lg text-sm">
                             {errors.code}
                         </div>
@@ -199,9 +214,7 @@ export default function TwoFactor({ expiresAt, status }) {
                             <input
                                 type="text"
                                 value={data.code}
-                                onChange={(e) =>
-                                    setData('code', e.target.value.replace(/\D/g, '').slice(0, 6))
-                                }
+                                onChange={handleCodeChange}
                                 placeholder="000000"
                                 maxLength="6"
                                 className="w-full px-4 py-4 text-center text-3xl font-mono tracking-widest border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"

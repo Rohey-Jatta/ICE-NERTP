@@ -1,24 +1,20 @@
-import { useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useForm, usePage } from '@inertiajs/react';
 
 export default function Login() {
     const { props } = usePage();
-    const deviceError = props.flash?.device_error ?? null;
-    const pageErrors = props.errors ?? {};
+    const rawDeviceError = props.flash?.device_error ?? null;
 
     const fingerprint = typeof window !== 'undefined' ? window.deviceFingerprint?.get?.() || '' : '';
-    const { data, setData, post, processing, errors: formErrors } = useForm({
+    const { data, setData, post, processing, errors } = useForm({
         email:     '',
         password:  '',
         device_id: fingerprint,
     });
 
-    // Merge errors coming from the page props (covers a freshly-mounted page
-    // after a redirect-back-with-errors) with errors tracked locally by
-    // useForm (covers the case where the same instance receives them via
-    // its onError callback). This guarantees the message always renders.
-    const errors = { ...pageErrors, ...formErrors };
-    const hasCredentialError = Boolean(errors.email || errors.password);
+    // ── Visibility state for auto-dismissing errors ─────────────────────────
+    const [showDeviceError,  setShowDeviceError]  = useState(!!rawDeviceError);
+    const [showLoginError,   setShowLoginError]   = useState(false);
 
     useEffect(() => {
         if (!data.device_id && window.deviceFingerprint?.get) {
@@ -26,16 +22,34 @@ export default function Login() {
         }
     }, [data.device_id, setData]);
 
+    // Auto-dismiss device error after 15 s
+    useEffect(() => {
+        if (rawDeviceError) {
+            setShowDeviceError(true);
+            const t = setTimeout(() => setShowDeviceError(false), 15000);
+            return () => clearTimeout(t);
+        }
+    }, [rawDeviceError]);
+
+    // Auto-dismiss login errors after 15 s
+    useEffect(() => {
+        if (errors.email || errors.password) {
+            setShowLoginError(true);
+            const t = setTimeout(() => setShowLoginError(false), 15000);
+            return () => clearTimeout(t);
+        }
+    }, [errors.email, errors.password]);
+
     const handleSubmit = (e) => {
         e.preventDefault();
-        // FIX: Inertia's post() defaults preserveState to `true` specifically
-        // so validation errors returned by the server survive the redirect
-        // back to this page. The previous code explicitly forced
-        // preserveState:false, which fully remounted this component as soon
-        // as the response arrived — destroying the form state before the
-        // "Invalid email or password" message could ever be rendered, even
-        // though the backend correctly rejected the request every time.
-        post('/auth/login', { preserveScroll: false, preserveState: true });
+        post('/auth/login', { preserveScroll: false, preserveState: false });
+    };
+
+    // Clear errors when user starts interacting with the form
+    const handleFieldChange = (field) => (e) => {
+        setData(field, e.target.value);
+        setShowLoginError(false);
+        setShowDeviceError(false);
     };
 
     return (
@@ -67,8 +81,8 @@ export default function Login() {
                 <div className="bg-white/95 backdrop-blur-sm rounded-xl shadow-2xl p-8">
                     <h2 className="text-2xl font-bold text-gray-800 mb-6 text-center">Sign in to your account</h2>
 
-                    {/* Device mismatch / revoked error — shown after redirect from 2FA */}
-                    {deviceError && (
+                    {/* Device mismatch / revoked error */}
+                    {showDeviceError && rawDeviceError && (
                         <div className="mb-4 p-4 bg-red-50 border border-red-300 rounded-lg">
                             <div className="flex items-start gap-3">
                                 <svg className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
@@ -76,24 +90,17 @@ export default function Login() {
                                 </svg>
                                 <div>
                                     <p className="text-sm font-semibold text-red-800">Device Not Authorised</p>
-                                    <p className="text-sm text-red-700 mt-1">{deviceError}</p>
+                                    <p className="text-sm text-red-700 mt-1">{rawDeviceError}</p>
                                 </div>
                             </div>
                         </div>
                     )}
 
-                    {/* Invalid credentials / account status error */}
-                    {hasCredentialError && (
+                    {/* Login credential error */}
+                    {showLoginError && (errors.email || errors.password) && (
                         <div className="mb-4 p-4 bg-red-100 border-l-4 border-red-600 text-red-800 rounded-lg text-sm">
-                            <div className="flex items-start gap-2">
-                                <svg className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
-                                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                                </svg>
-                                <div>
-                                    <strong className="block">Login Failed</strong>
-                                    <p>{errors.email || errors.password}</p>
-                                </div>
-                            </div>
+                            <strong>⚠ Login Error</strong>
+                            <p>{errors.email || errors.password}</p>
                         </div>
                     )}
 
@@ -103,30 +110,41 @@ export default function Login() {
                             <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
                                 Email address
                             </label>
-                            <input id="email" type="email" value={data.email}
-                                onChange={(e) => setData('email', e.target.value)}
+                            <input
+                                id="email"
+                                type="email"
+                                value={data.email}
+                                onChange={handleFieldChange('email')}
                                 placeholder="your.email@iec.gm"
-                                required disabled={processing} autoComplete="email"
-                                className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors ${
-                                    errors.email ? 'border-red-400' : 'border-gray-300'
-                                }`} />
+                                required
+                                disabled={processing}
+                                autoComplete="email"
+                                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
+                            />
                         </div>
 
                         <div>
                             <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
                                 Password
                             </label>
-                            <input id="password" type="password" value={data.password}
-                                onChange={(e) => setData('password', e.target.value)}
+                            <input
+                                id="password"
+                                type="password"
+                                value={data.password}
+                                onChange={handleFieldChange('password')}
                                 placeholder="••••••••"
-                                required disabled={processing} autoComplete="current-password"
-                                className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors ${
-                                    errors.password ? 'border-red-400' : 'border-gray-300'
-                                }`} />
+                                required
+                                disabled={processing}
+                                autoComplete="current-password"
+                                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
+                            />
                         </div>
 
-                        <button type="submit" disabled={processing}
-                            className="w-full py-3 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-lg transition-all shadow-lg">
+                        <button
+                            type="submit"
+                            disabled={processing}
+                            className="w-full py-3 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-lg transition-all shadow-lg"
+                        >
                             {processing ? 'Signing in…' : 'Sign in'}
                         </button>
                     </form>

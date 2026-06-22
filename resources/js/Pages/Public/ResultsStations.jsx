@@ -14,11 +14,6 @@ function firstColor(value, fallback = '#6b7280') {
     return (value || fallback).split(',')[0].trim();
 }
 
-// Collapse the fine-grained certification_status into the three public buckets.
-// NOTE: this is purely STATUS-based now (not "do we have a total_votes_cast"),
-// because vote figures, the result sheet, and party reactions are only ever
-// sent by the backend once a result has been NATIONALLY CERTIFIED. A station
-// can be "provisional" (in the pipeline) while still showing no figures.
 function stationBucket(station) {
     if (station.status === RESULT_STATUS.NATIONALLY_CERTIFIED) return 'certified';
     if (!station.status || station.status === RESULT_STATUS.NOT_REPORTED) return 'pending';
@@ -59,9 +54,9 @@ function buildRegionOptions(stations) {
 }
 
 const BUCKET_CHIP = {
-    certified: { label: 'Certified', cls: 'bg-[#e2f2ea] text-[#0e8c5a]', dot: 'bg-[#0e8c5a]' },
-    provisional: { label: 'Provisional', cls: 'bg-[#fef3c7] text-[#b45309]', dot: 'bg-[#b45309]' },
-    pending: { label: 'Pending', cls: 'bg-[#f5f6f8] text-[#5f6773]', dot: 'bg-[#8b95a3]' },
+    certified:   { label: 'Certified',    cls: 'bg-[#e2f2ea] text-[#0e8c5a]', dot: 'bg-[#0e8c5a]' },
+    provisional: { label: 'Provisional',  cls: 'bg-[#fef3c7] text-[#b45309]', dot: 'bg-[#b45309]' },
+    pending:     { label: 'Pending',      cls: 'bg-[#f5f6f8] text-[#5f6773]', dot: 'bg-[#8b95a3]' },
 };
 
 function StatusChip({ bucket }) {
@@ -71,6 +66,44 @@ function StatusChip({ bucket }) {
             <span className={`h-1.5 w-1.5 rounded-full ${c.dot}`} />
             {c.label}
         </span>
+    );
+}
+
+// ── Photo lightbox ────────────────────────────────────────────────────────────
+function PhotoLightbox({ url, stationName, onClose }) {
+    return (
+        <div
+            className="fixed inset-0 z-[9999] bg-black/92 flex items-center justify-center p-4 backdrop-blur-sm"
+            onClick={onClose}
+        >
+            <div
+                className="relative flex flex-col items-center max-w-5xl w-full max-h-full"
+                onClick={(e) => e.stopPropagation()}
+            >
+                {/* Header bar */}
+                <div className="flex items-center justify-between w-full mb-3 px-1">
+                    <span className="text-white/70 text-sm font-medium truncate mr-4">
+                        Result Sheet — {stationName}
+                    </span>
+                    <button
+                        onClick={onClose}
+                        className="flex-shrink-0 flex items-center gap-1.5 text-white/80 hover:text-white text-sm font-semibold transition-colors bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-lg"
+                    >
+                        <span>✕</span>
+                        <span>Close</span>
+                    </button>
+                </div>
+
+                {/* Image */}
+                <img
+                    src={url}
+                    alt={`Result sheet – ${stationName}`}
+                    className="max-w-full max-h-[85vh] object-contain rounded-xl shadow-2xl border border-white/10"
+                />
+
+                <p className="mt-3 text-white/40 text-xs">Click outside the image to close</p>
+            </div>
+        </div>
     );
 }
 
@@ -149,10 +182,10 @@ function StationItem({ station, isActive, onSelect }) {
 // ── Detail panel ──────────────────────────────────────────────────────────────
 function CertificationTimeline({ bucket }) {
     const steps = [
-        { title: 'Results submitted', sub: 'Polling officer files the count', state: bucket !== 'pending' ? 'done' : 'pending' },
-        { title: 'Validation passed', sub: 'System checks math and signatures', state: bucket !== 'pending' ? 'done' : 'pending' },
-        { title: 'Regional review', sub: 'Returning officers compare and sign', state: bucket === 'certified' ? 'done' : bucket === 'provisional' ? 'active' : 'pending' },
-        { title: 'Nationally certified', sub: 'IEC certifies and publishes', state: bucket === 'certified' ? 'done' : 'pending' },
+        { title: 'Results submitted',  sub: 'Polling officer files the count',       state: bucket !== 'pending' ? 'done' : 'pending' },
+        { title: 'Validation passed',  sub: 'System checks math and signatures',     state: bucket !== 'pending' ? 'done' : 'pending' },
+        { title: 'Regional review',    sub: 'Returning officers compare and sign',   state: bucket === 'certified' ? 'done' : bucket === 'provisional' ? 'active' : 'pending' },
+        { title: 'Nationally certified', sub: 'IEC certifies and publishes',         state: bucket === 'certified' ? 'done' : 'pending' },
     ];
 
     return (
@@ -175,17 +208,29 @@ function CertificationTimeline({ bucket }) {
 }
 
 function StationDetail({ station }) {
-    const bucket = stationBucket(station);
-    const turnout = stationTurnout(station);
-    const hierarchy = stationHierarchy(station);
+    const bucket      = stationBucket(station);
+    const turnout     = stationTurnout(station);
+    const hierarchy   = stationHierarchy(station);
     const isCertified = !!station.is_certified;
-    const hasFigures = station.total_votes_cast != null;
-    const validVotes = numeric(station.valid_votes);
-    const candidates = station.candidate_votes || [];
-    const [imgError, setImgError] = useState(false);
+    const hasFigures  = station.total_votes_cast != null;
+    const validVotes  = numeric(station.valid_votes);
+    const candidates  = station.candidate_votes || [];
+
+    const [imgError,      setImgError]      = useState(false);
+    // ── Lightbox state ────────────────────────────────────────────────────────
+    const [lightboxOpen,  setLightboxOpen]  = useState(false);
 
     return (
         <>
+            {/* ── Lightbox overlay (renders at fixed position over full viewport) ── */}
+            {lightboxOpen && station.photo_url && (
+                <PhotoLightbox
+                    url={station.photo_url}
+                    stationName={station.name}
+                    onClose={() => setLightboxOpen(false)}
+                />
+            )}
+
             <div className="border-b border-[#e6e8ec] bg-white px-7 py-6">
                 <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#5f6773]">
                     {station.admin_area_name || 'Polling Station'} · Polling Station
@@ -201,16 +246,31 @@ function StationDetail({ station }) {
                 </div>
             </div>
 
-            {/* Result sheet photo — only present once nationally certified */}
+            {/* Result sheet photo */}
             <div className="border-b border-[#e6e8ec] px-7 py-5">
                 <h4 className="mb-3.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-[#5f6773]">Result Sheet</h4>
                 {isCertified && station.photo_url && !imgError ? (
-                    <img
-                        src={station.photo_url}
-                        alt={`Result sheet for ${station.name}`}
-                        onError={() => setImgError(true)}
-                        className="w-full rounded-[10px] border border-[#e6e8ec] object-cover"
-                    />
+                    <div className="group relative">
+                        <img
+                            src={station.photo_url}
+                            alt={`Result sheet for ${station.name}`}
+                            onError={() => setImgError(true)}
+                            onClick={() => setLightboxOpen(true)}
+                            className="w-full rounded-[10px] border border-[#e6e8ec] object-cover cursor-zoom-in transition-opacity hover:opacity-90"
+                        />
+                        {/* Click-to-enlarge hint */}
+                        <div
+                            onClick={() => setLightboxOpen(true)}
+                            className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-zoom-in rounded-[10px] bg-black/20"
+                        >
+                            <span className="bg-black/70 text-white text-xs font-semibold px-3 py-1.5 rounded-full flex items-center gap-1.5">
+                                <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                    <path strokeLinecap="round" d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" />
+                                </svg>
+                                Click to enlarge
+                            </span>
+                        </div>
+                    </div>
                 ) : (
                     <div className="grid aspect-[16/9] w-full place-items-center rounded-[10px] border border-[#e6e8ec] bg-gradient-to-br from-[#f5f6f8] to-[#f1f3f5] text-[#8b95a3]">
                         <div className="text-center">
@@ -260,7 +320,7 @@ function StationDetail({ station }) {
                     </p>
                 ) : (
                     candidates.map((c, idx) => {
-                        const cPct = validVotes > 0 ? ((numeric(c.votes) / validVotes) * 100).toFixed(2) : '0.00';
+                        const cPct  = validVotes > 0 ? ((numeric(c.votes) / validVotes) * 100).toFixed(2) : '0.00';
                         const color = firstColor(c.party_color);
                         return (
                             <div key={`${c.candidate_name}-${idx}`} className="border-b border-[#f1f3f5] py-2.5 last:border-b-0">
@@ -283,7 +343,7 @@ function StationDetail({ station }) {
                 )}
             </div>
 
-            {/* Party acceptances — only present once nationally certified */}
+            {/* Party acceptances */}
             {isCertified && station.party_acceptances?.length > 0 && (
                 <div className="border-b border-[#e6e8ec] px-7 py-5">
                     <h4 className="mb-3.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-[#5f6773]">Party Acceptances</h4>
@@ -314,10 +374,10 @@ function StationDetail({ station }) {
 // ── Page ──────────────────────────────────────────────────────────────────────
 export default function ResultsStations({ election, elections = [], selectedElectionId, stations }) {
     const param = selectedElectionId ? `?election=${selectedElectionId}` : '';
-    const [searchTerm, setSearchTerm] = useState('');
+    const [searchTerm,   setSearchTerm]   = useState('');
     const [statusFilter, setStatusFilter] = useState('all');
     const [regionFilter, setRegionFilter] = useState('all');
-    const [selectedId, setSelectedId] = useState(null);
+    const [selectedId,   setSelectedId]   = useState(null);
     const [visibleCount, setVisibleCount] = useState(STATIONS_PAGE_SIZE);
     const deferredSearchTerm = useDeferredValue(searchTerm);
     useInertiaPrefetch([`/results${param}`, `/results/map${param}`]);
@@ -358,7 +418,7 @@ export default function ResultsStations({ election, elections = [], selectedElec
         return filteredStations.find((s) => s.id === selectedId) || filteredStations[0] || null;
     }, [filteredStations, selectedId]);
 
-    const resetPaging = () => setVisibleCount(STATIONS_PAGE_SIZE);
+    const resetPaging  = () => setVisibleCount(STATIONS_PAGE_SIZE);
     const handleSearch = (value) => { setSearchTerm(value); resetPaging(); };
     const handleStatus = (value) => { setStatusFilter(value); resetPaging(); };
     const handleRegion = (value) => { setRegionFilter(value); resetPaging(); };
@@ -382,7 +442,7 @@ export default function ResultsStations({ election, elections = [], selectedElec
     return (
         <AppLayout>
             <div className="bg-white font-sans text-[#0e1014]">
-                {/* Slim context bar — election title + selector */}
+                {/* Slim context bar */}
                 <div className="border-b border-[#e6e8ec] bg-white">
                     <div className="mx-auto flex max-w-[1240px] flex-col gap-3 px-7 py-4 sm:flex-row sm:items-center sm:justify-between">
                         <div className="min-w-0">
@@ -417,10 +477,10 @@ export default function ResultsStations({ election, elections = [], selectedElec
                                     className="w-full rounded-lg border border-[#e6e8ec] bg-[#f5f6f8] py-2.5 pl-9 pr-3.5 text-sm text-[#0e1014] outline-none transition focus:border-[#e61a6e] focus:bg-white"
                                 />
                             </div>
-                            <FilterPill active={statusFilter === 'all'} onClick={() => handleStatus('all')} count={counts.all}>All</FilterPill>
-                            <FilterPill active={statusFilter === 'certified'} onClick={() => handleStatus('certified')} count={counts.certified}>Certified</FilterPill>
+                            <FilterPill active={statusFilter === 'all'}         onClick={() => handleStatus('all')}         count={counts.all}>All</FilterPill>
+                            <FilterPill active={statusFilter === 'certified'}   onClick={() => handleStatus('certified')}   count={counts.certified}>Certified</FilterPill>
                             <FilterPill active={statusFilter === 'provisional'} onClick={() => handleStatus('provisional')} count={counts.provisional}>Provisional</FilterPill>
-                            <FilterPill active={statusFilter === 'pending'} onClick={() => handleStatus('pending')} count={counts.pending}>Pending</FilterPill>
+                            <FilterPill active={statusFilter === 'pending'}     onClick={() => handleStatus('pending')}     count={counts.pending}>Pending</FilterPill>
                         </div>
 
                         {regionOptions.length > 0 && (
