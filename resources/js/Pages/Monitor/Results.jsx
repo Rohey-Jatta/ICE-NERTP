@@ -117,9 +117,9 @@ export default function MonitorResults({ auth, monitor, results = [] }) {
                         <p className="text-slate-500 mt-1">
                             Read-only view of results for your assigned polling stations
                         </p>
-                        <div className="mt-2 inline-flex items-center gap-2 px-3 py-1 bg-iec-pink-500/10 border border-blue-500/30 rounded-lg text-iec-pink-600 text-xs">
+                        {/* <div className="mt-2 inline-flex items-center gap-2 px-3 py-1 bg-iec-pink-500/10 border border-blue-500/30 rounded-lg text-iec-pink-600 text-xs">
                             ℹ️ View only — you cannot modify results
-                        </div>
+                        </div> */}
                     </div>
                     
                     {/* Refresh Status */}

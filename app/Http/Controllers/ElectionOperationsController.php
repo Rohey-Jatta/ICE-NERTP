@@ -129,6 +129,12 @@ class ElectionOperationsController extends Controller
         $rejections    = (clone $base())->rejections()->count();
         $resubmissions = (clone $base())->resubmissions()->count();
 
+        // NOTE: PostgreSQL cannot resolve SELECT aliases (disputes, rejections,
+        // resubmissions) when they appear inside a compound ORDER BY expression
+        // — it tries to resolve each identifier against the underlying table's
+        // real columns instead, which causes "column does not exist" errors.
+        // Fix: repeat the full SUM(CASE...) expressions in the ORDER BY clause
+        // rather than referencing the SELECT aliases.
         $byArea = Incident::forElection($electionId)
             ->whereNotNull('administrative_area_name')
             ->selectRaw("
@@ -138,7 +144,13 @@ class ElectionOperationsController extends Controller
                 SUM(CASE WHEN type = 'resubmission'  THEN 1 ELSE 0 END) as resubmissions
             ")
             ->groupBy('administrative_area_name')
-            ->orderByRaw('(disputes + rejections + resubmissions) DESC')
+            ->orderByRaw("
+                (
+                    SUM(CASE WHEN type = 'dispute'      THEN 1 ELSE 0 END) +
+                    SUM(CASE WHEN type = 'rejection'    THEN 1 ELSE 0 END) +
+                    SUM(CASE WHEN type = 'resubmission' THEN 1 ELSE 0 END)
+                ) DESC
+            ")
             ->get()
             ->map(fn ($row) => [
                 'administrative_area_name' => $row->administrative_area_name,

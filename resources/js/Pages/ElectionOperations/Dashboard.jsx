@@ -479,7 +479,7 @@ export default function ElectionOperationsDashboard({ auth, data: initialData })
                     </div>
                 </div>
 
-                {/* ── Key Benefits ─────────────────────────────────────────── */}
+                {/* ── Key Benefits ───────────────────────────────────────────
                 <div className="bg-slate-100 border-t border-slate-200 px-4 py-4">
                     <div className="max-w-7xl mx-auto flex flex-wrap items-center gap-6">
                         <span className="text-xs font-extrabold text-slate-700 uppercase tracking-widest">
@@ -498,7 +498,7 @@ export default function ElectionOperationsDashboard({ auth, data: initialData })
                             </div>
                         ))}
                     </div>
-                </div>
+                </div> */}
 
             </div>
         </AppLayout>

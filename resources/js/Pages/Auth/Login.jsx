@@ -4,13 +4,21 @@ import { useForm, usePage } from '@inertiajs/react';
 export default function Login() {
     const { props } = usePage();
     const deviceError = props.flash?.device_error ?? null;
+    const pageErrors = props.errors ?? {};
 
     const fingerprint = typeof window !== 'undefined' ? window.deviceFingerprint?.get?.() || '' : '';
-    const { data, setData, post, processing, errors } = useForm({
+    const { data, setData, post, processing, errors: formErrors } = useForm({
         email:     '',
         password:  '',
         device_id: fingerprint,
     });
+
+    // Merge errors coming from the page props (covers a freshly-mounted page
+    // after a redirect-back-with-errors) with errors tracked locally by
+    // useForm (covers the case where the same instance receives them via
+    // its onError callback). This guarantees the message always renders.
+    const errors = { ...pageErrors, ...formErrors };
+    const hasCredentialError = Boolean(errors.email || errors.password);
 
     useEffect(() => {
         if (!data.device_id && window.deviceFingerprint?.get) {
@@ -20,7 +28,14 @@ export default function Login() {
 
     const handleSubmit = (e) => {
         e.preventDefault();
-        post('/auth/login', { preserveScroll: false, preserveState: false });
+        // FIX: Inertia's post() defaults preserveState to `true` specifically
+        // so validation errors returned by the server survive the redirect
+        // back to this page. The previous code explicitly forced
+        // preserveState:false, which fully remounted this component as soon
+        // as the response arrived — destroying the form state before the
+        // "Invalid email or password" message could ever be rendered, even
+        // though the backend correctly rejected the request every time.
+        post('/auth/login', { preserveScroll: false, preserveState: true });
     };
 
     return (
@@ -67,10 +82,18 @@ export default function Login() {
                         </div>
                     )}
 
-                    {(errors.email || errors.password) && (
+                    {/* Invalid credentials / account status error */}
+                    {hasCredentialError && (
                         <div className="mb-4 p-4 bg-red-100 border-l-4 border-red-600 text-red-800 rounded-lg text-sm">
-                            <strong>⚠ Login Error</strong>
-                            <p>{errors.email || errors.password}</p>
+                            <div className="flex items-start gap-2">
+                                <svg className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                                </svg>
+                                <div>
+                                    <strong className="block">Login Failed</strong>
+                                    <p>{errors.email || errors.password}</p>
+                                </div>
+                            </div>
                         </div>
                     )}
 
@@ -84,7 +107,9 @@ export default function Login() {
                                 onChange={(e) => setData('email', e.target.value)}
                                 placeholder="your.email@iec.gm"
                                 required disabled={processing} autoComplete="email"
-                                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors" />
+                                className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors ${
+                                    errors.email ? 'border-red-400' : 'border-gray-300'
+                                }`} />
                         </div>
 
                         <div>
@@ -95,7 +120,9 @@ export default function Login() {
                                 onChange={(e) => setData('password', e.target.value)}
                                 placeholder="••••••••"
                                 required disabled={processing} autoComplete="current-password"
-                                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors" />
+                                className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors ${
+                                    errors.password ? 'border-red-400' : 'border-gray-300'
+                                }`} />
                         </div>
 
                         <button type="submit" disabled={processing}

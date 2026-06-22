@@ -119,7 +119,7 @@ const NAV_ITEMS = {
     'constituency-approver': [
         { href: '/constituency/dashboard',     label: 'Dashboard',      icon: 'dashboard' },
         { href: '/constituency/approval-queue',label: 'Approval Queue', icon: 'queue',    permissions: ['view-constituency-queue', 'view-constituency-results'] },
-        { href: '/constituency/reports',       label: 'Reports',        icon: 'results',  permissions: ['generate-constituency-report'] },
+        // { href: '/constituency/reports',       label: 'Reports',        icon: 'results',  permissions: ['generate-constituency-report'] },
         { href: '/constituency/ward-breakdowns',label: 'Ward Breakdowns',icon: 'stations',permissions: ['view-ward-breakdowns'] },
         ELECTION_OPERATIONS_NAV,
     ],

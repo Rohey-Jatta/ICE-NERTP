@@ -25,9 +25,14 @@ class HandleInertiaRequests extends Middleware
                 'user' => $this->userPayload($request->user()),
             ],
             'flash' => [
-                'success' => fn () => $request->session()->get('success'),
-                'error'   => fn () => $request->session()->get('error'),
-                'info'    => fn () => $request->session()->get('info'),
+                'success'      => fn () => $request->session()->get('success'),
+                'error'        => fn () => $request->session()->get('error'),
+                'info'         => fn () => $request->session()->get('info'),
+                // FIX: was missing — TwoFactorController flashes a
+                // "device_error" key when a device mismatch/revocation is
+                // detected, but it never reached the frontend because it
+                // wasn't shared here. Login.jsx reads `flash.device_error`.
+                'device_error' => fn () => $request->session()->get('device_error'),
             ],
         ];
     }

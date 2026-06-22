@@ -52,7 +52,8 @@ class AuthenticatedSessionController extends Controller
                 ]
             );
             throw ValidationException::withMessages([
-                'email' => ['These credentials do not match our records.'],
+                // FIX: user-friendly, explicit message for the frontend to display.
+                'email' => ['Invalid email or password. Please try again.'],
             ]);
         }
 

@@ -101,13 +101,13 @@ export default function Observations({
                             </div>
                             
                             <div className="flex gap-2">
-                                <a href="/monitor/observations/export"
+                                {/* <a href="/monitor/observations/export"
                                     className="px-6 py-3 bg-iec-pink-600 hover:bg-iec-pink-700 text-white font-bold rounded-lg flex items-center gap-2"
                                 >
                                     ⬇ Export CSV
-                                </a>
+                                </a> */}
                                 <a href={`/monitor/observations/pdf/batch?type=${typeFilter}&severity=${severityFilter}`}
-                                    className="px-6 py-3 bg-orange-600 hover:bg-orange-700 text-white font-bold rounded-lg flex items-center gap-2"
+                                    className="px-6 py-3 bg-pink-500 hover:bg-orange-600 text-white font-bold rounded-lg flex items-center gap-2"
                                 >
                                     📄 Export PDF
                                 </a>
@@ -355,15 +355,15 @@ export default function Observations({
 
                 {/* Bottom navigation */}
                 <div className="mt-8 flex flex-wrap gap-4">
-                    <Link href="/monitor/submit-observation" className="px-6 py-3 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-lg">
+                    <Link href="/monitor/submit-observation" className="px-6 py-3 bg-pink-500 hover:bg-pink-700 text-white font-bold rounded-lg">
                         📝 Submit New Observation
                     </Link>
-                    <Link href="/monitor/stations" className="px-6 py-3 bg-iec-pink-600 hover:bg-iec-pink-700 text-white font-bold rounded-lg">
+                    <Link href="/monitor/stations" className="px-6 py-3 bg-pink-500 hover:bg-iec-pink-700 text-white font-bold rounded-lg">
                         📍 View My Stations
                     </Link>
-                    <a href="/monitor/observations/export" className="px-6 py-3 bg-iec-pink-600 hover:bg-iec-pink-700 text-white font-bold rounded-lg">
+                    {/* <a href="/monitor/observations/export" className="px-6 py-3 bg-iec-pink-600 hover:bg-iec-pink-700 text-white font-bold rounded-lg">
                         ⬇ Export All (CSV)
-                    </a>
+                    </a> */}
                 </div>
             </div>
         </AppLayout>
