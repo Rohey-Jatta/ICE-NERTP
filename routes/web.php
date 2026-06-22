@@ -2,6 +2,7 @@
 
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
+use App\Http\Controllers\ElectionOperationsController;
 use App\Http\Controllers\Public\ResultsSummaryController;
 use App\Http\Controllers\Public\ResultsMapController;
 use App\Http\Controllers\Public\ResultsStationsController;
@@ -18,6 +19,14 @@ Route::get('/results/stations', [ResultsStationsController::class, 'index'])->na
 
 // ─── JSON endpoint: homepage embedded map data ────────────────────────────────
 Route::get('/api/public/map-stations', [ResultsMapController::class, 'stationsJson']);
+
+// ─── Election Operations Dashboard (all authenticated users) ──────────────────
+Route::middleware(['auth'])->group(function () {
+    Route::get('/election-operations', [ElectionOperationsController::class, 'index'])
+        ->name('election-operations.index');
+    Route::get('/election-operations/data', [ElectionOperationsController::class, 'data'])
+        ->name('election-operations.data');
+});
 
 // ─── Auth routes ──────────────────────────────────────────────────────────────
 require __DIR__.'/auth.php';

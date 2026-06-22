@@ -124,7 +124,7 @@ export default function ConstituencyDashboard({ auth, constituency, statistics }
                             </div>
                         </Link>
 
-                        <Link
+                        {/* <Link
                             href="/constituency/reports"
                             className="group p-5 bg-iec-pink-50 hover:bg-iec-pink-50 border border-iec-pink-100 rounded-xl transition-all block"
                         >
@@ -133,7 +133,7 @@ export default function ConstituencyDashboard({ auth, constituency, statistics }
                                 <div className="text-lg font-bold text-iec-navy">Reports</div>
                             </div>
                             <div className="text-iec-pink-600 text-sm">Generate constituency reports</div>
-                        </Link>
+                        </Link> */}
                     </div>
                 </div>
             </div>

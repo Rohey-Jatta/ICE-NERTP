@@ -11,6 +11,7 @@ use Inertia\Inertia;
 use App\Models\AuditLog;
 use App\Models\Election;
 use App\Models\ElectionMonitor;
+use App\Models\Incident;
 use App\Models\PollingStation;
 use App\Models\Result;
 use App\Services\ObservationPDFService;
@@ -257,6 +258,42 @@ Route::middleware(['auth', 'role:election-monitor'])
                 'created_at'          => now(),
                 'updated_at'          => now(),
             ]);
+
+            // ── Auto-create Incident from Observation ─────────────────────
+            // Classify observation type → incident type
+            $incidentType = match ($request->observation_type) {
+                'irregularity', 'incident', 'process_concern' => 'dispute',
+                default => null,
+            };
+
+            if ($incidentType) {
+                try {
+                    $stationHierarchy = DB::table('polling_stations as ps')
+                        ->leftJoin('administrative_hierarchy as w',   'ps.ward_id',    '=', 'w.id')
+                        ->leftJoin('administrative_hierarchy as con', 'w.parent_id',   '=', 'con.id')
+                        ->leftJoin('administrative_hierarchy as aa',  'con.parent_id', '=', 'aa.id')
+                        ->where('ps.id', $request->polling_station_id)
+                        ->select('ps.name as station_name', 'aa.id as area_id', 'aa.name as area_name')
+                        ->first();
+
+                    Incident::create([
+                        'election_id'              => $monitor->election_id,
+                        'observation_id'           => $observationId,
+                        'type'                     => $incidentType,
+                        'administrative_area_id'   => $stationHierarchy?->area_id,
+                        'administrative_area_name' => $stationHierarchy?->area_name,
+                        'polling_station_id'       => $request->polling_station_id,
+                        'polling_station_name'     => $stationHierarchy?->station_name,
+                        'description'              => $request->title,
+                    ]);
+
+                    // Bust operations dashboard cache
+                    Cache::forget('election_operations_dashboard');
+                } catch (\Throwable $e) {
+                    Log::warning('[Incident] Failed to create dispute incident: ' . $e->getMessage());
+                }
+            }
+            // ── End incident creation ──────────────────────────────────────
 
             AuditLog::record(
                 action:    'monitor.observation.submitted',

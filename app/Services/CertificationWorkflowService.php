@@ -4,12 +4,14 @@ namespace App\Services;
 
 use App\Models\AuditLog;
 use App\Models\Election;
+use App\Models\Incident;
 use App\Models\Result;
 use App\Models\ResultCertification;
 use App\Models\User;
 use App\Models\AdministrativeHierarchy;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 /**
  * CertificationWorkflowService — Sequential approval state machine.
@@ -21,12 +23,6 @@ use Illuminate\Support\Facades\DB;
  *
  * Party review is parallel and non-blocking. The pending_party_acceptance status
  * is accepted only for legacy ward-level records.
- *
- * NOTE: certification operates entirely on `results` rows, which always
- * carry their own `election_id` set at submission time (resolved via
- * CurrentElectionResolver — see ResultSubmissionController). This service
- * never reads polling_stations.election_id, so it needed no changes for
- * the dynamic-election refactor beyond this clarifying note.
  */
 class CertificationWorkflowService
 {
@@ -177,6 +173,10 @@ class CertificationWorkflowService
 
             DB::commit();
             $this->forgetWorkflowCaches($result);
+
+            // ── Auto-create Rejection Incident ────────────────────────────
+            $this->createRejectionIncident($result, $level, $reason);
+
             return true;
 
         } catch (\Exception $e) {
@@ -234,6 +234,43 @@ class CertificationWorkflowService
     }
 
     // ── Private helpers ───────────────────────────────────────────────
+
+    /**
+     * Auto-create a Rejection incident after a result is rejected.
+     * Non-fatal — a failure here must never block the certification flow.
+     */
+    private function createRejectionIncident(Result $result, string $level, string $reason): void
+    {
+        try {
+            $result->loadMissing('pollingStation');
+            $station = $result->pollingStation;
+
+            // Resolve admin area via hierarchy
+            $adminArea = DB::table('administrative_hierarchy as aa')
+                ->join('administrative_hierarchy as con', 'con.parent_id', '=', 'aa.id')
+                ->join('administrative_hierarchy as w',   'w.parent_id',   '=', 'con.id')
+                ->join('polling_stations as ps',          'ps.ward_id',    '=', 'w.id')
+                ->where('ps.id', $result->polling_station_id)
+                ->select('aa.id', 'aa.name')
+                ->first();
+
+            Incident::create([
+                'election_id'              => $result->election_id,
+                'result_id'                => $result->id,
+                'type'                     => 'rejection',
+                'administrative_area_id'   => $adminArea?->id,
+                'administrative_area_name' => $adminArea?->name,
+                'polling_station_id'       => $result->polling_station_id,
+                'polling_station_name'     => $station?->name,
+                'description'              => "Result rejected at {$level} level: {$reason}",
+            ]);
+
+            // Bust operations dashboard cache
+            Cache::forget('election_operations_dashboard');
+        } catch (\Throwable $e) {
+            Log::warning('[Incident] Failed to create rejection incident: ' . $e->getMessage());
+        }
+    }
 
     private function promoteToNextLevel(Result $result): void
     {
@@ -328,8 +365,7 @@ class CertificationWorkflowService
                 'certification_status_at_version'=> $result->certification_status,
             ]);
         } catch (\Throwable $e) {
-            // Non-fatal — don't fail the whole certification over a snapshot error
-            \Illuminate\Support\Facades\Log::warning('[CertificationWorkflow] version snapshot failed: ' . $e->getMessage());
+            Log::warning('[CertificationWorkflow] version snapshot failed: ' . $e->getMessage());
         }
     }
 
@@ -337,5 +373,6 @@ class CertificationWorkflowService
     {
         Election::forgetPublicCaches($result->election_id, $result->election?->status);
         Cache::forget('chairman_dashboard_stats');
+        Cache::forget('election_operations_dashboard');
     }
 }

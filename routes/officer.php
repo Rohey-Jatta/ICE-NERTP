@@ -5,11 +5,13 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
 use App\Models\AuditLog;
 use App\Models\Election;
 use App\Models\Candidate;
+use App\Models\Incident;
 use App\Models\PollingStation;
 use App\Models\Result;
 use App\Models\ResultCandidateVote;
@@ -122,7 +124,6 @@ Route::middleware(['auth', 'role:polling-officer'])
         }
 
         // A result that is NOT editable (already in pipeline for this active election).
-        // This includes resubmitted rejected results that have already been resubmitted.
         $existingResult = Result::where('polling_station_id', $station->id)
             ->where('election_id', $election->id)
             ->whereIn('certification_status', Result::CERTIFICATION_PIPELINE_STATUSES)
@@ -203,13 +204,11 @@ Route::middleware(['auth', 'role:polling-officer'])
         ]);
 
         // Allow submissions while election is open: active, results_pending, or certifying.
-        // 'certified' means the Chairman has explicitly closed the election — block submissions.
         $election = Election::where('id', $request->election_id)
             ->whereIn('status', ['active', 'results_pending', 'certifying'])
             ->first();
 
         if (!$election) {
-            // Give a helpful, specific error depending on whether the election is closed vs missing
             $closedElection = Election::where('id', $request->election_id)
                 ->whereIn('status', ['certified', 'archived'])
                 ->first();
@@ -308,6 +307,32 @@ Route::middleware(['auth', 'role:polling-officer'])
                 }
 
                 \App\Jobs\ProcessResultSubmission::dispatch($existingResult->fresh());
+
+                // ── Auto-create Resubmission Incident ────────────────────
+                try {
+                    $adminAreaInfo = DB::table('administrative_hierarchy as aa')
+                        ->join('administrative_hierarchy as con', 'con.parent_id', '=', 'aa.id')
+                        ->join('administrative_hierarchy as w',   'w.parent_id',   '=', 'con.id')
+                        ->where('w.id', $station->ward_id)
+                        ->select('aa.id', 'aa.name')
+                        ->first();
+
+                    Incident::create([
+                        'election_id'              => $election->id,
+                        'result_id'                => $existingResult->id,
+                        'type'                     => 'resubmission',
+                        'administrative_area_id'   => $adminAreaInfo?->id,
+                        'administrative_area_name' => $adminAreaInfo?->name,
+                        'polling_station_id'       => $station->id,
+                        'polling_station_name'     => $station->name,
+                        'description'              => 'Result resubmitted after rejection',
+                    ]);
+
+                    Cache::forget('election_operations_dashboard');
+                } catch (\Throwable $e) {
+                    Log::warning('[Incident] Failed to create resubmission incident: ' . $e->getMessage());
+                }
+                // ── End resubmission incident ─────────────────────────────
 
                 return redirect()->route('officer.submissions')
                     ->with('success', 'Result resubmitted successfully!');
