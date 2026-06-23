@@ -44,7 +44,7 @@ export default function ConstituencyDashboard({ auth, constituency, statistics }
                 {statistics?.pending > 0 && (
                     <div className="mb-6 p-4 bg-pink-500/10 border border-pink-500/40 rounded-xl flex items-center gap-3">
                         <div className="w-3 h-3 bg-pink-400 rounded-full animate-pulse flex-shrink-0" />
-                        <p className="text-pink-500">
+                        <p className="text-pink-600">
                             <strong>{statistics.pending} result{statistics.pending !== 1 ? 's' : ''}</strong> awaiting your constituency certification
                         </p>
                         <Link
@@ -101,10 +101,10 @@ export default function ConstituencyDashboard({ auth, constituency, statistics }
                             className="group p-5 bg-pink-500/10 hover:bg-pink-500/20 border border-pink-500/30 rounded-xl transition-all block"
                         >
                             <div className="flex items-center gap-3 mb-2">
-                                <div className="w-8 h-8 bg-pink-500/20 rounded-lg flex items-center justify-center text-pink-400">⏳</div>
+                                <div className="w-8 h-8 bg-pink-500/20 rounded-lg flex items-center justify-center text-pink-500">⏳</div>
                                 <div className="text-lg font-bold text-iec-navy">Approval Queue</div>
                             </div>
-                            <div className="text-pink-300 text-sm">
+                            <div className="text-pink-500 text-sm">
                                 {statistics?.pending > 0
                                     ? `${statistics.pending} ward-certified result${statistics.pending !== 1 ? 's' : ''} pending`
                                     : 'No results pending'}

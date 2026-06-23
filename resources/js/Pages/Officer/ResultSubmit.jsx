@@ -152,7 +152,7 @@ export default function ResultSubmit({ auth, station, election, candidates = [],
 
                 {!election && (
                     <div className="mb-6 p-4 bg-amber-500/10 border border-amber-500/40 rounded-xl">
-                        <p className="text-amber-300 text-sm">⚠ No active election found. Contact the administrator.</p>
+                        <p className="text-amber-500 text-sm">⚠ No active election found. Contact the administrator.</p>
                     </div>
                 )}
 
@@ -205,12 +205,12 @@ export default function ResultSubmit({ auth, station, election, candidates = [],
                             </div>
 
                             {candidateError && (
-                                <div className="mt-3 p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-red-300 text-xs">
+                                <div className="mt-3 p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-red-500 text-xs">
                                     ⚠ {candidateError}
                                 </div>
                             )}
                             {errors.candidate_votes && (
-                                <p className="text-red-400 text-xs mt-2">{errors.candidate_votes}</p>
+                                <p className="text-red-500 text-xs mt-2">{errors.candidate_votes}</p>
                             )}
                         </div>
                     )}
@@ -223,19 +223,19 @@ export default function ResultSubmit({ auth, station, election, candidates = [],
 
                     <div className="bg-white rounded-xl p-6 border border-slate-200">
                         <h2 className="text-iec-navy font-bold text-lg mb-1">Vote Totals</h2>
-                        <p className="text-slate-500 text-xs mb-4">Valid + Rejected must equal Total Votes Cast</p>
+                        <p className="text-slate-600 text-xs mb-4">Valid + Rejected must equal Total Votes Cast</p>
 
                         <div className="grid grid-cols-2 gap-4">
                             <div className="col-span-2 sm:col-span-1">
                                 <label className="block text-slate-600 text-sm font-semibold mb-2">
-                                    Registered Voters <span className="text-red-400">*</span>
+                                    Registered Voters <span className="text-teal-500">*</span>
                                 </label>
                                 <input type="number" min="1"
                                     value={data.registered_voters}
                                     onChange={(e) => setData('registered_voters', e.target.value)}
                                     className="w-full px-4 py-3 bg-white border border-slate-200 rounded-lg text-iec-navy font-mono focus:outline-none focus:border-blue-500"
                                     placeholder="0" required />
-                                {errors.registered_voters && <p className="text-red-400 text-xs mt-1">{errors.registered_voters}</p>}
+                                {errors.registered_voters && <p className="text-red-500 text-xs mt-1">{errors.registered_voters}</p>}
                             </div>
 
                             <div className="col-span-2 sm:col-span-1">
@@ -247,12 +247,12 @@ export default function ResultSubmit({ auth, station, election, candidates = [],
                                     onChange={(e) => setData('total_votes_cast', e.target.value)}
                                     className="w-full px-4 py-3 bg-white border border-slate-200 rounded-lg text-iec-navy font-mono focus:outline-none focus:border-blue-500"
                                     placeholder="0" required />
-                                {errors.total_votes_cast && <p className="text-red-400 text-xs mt-1">{errors.total_votes_cast}</p>}
+                                {errors.total_votes_cast && <p className="text-red-500 text-xs mt-1">{errors.total_votes_cast}</p>}
                             </div>
 
                             <div>
                                 <label className="block text-slate-600 text-sm font-semibold mb-2">
-                                    Valid Votes <span className="text-red-400">*</span>
+                                    Valid Votes <span className="text-teal-400">*</span>
                                 </label>
                                 <input type="number" min="0"
                                     value={data.valid_votes}
@@ -263,18 +263,18 @@ export default function ResultSubmit({ auth, station, election, candidates = [],
 
                             <div>
                                 <label className="block text-slate-600 text-sm font-semibold mb-2">
-                                    Rejected Ballots <span className="text-red-400">*</span>
+                                    Rejected Ballots <span className="text-red-500">*</span>
                                 </label>
                                 <input type="number" min="0"
                                     value={data.rejected_votes}
                                     onChange={(e) => setData('rejected_votes', e.target.value)}
-                                    className="w-full px-4 py-3 bg-white border border-red-600/30 rounded-lg text-red-300 font-mono focus:outline-none focus:border-red-500"
+                                    className="w-full px-4 py-3 bg-white border border-red-600/30 rounded-lg text-red-500 font-mono focus:outline-none focus:border-red-500"
                                     placeholder="0" required />
                             </div>
                         </div>
 
                         {totalsError && (
-                            <div className="mt-3 p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-red-300 text-xs">
+                            <div className="mt-3 p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-red-500 text-xs">
                                 ⚠ {totalsError}
                             </div>
                         )}
@@ -327,7 +327,7 @@ export default function ResultSubmit({ auth, station, election, candidates = [],
                             </div>
                             <input type="file" accept="image/*" onChange={handlePhotoChange} className="hidden" />
                         </label>
-                        {errors.photo && <p className="text-red-400 text-xs mt-1">{errors.photo}</p>}
+                        {errors.photo && <p className="text-red-500 text-xs mt-1">{errors.photo}</p>}
                     </div>
 
                     <div className="flex gap-4">
@@ -346,7 +346,7 @@ export default function ResultSubmit({ auth, station, election, candidates = [],
                     </div>
 
                     {errors.error && (
-                        <div className="p-4 bg-red-500/20 border border-red-500/40 rounded-xl text-red-300 text-sm">
+                        <div className="p-4 bg-red-500/20 border border-red-500/40 rounded-xl text-red-500 text-sm">
                             {errors.error}
                         </div>
                     )}

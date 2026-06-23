@@ -16,12 +16,12 @@ export default function AdminAreaAnalytics({ auth, adminArea, stats = {}, consti
 
                 {/* Header */}
                 <div className="mb-6">
-                    <Link href="/admin-area/dashboard" className="text-slate-500 hover:text-iec-navy text-sm mb-2 inline-flex items-center gap-1">
+                    <Link href="/admin-area/dashboard" className="text-slate-600 hover:text-iec-navy text-sm mb-2 inline-flex items-center gap-1">
                         Admin-Area Dashboard
                     </Link>
                     <h1 className="text-3xl font-bold text-iec-navy">Admin-Area Analytics</h1>
                     {adminArea?.name && <p className="text-iec-pink-600 mt-1">{adminArea.name}</p>}
-                    <p className="text-slate-500 text-sm mt-1">
+                    <p className="text-slate-600 text-sm mt-1">
                         Statistical overview across all constituencies in your area
                     </p>
                 </div>
@@ -33,12 +33,12 @@ export default function AdminAreaAnalytics({ auth, adminArea, stats = {}, consti
                         { label: 'Certified',       value: stats.certified          || 0,               color: 'text-iec-pink-600'    },
                         { label: 'Total Wards',     value: stats.totalWards         || 0,               color: 'text-iec-pink-600'    },
                         { label: 'Total Votes',     value: (stats.totalVotes || 0).toLocaleString(),    color: 'text-iec-navy'       },
-                        { label: 'Avg Turnout',     value: `${stats.avgTurnout || 0}%`,                 color: 'text-amber-300'   },
+                        { label: 'Avg Turnout',     value: `${stats.avgTurnout || 0}%`,                 color: 'text-amber-600'   },
                         { label: 'Cert. Rate',      value: `${certificationRate}%`,                     color: 'text-iec-pink-600'  },
                     ].map((card, i) => (
                         <div key={i} className="bg-white rounded-xl p-5 border border-slate-200 min-w-0 overflow-hidden">
                             <div className={`text-2xl font-bold mb-1 break-words ${card.color}`}>{card.value}</div>
-                            <div className="text-slate-500 text-xs">{card.label}</div>
+                            <div className="text-slate-600 text-xs">{card.label}</div>
                         </div>
                     ))}
                 </div>
@@ -56,7 +56,7 @@ export default function AdminAreaAnalytics({ auth, adminArea, stats = {}, consti
                                 style={{ width: `${certificationRate}%` }}
                             />
                         </div>
-                        <div className="flex justify-between text-xs text-slate-500 mt-2">
+                        <div className="flex justify-between text-xs text-slate-600 mt-2">
                             <span>{stats.certified} constituencies certified</span>
                             <span>{(stats.totalConstituencies || 0) - (stats.certified || 0)} remaining</span>
                         </div>
@@ -69,16 +69,16 @@ export default function AdminAreaAnalytics({ auth, adminArea, stats = {}, consti
                         <h2 className="text-lg font-bold text-iec-navy mb-4">Turnout Analysis</h2>
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                             <div className="bg-white p-4 rounded-lg text-center">
-                                <div className="text-slate-500 text-sm mb-1">Average Turnout</div>
+                                <div className="text-slate-600 text-sm mb-1">Average Turnout</div>
                                 <div className="text-iec-navy font-bold text-3xl">{stats.avgTurnout}%</div>
                             </div>
                             <div className="bg-white p-4 rounded-lg text-center">
-                                <div className="text-slate-500 text-sm mb-1">Highest Turnout</div>
+                                <div className="text-slate-600 text-sm mb-1">Highest Turnout</div>
                                 <div className="text-iec-pink-600 font-bold text-3xl">{stats.highestTurnout}%</div>
                             </div>
                             <div className="bg-white p-4 rounded-lg text-center">
-                                <div className="text-slate-500 text-sm mb-1">Lowest Turnout</div>
-                                <div className="text-amber-300 font-bold text-3xl">{stats.lowestTurnout}%</div>
+                                <div className="text-slate-600 text-sm mb-1">Lowest Turnout</div>
+                                <div className="text-amber-600 font-bold text-3xl">{stats.lowestTurnout}%</div>
                             </div>
                         </div>
                     </div>
@@ -94,8 +94,8 @@ export default function AdminAreaAnalytics({ auth, adminArea, stats = {}, consti
                                     <div className="flex justify-between items-center mb-1 flex-wrap gap-1">
                                         <span className="text-slate-600 text-sm font-medium truncate">{constituency.name}</span>
                                         <div className="flex items-center gap-3 text-sm">
-                                            <span className="text-slate-500">{(constituency.votes || 0).toLocaleString()} votes</span>
-                                            <span className="text-slate-500">{constituency.turnout}% turnout</span>
+                                            <span className="text-slate-600">{(constituency.votes || 0).toLocaleString()} votes</span>
+                                            <span className="text-slate-600">{constituency.turnout}% turnout</span>
                                             <span className="text-iec-navy font-bold w-10 text-right">{constituency.progress}%</span>
                                         </div>
                                     </div>
@@ -117,8 +117,8 @@ export default function AdminAreaAnalytics({ auth, adminArea, stats = {}, consti
 
                 {constituencies.length === 0 && (
                     <div className="bg-white rounded-xl p-12 border border-slate-200 text-center">
-                        <p className="text-slate-500">No constituency analytics available yet.</p>
-                        <p className="text-slate-500 text-sm mt-1">Data will appear once results are submitted and certified.</p>
+                        <p className="text-slate-600">No constituency analytics available yet.</p>
+                        <p className="text-slate-600 text-sm mt-1">Data will appear once results are submitted and certified.</p>
                     </div>
                 )}
             </div>

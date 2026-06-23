@@ -66,14 +66,14 @@ export default function WardDashboard({ auth, ward, pendingResults, statistics }
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
                     <div className="bg-white rounded-xl p-5 border border-slate-200">
                         <div className="text-3xl font-bold text-iec-pink-600">{pendingResults || 0}</div>
-                        <div className="text-slate-500 text-sm mt-1">Pending Certification</div>
+                        <div className="text-slate-600 text-sm mt-1">Pending Certification</div>
                     </div>
                     <div className="bg-white rounded-xl p-5 border border-slate-200">
                         <div className="text-3xl font-bold text-green-600">{statistics?.approved || 0}</div>
                         <div className="text-slate-500 text-sm mt-1">Ward Certified</div>
                     </div>
                     <div className="bg-white rounded-xl p-5 border border-slate-200">
-                        <div className="text-3xl font-bold text-red-500">{statistics?.rejected || 0}</div>
+                        <div className="text-3xl font-bold text-red-600">{statistics?.rejected || 0}</div>
                         <div className="text-slate-500 text-sm mt-1">Rejected / Returned</div>
                     </div>
                     <div className="bg-white rounded-xl p-5 border border-slate-200">
@@ -136,10 +136,10 @@ export default function WardDashboard({ auth, ward, pendingResults, statistics }
                             className="group p-5 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 rounded-xl transition-all"
                         >
                             <div className="flex items-center gap-3 mb-2">
-                                <div className="w-8 h-8 bg-red-500/20 rounded-lg flex items-center justify-center text-red-400">✗</div>
+                                <div className="w-8 h-8 bg-red-500/20 rounded-lg flex items-center justify-center text-red-600">✗</div>
                                 <div className="text-lg font-bold text-iec-navy">Rejected Results</div>
                             </div>
-                            <div className="text-red-300 text-sm">{statistics?.rejected || 0} results returned to officers</div>
+                            <div className="text-red-600 text-sm">{statistics?.rejected || 0} results returned to officers</div>
                         </Link>
 
                         <Link

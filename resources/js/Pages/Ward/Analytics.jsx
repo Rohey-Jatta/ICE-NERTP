@@ -24,8 +24,8 @@ export default function WardAnalytics({ auth, ward, stats = {}, stationBreakdown
                     {[
                         { label: 'Total Stations', value: stats.totalStations || 0, color: 'text-iec-navy' },
                         { label: 'Certified',       value: stats.certified     || 0, color: 'text-iec-pink-600' },
-                        { label: 'Pending',         value: stats.pending       || 0, color: 'text-amber-300' },
-                        { label: 'Rejected',        value: stats.rejected      || 0, color: 'text-red-300' },
+                        { label: 'Pending',         value: stats.pending       || 0, color: 'text-amber-600' },
+                        { label: 'Rejected',        value: stats.rejected      || 0, color: 'text-red-600' },
                         { label: 'Total Votes',     value: (stats.totalVotes || 0).toLocaleString(), color: 'text-iec-navy' },
                         { label: 'Turnout Rate',    value: `${stats.turnoutRate || 0}%`, color: 'text-iec-pink-600' },
                     ].map((card, i) => (
@@ -76,9 +76,9 @@ export default function WardAnalytics({ auth, ward, stats = {}, stationBreakdown
                                     {stationBreakdown.map((station, i) => {
                                         const statusColors = {
                                             'Certified':    'bg-iec-pink-500/20 text-iec-pink-600',
-                                            'Pending':      'bg-amber-500/20 text-amber-300',
-                                            'Submitted':    'bg-amber-500/20 text-amber-300',
-                                            'Rejected':     'bg-red-500/20 text-red-300',
+                                            'Pending':      'bg-amber-500/20 text-amber-600',
+                                            'Submitted':    'bg-amber-500/20 text-amber-600',
+                                            'Rejected':     'bg-red-500/20 text-red-600',
                                             'Not Reported': 'bg-slate-100 text-slate-500',
                                         };
                                         return (
@@ -106,8 +106,8 @@ export default function WardAnalytics({ auth, ward, stats = {}, stationBreakdown
 
                 {stationBreakdown.length === 0 && (
                     <div className="bg-white rounded-xl p-12 border border-slate-200 text-center">
-                        <p className="text-slate-500">No station data available yet.</p>
-                        <p className="text-slate-500 text-sm mt-1">Data will appear once results are submitted.</p>
+                        <p className="text-slate-600">No station data available yet.</p>
+                        <p className="text-slate-600 text-sm mt-1">Data will appear once results are submitted.</p>
                     </div>
                 )}
             </div>

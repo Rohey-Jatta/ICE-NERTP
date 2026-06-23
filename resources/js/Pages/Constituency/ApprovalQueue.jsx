@@ -61,7 +61,7 @@ export default function ConstituencyApprovalQueue({
     ];
 
     const tabColors = {
-        pink:  { active: 'bg-iec-pink-500 text-white', dot: 'bg-pink-400' },
+        pink:  { active: 'bg-iec-pink 500 text-white', dot: 'bg-pink-400' },
         teal:  { active: 'bg-iec-pink-500 text-white',  dot: 'bg-teal-400' },
         red:   { active: 'bg-red-500 text-white',   dot: 'bg-red-400' },
         slate: { active: 'bg-slate-500 text-iec-navy', dot: 'bg-slate-400' },
@@ -121,7 +121,7 @@ export default function ConstituencyApprovalQueue({
         <AppLayout user={auth?.user}>
             <div className="container mx-auto px-4 py-8">
                 <div className="mb-6">
-                    <Link href="/constituency/dashboard" className="text-slate-500 hover:text-iec-navy text-sm mb-2 inline-flex items-center gap-1">
+                    <Link href="/constituency/dashboard" className="text-slate-600 hover:text-iec-navy text-sm mb-2 inline-flex items-center gap-1">
                         ← Back to Constituency Dashboard
                     </Link>
                     <h1 className="text-3xl font-bold text-iec-navy">Constituency Approval Queue</h1>
@@ -198,14 +198,14 @@ export default function ConstituencyApprovalQueue({
                                                     <span className="px-2 py-0.5 rounded-full text-xs bg-pink-500/20 text-pink-700">⚠ Anomaly</span>
                                                 )}
                                             </div>
-                                            <p className="text-slate-500 text-sm">Submitted: {result.submitted_at}</p>
+                                            <p className="text-slate-600 text-sm">Submitted: {result.submitted_at}</p>
                                         </div>
                                         <div className="text-right text-sm flex-shrink-0">
-                                            <div className="text-slate-500">Party Status</div>
+                                            <div className="text-slate-600">Party Status</div>
                                             <div className={`font-semibold ${
-                                                result.party_acceptances.length === 0 ? 'text-slate-500' :
+                                                result.party_acceptances.length === 0 ? 'text-slate-600' :
                                                 result.party_acceptances.every(p => ['accepted','accepted_with_reservation'].includes(p.status))
-                                                    ? 'text-green-600' : 'text-pink-600'
+                                                    ? 'text-green-700' : 'text-pink-700'
                                             }`}>
                                                 {result.party_acceptances.length === 0 ? 'N/A' :
                                                     `${result.party_acceptances.filter(p => p.status !== 'pending').length}/${result.party_acceptances.length} Responded`}
@@ -245,12 +245,12 @@ export default function ConstituencyApprovalQueue({
                                                     <div key={idx} className="flex items-center gap-3">
                                                         <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: cv.party_color }} />
                                                         <span className="text-slate-600 text-sm w-36 truncate">{cv.candidate}</span>
-                                                        <span className="text-xs text-slate-500 w-10">{cv.party}</span>
+                                                        <span className="text-xs text-slate-600 w-10">{cv.party}</span>
                                                         <div className="flex-1 bg-white rounded-full h-1.5">
                                                             <div className="h-1.5 rounded-full" style={{ width: `${cv.percentage}%`, backgroundColor: cv.party_color }} />
                                                         </div>
                                                         <span className="text-iec-navy text-sm font-semibold w-16 text-right">{cv.votes?.toLocaleString()}</span>
-                                                        <span className="text-slate-500 text-xs w-10 text-right">{cv.percentage}%</span>
+                                                        <span className="text-slate-600 text-xs w-10 text-right">{cv.percentage}%</span>
                                                     </div>
                                                 ))}
                                             </div>
@@ -285,15 +285,15 @@ export default function ConstituencyApprovalQueue({
                                     {result.ward_cert_comments && (
                                         <div className="mx-5 mb-4 p-3 bg-iec-pink-500/10 border border-blue-500/30 rounded-lg">
                                             <div className="text-xs text-iec-pink-800 font-semibold mb-1">📋 Ward Approver Note</div>
-                                            <div className="text-blue-200 text-sm">{result.ward_cert_comments}</div>
+                                            <div className="text-blue-500 text-sm">{result.ward_cert_comments}</div>
                                         </div>
                                     )}
 
                                     {/* Prior rejection reason */}
                                     {result.last_rejection_reason && (
                                         <div className="mx-5 mb-4 p-3 bg-red-500/10 border border-red-500/30 rounded-lg">
-                                            <div className="text-xs text-red-600 font-semibold mb-1">Previous Rejection Reason</div>
-                                            <div className="text-red-600 text-sm">{result.last_rejection_reason}</div>
+                                            <div className="text-xs text-red-700 font-semibold mb-1">Previous Rejection Reason</div>
+                                            <div className="text-red-700 text-sm">{result.last_rejection_reason}</div>
                                         </div>
                                     )}
 
@@ -371,13 +371,13 @@ export default function ConstituencyApprovalQueue({
                             </div>
 
                             {flash && (
-                                <div className={`p-3 rounded-lg text-sm ${flash.type === 'error' ? 'bg-red-500/20 text-red-600' : 'bg-iec-pink-500/20 text-iec-pink-700'}`}>
+                                <div className={`p-3 rounded-lg text-sm ${flash.type === 'error' ? 'bg-red-500/20 text-red-700' : 'bg-iec-pink-500/20 text-iec-pink-700'}`}>
                                     {flash.text}
                                 </div>
                             )}
 
                             <div className="bg-white border border-slate-200 rounded-xl p-4">
-                                <label className="block text-gray-200 font-semibold mb-2 text-sm">
+                                <label className="block text-gray-500 font-semibold mb-2 text-sm">
                                     {ACTION_CONFIG[action].commentLabel}
                                     {ACTION_CONFIG[action].commentReq && <span className="text-red-700 ml-1">*</span>}
                                 </label>

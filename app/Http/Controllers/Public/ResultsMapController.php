@@ -70,6 +70,18 @@ class ResultsMapController extends Controller
         $aggKey = "results_map_agg_v4_{$election->id}";
         $agg    = Cache::remember($aggKey, 300, fn() => $this->computeRegionAggregates($election));
 
+        // Compute a single banner message (or null) — prevents duplicate banners
+        $stationsWithAnyResult = collect($stations)->filter(fn($s) => isset($s->status) && $s->status !== 'not_reported')->count();
+        $stationsWithCertified = collect($stations)->filter(fn($s) => isset($s->status) && $s->status === 'nationally_certified')->count();
+        $totalStations         = count($stations);
+
+        $bannerMessage = null;
+        if ($stationsWithCertified === 0 && $stationsWithAnyResult > 0) {
+            $bannerMessage = "{$stationsWithAnyResult} of {$totalStations} station(s) have submitted results — candidate totals will appear once the IEC Chairman certifies them.";
+        } elseif ($stationsWithAnyResult === 0) {
+            $bannerMessage = "No results have been submitted yet for {$election->name}.";
+        }
+
         return Inertia::render('Public/ResultsMap', [
             'stations'           => $stations,
             'regions'            => $agg['regions'],
@@ -83,6 +95,7 @@ class ResultsMapController extends Controller
             ],
             'elections'          => $availableElections,
             'selectedElectionId' => $election->id,
+            'bannerMessage'      => $bannerMessage, // single computed message passed to frontend
         ]);
     }
 
@@ -114,9 +127,6 @@ class ResultsMapController extends Controller
             if ($election) return $election;
         }
 
-        // Prefer the CURRENT operational election; fall back to the most
-        // recent results_pending/certified if nothing is currently active/
-        // submitting/certifying, so the public page is never blank.
         return $this->electionResolver->currentOrNull()
             ?? Election::where('status', 'results_pending')
                 ->latest('start_date')
@@ -126,18 +136,6 @@ class ResultsMapController extends Controller
                 ->first();
     }
 
-    /**
-     * Build the stations array for the Leaflet map.
-     *
-     * Every station always shows its pipeline status. Vote totals, the
-     * candidate breakdown, the result-sheet photo, and party representative
-     * reactions are ONLY INCLUDED once that result has been NATIONALLY
-     * CERTIFIED (published by the IEC Chairman).
-     *
-     * Stations are no longer filtered by polling_stations.election_id —
-     * every active station with coordinates is included; only the LEFT
-     * JOIN to `results` is scoped to the election being viewed.
-     */
     private function computeStationsData(Election $election): array
     {
         $latestResults = <<<SQL
@@ -236,13 +234,6 @@ SQL;
         })->toArray();
     }
 
-    /**
-     * Per-region (admin_area) leading candidate + candidate breakdown, plus
-     * a national scorecard. Only NATIONALLY CERTIFIED (published) results
-     * are aggregated. Stations are no longer scoped by election_id — every
-     * active station counts toward the totals/denominators; only the
-     * `results` join is scoped to this specific election.
-     */
     private function computeRegionAggregates(Election $election): array
     {
         $voteRows = DB::table('polling_stations as ps')
@@ -313,12 +304,27 @@ SQL;
                 'pct' => $total > 0 ? round($c['votes'] / $total * 100, 1) : 0,
             ], $cands);
 
+            // Count stations with ANY submitted result (not just certified) for reporting_pct
+            $submittedCount = DB::table('results')
+                ->where('election_id', $election->id)
+                ->whereIn('polling_station_id', function($sub) use ($name) {
+                    $sub->select('ps.id')
+                        ->from('polling_stations as ps')
+                        ->join('administrative_hierarchy as w', 'ps.ward_id', '=', 'w.id')
+                        ->join('administrative_hierarchy as con', 'w.parent_id', '=', 'con.id')
+                        ->join('administrative_hierarchy as aa', 'con.parent_id', '=', 'aa.id')
+                        ->where('aa.name', $name)
+                        ->where('ps.is_active', true);
+                })
+                ->distinct('polling_station_id')
+                ->count('polling_station_id');
+
             $regions[] = [
                 'name'              => $name,
                 'total_stations'    => (int) $cnt->total_stations,
-                'reported_stations' => (int) $cnt->reported_stations,
+                'reported_stations' => $submittedCount, // any submission, not just certified
                 'reporting_pct'     => $cnt->total_stations > 0
-                    ? round($cnt->reported_stations / $cnt->total_stations * 100)
+                    ? round($submittedCount / $cnt->total_stations * 100)
                     : 0,
                 'total_votes'       => $total,
                 'leader'            => $cands[0] ?? null,
@@ -350,7 +356,11 @@ SQL;
         ], $national);
 
         $totalStations    = (int) $countRows->sum('total_stations');
-        $reportedStations = (int) $countRows->sum('reported_stations');
+        // For national reporting_pct, use any submission
+        $totalSubmitted   = DB::table('results')
+            ->where('election_id', $election->id)
+            ->distinct('polling_station_id')
+            ->count('polling_station_id');
 
         return [
             'regions'  => $regions,
@@ -358,19 +368,14 @@ SQL;
                 'candidates'        => $national,
                 'total_votes'       => $nationalTotal,
                 'total_stations'    => $totalStations,
-                'reported_stations' => $reportedStations,
+                'reported_stations' => $totalSubmitted,
                 'reporting_pct'     => $totalStations > 0
-                    ? round($reportedStations / $totalStations * 100)
+                    ? round($totalSubmitted / $totalStations * 100)
                     : 0,
             ],
         ];
     }
 
-    /**
-     * Per-constituency leader + totals, keyed by parent region (admin_area)
-     * name. Only nationally-certified results are counted. Stations are
-     * universal (is_active = true) — only the results join is election-specific.
-     */
     private function computeConstituencies(Election $election): array
     {
         $voteRows = DB::table('polling_stations as ps')
@@ -459,10 +464,6 @@ SQL;
         return $byRegion;
     }
 
-    /**
-     * Per-ward leader + totals. Only nationally-certified results counted.
-     * Stations are universal (is_active = true).
-     */
     private function computeWards(Election $election): array
     {
         $voteRows = DB::table('polling_stations as ps')

@@ -51,8 +51,7 @@ class ResultsSummaryController extends Controller
         // Prefer the CURRENT operational election (active, submitting,
         // certifying) per CurrentElectionResolver. Falls back to
         // results_pending then certified only when nothing is currently
-        // operational — satisfies rule #7 (most recent qualifying election)
-        // while still letting the public view recently-closed elections.
+        // operational.
         if (!$electionModel) {
             $electionModel = $this->electionResolver->currentOrNull()
                 ?? Election::where('status', 'results_pending')
@@ -74,8 +73,10 @@ class ResultsSummaryController extends Controller
             ]);
         }
 
+        // Cache bust more aggressively — use a shorter TTL (15s) so stats
+        // update faster when officers submit results
         $cacheKey = "results_summary_v7_{$electionModel->id}_{$electionModel->status}";
-        $data     = Cache::remember($cacheKey, 30, fn() => $this->computeSummary($electionModel));
+        $data     = Cache::remember($cacheKey, 15, fn() => $this->computeSummary($electionModel));
 
         return Inertia::render('Public/Results', array_merge($data, [
             'elections'          => $availableElections,
@@ -85,8 +86,6 @@ class ResultsSummaryController extends Controller
 
     private function computeSummary(Election $election): array
     {
-        $publicStatuses = ['nationally_certified'];
-
         $electionPayload = [
             'id'         => $election->id,
             'name'       => $election->name,
@@ -95,42 +94,82 @@ class ResultsSummaryController extends Controller
             'start_date' => $election->start_date?->toDateString(),
         ];
 
-        $latestCertifiedResults = <<<SQL
+        // Use ALL submitted results (not just nationally_certified) for the
+        // stats display — this ensures the station count and vote totals
+        // update as soon as officers submit, not only after chairman certifies.
+        $allActiveStatuses = [
+            'submitted',
+            'pending_ward',
+            'ward_certified',
+            'pending_constituency',
+            'constituency_certified',
+            'pending_admin_area',
+            'admin_area_certified',
+            'pending_national',
+            'nationally_certified',
+        ];
+
+        // Latest result per station for this election (any active pipeline status)
+        $latestAllResults = <<<SQL
 SELECT DISTINCT ON (polling_station_id)
-    id, polling_station_id, total_votes_cast, valid_votes, rejected_votes
+    id, polling_station_id, total_votes_cast, valid_votes, rejected_votes, certification_status
 FROM results
 WHERE election_id = {$election->id}
-  AND certification_status = 'nationally_certified'
-ORDER BY polling_station_id, nationally_certified_at DESC NULLS LAST, id DESC
+  AND certification_status NOT IN ('submitted') -- exclude raw submitted for certified stats
+ORDER BY polling_station_id,
+    CASE WHEN certification_status = 'nationally_certified' THEN 0 ELSE 1 END,
+    nationally_certified_at DESC NULLS LAST,
+    submitted_at DESC,
+    id DESC
 SQL;
 
-        // Station universe is now ALL active stations, not stations pinned
-        // to this election_id. Results are still scoped to this election
-        // via the subquery join above.
-        $stats = DB::table('polling_stations as ps')
-            ->selectRaw('
-                COUNT(DISTINCT ps.id)                                      AS total_stations,
-                COALESCE(SUM(ps.registered_voters), 0)                    AS total_registered,
-                COUNT(DISTINCT r.id)                                       AS stations_reported,
-                COALESCE(SUM(r.total_votes_cast), 0)                      AS total_cast,
-                COALESCE(SUM(r.valid_votes), 0)                           AS valid_votes,
-                COALESCE(SUM(r.rejected_votes), 0)                        AS rejected_votes
-            ')
-            ->leftJoin(DB::raw("({$latestCertifiedResults}) AS r"), 'ps.id', '=', 'r.polling_station_id')
-            ->where('ps.is_active', true)
+        // For reporting count — count ANY result submission per station
+        $latestAnyResult = <<<SQL
+SELECT DISTINCT ON (polling_station_id)
+    id, polling_station_id, total_votes_cast, valid_votes, rejected_votes, certification_status
+FROM results
+WHERE election_id = {$election->id}
+ORDER BY polling_station_id,
+    CASE WHEN certification_status = 'nationally_certified' THEN 0 ELSE 1 END,
+    nationally_certified_at DESC NULLS LAST,
+    submitted_at DESC,
+    id DESC
+SQL;
+
+        // Total station universe (all active stations)
+        $stationStats = DB::table('polling_stations')
+            ->where('is_active', true)
+            ->selectRaw('COUNT(*) as total_stations, COALESCE(SUM(registered_voters), 0) as total_registered')
             ->first();
 
-        if (!$stats) {
-            return [
-                'election'   => $electionPayload,
-                'stats'      => null,
-                'pipeline'   => null,
-                'candidates' => [],
-                'regions'    => [],
-                'message'    => 'Results will appear as the IEC Chairman certifies and publishes them.',
-            ];
-        }
+        // Count stations that have submitted ANY result (for reporting stat)
+        $reportingStats = DB::table(DB::raw("({$latestAnyResult}) AS r"))
+            ->selectRaw('
+                COUNT(*) as stations_reported,
+                COALESCE(SUM(total_votes_cast), 0) as total_cast,
+                COALESCE(SUM(valid_votes), 0) as valid_votes,
+                COALESCE(SUM(rejected_votes), 0) as rejected_votes
+            ')
+            ->first();
 
+        $totalStations         = (int) ($stationStats->total_stations ?? 0);
+        $totalRegisteredVoters = (int) ($stationStats->total_registered ?? 0);
+        $stationsReported      = (int) ($reportingStats->stations_reported ?? 0);
+        $totalVotesCast        = (int) ($reportingStats->total_cast ?? 0);
+        $validVotes            = (int) ($reportingStats->valid_votes ?? 0);
+        $rejectedVotes         = (int) ($reportingStats->rejected_votes ?? 0);
+
+        // Build a stats object matching what the frontend expects
+        $stats = (object) [
+            'total_stations'    => $totalStations,
+            'stations_reported' => $stationsReported,
+            'total_registered'  => $totalRegisteredVoters,
+            'total_cast'        => $totalVotesCast,
+            'valid_votes'       => $validVotes,
+            'rejected_votes'    => $rejectedVotes,
+        ];
+
+        // Pipeline breakdown — for all results
         $latestResults = <<<SQL
 SELECT DISTINCT ON (polling_station_id)
     polling_station_id, certification_status
@@ -157,6 +196,7 @@ SQL;
             'certified'    => (int) ($pipelineRaw->certified    ?? 0),
         ];
 
+        // Candidates — only from nationally_certified results (published data)
         $latestCertifiedResultIds = <<<SQL
     SELECT DISTINCT ON (polling_station_id)
         id
@@ -197,7 +237,8 @@ SQL;
                 'total_votes' => (int) $c->total_votes,
             ]);
 
-        if ((int) $stats->stations_reported === 0) {
+        // Only show candidate tiles when there are nationally certified results
+        if ((int) ($pipeline['certified'] ?? 0) === 0) {
             $candidates = collect();
         }
 
@@ -207,9 +248,11 @@ SQL;
             'pipeline'   => $pipeline,
             'candidates' => $candidates,
             'regions'    => $this->computeRegions($election),
-            'message'    => (int) $stats->stations_reported === 0
-                ? 'No results have been officially published yet. Check back after the IEC Chairman certifies the first results.'
-                : null,
+            'message'    => $stationsReported === 0
+                ? 'No results have been submitted yet. Results will appear here as polling officers file their station counts.'
+                : ((int) ($pipeline['certified'] ?? 0) === 0
+                    ? 'Results are being processed. Candidate totals and vote counts publish once the IEC Chairman certifies results nationally.'
+                    : null),
         ];
     }
 

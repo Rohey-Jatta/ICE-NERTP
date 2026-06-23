@@ -3,10 +3,10 @@ import { Link, router } from '@inertiajs/react';
 
 const STATUS_CONFIG = {
     'Certified':       { color: 'bg-iec-pink-500/20 text-iec-pink-600',    dot: 'bg-teal-400'   },
-    'Pending Review':  { color: 'bg-orange-500/20 text-orange-300', dot: 'bg-orange-400' },
+    'Pending Review':  { color: 'bg-orange-500/20 text-orange-600', dot: 'bg-orange-400' },
     'In Pipeline':     { color: 'bg-iec-pink-500/20 text-iec-pink-600',     dot: 'bg-blue-400'   },
-    'In Progress':     { color: 'bg-amber-500/20 text-amber-300',   dot: 'bg-amber-400'  },
-    'No Results':      { color: 'bg-slate-100 text-slate-500',     dot: 'bg-gray-500'   },
+    'In Progress':     { color: 'bg-amber-500/20 text-amber-600',   dot: 'bg-amber-400'  },
+    'No Results':      { color: 'bg-slate-100 text-slate-600',     dot: 'bg-gray-500'   },
 };
 
 export default function ConstituencyBreakdowns({ auth, adminArea, constituencies = [], stats = {} }) {
@@ -20,12 +20,12 @@ export default function ConstituencyBreakdowns({ auth, adminArea, constituencies
 
                 {/* Header */}
                 <div className="mb-6">
-                    <Link href="/admin-area/dashboard" className="text-slate-500 hover:text-iec-navy text-sm mb-2 inline-flex items-center gap-1">
+                    <Link href="/admin-area/dashboard" className="text-slate-600 hover:text-iec-navy text-sm mb-2 inline-flex items-center gap-1">
                         Admin-Area Dashboard
                     </Link>
                     <h1 className="text-3xl font-bold text-iec-navy">Constituency Breakdowns</h1>
                     {adminArea?.name && <p className="text-iec-pink-600 mt-1">{adminArea.name}</p>}
-                    <p className="text-slate-500 text-sm mt-1">
+                    <p className="text-slate-600 text-sm mt-1">
                         Full pipeline status across all constituencies in your administrative area
                     </p>
                 </div>
@@ -45,11 +45,11 @@ export default function ConstituencyBreakdowns({ auth, adminArea, constituencies
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
                         <div className="bg-white rounded-xl p-5 border border-slate-200">
                             <div className="text-3xl font-bold text-iec-navy">{stats.total || 0}</div>
-                            <div className="text-slate-500 text-sm mt-1">Total Constituencies</div>
+                            <div className="text-slate-600 text-sm mt-1">Total Constituencies</div>
                         </div>
                         <div className="bg-white rounded-xl p-5 border border-slate-200">
                             <div className="text-3xl font-bold text-iec-pink-600">{stats.certified || 0}</div>
-                            <div className="text-slate-500 text-sm mt-1">Fully Certified</div>
+                            <div className="text-slate-600 text-sm mt-1">Fully Certified</div>
                         </div>
                         <div className="bg-white rounded-xl p-5 border border-slate-200">
                             <div className="text-3xl font-bold text-iec-pink-600">{stats.awaiting || 0}</div>
@@ -70,16 +70,16 @@ export default function ConstituencyBreakdowns({ auth, adminArea, constituencies
                             <table className="w-full">
                                 <thead className="bg-white">
                                     <tr>
-                                        <th className="text-left text-slate-500 py-4 px-5 text-sm">Constituency</th>
-                                        <th className="text-right text-slate-500 py-4 px-4 text-sm">Wards</th>
-                                        <th className="text-right text-slate-500 py-4 px-4 text-sm">Stations</th>
-                                        <th className="text-right text-slate-500 py-4 px-4 text-sm">Votes</th>
-                                        <th className="text-right text-slate-500 py-4 px-4 text-sm">Turnout</th>
-                                        <th className="text-center text-slate-500 py-4 px-4 text-sm">Area Certified</th>
-                                        <th className="text-center text-slate-500 py-4 px-4 text-sm">Pending Review</th>
-                                        <th className="text-center text-slate-500 py-4 px-4 text-sm">In Pipeline</th>
-                                        <th className="text-center text-slate-500 py-4 px-4 text-sm">Status</th>
-                                        <th className="text-center text-slate-500 py-4 px-4 text-sm">Actions</th>
+                                        <th className="text-left text-slate-600 py-4 px-5 text-sm">Constituency</th>
+                                        <th className="text-right text-slate-600 py-4 px-4 text-sm">Wards</th>
+                                        <th className="text-right text-slate-600 py-4 px-4 text-sm">Stations</th>
+                                        <th className="text-right text-slate-600 py-4 px-4 text-sm">Votes</th>
+                                        <th className="text-right text-slate-600 py-4 px-4 text-sm">Turnout</th>
+                                        <th className="text-center text-slate-600 py-4 px-4 text-sm">Area Certified</th>
+                                        <th className="text-center text-slate-600 py-4 px-4 text-sm">Pending Review</th>
+                                        <th className="text-center text-slate-600 py-4 px-4 text-sm">In Pipeline</th>
+                                        <th className="text-center text-slate-600 py-4 px-4 text-sm">Status</th>
+                                        <th className="text-center text-slate-600 py-4 px-4 text-sm">Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -95,21 +95,21 @@ export default function ConstituencyBreakdowns({ auth, adminArea, constituencies
 
                                                 {/* Area Certified / total that reached admin-area */}
                                                 <td className="py-4 px-4 text-center">
-                                                    <span className={`text-sm font-semibold ${c.certified_count > 0 ? 'text-iec-pink-600' : 'text-slate-500'}`}>
+                                                    <span className={`text-sm font-semibold ${c.certified_count > 0 ? 'text-iec-pink-600' : 'text-slate-600'}`}>
                                                         {c.certified_count}/{c.admin_level}
                                                     </span>
                                                 </td>
 
                                                 {/* Pending this approver's decision */}
                                                 <td className="py-4 px-4 text-center">
-                                                    <span className={`text-sm font-semibold ${c.pending_review > 0 ? 'text-orange-300' : 'text-slate-500'}`}>
+                                                    <span className={`text-sm font-semibold ${c.pending_review > 0 ? 'text-orange-600' : 'text-slate-600'}`}>
                                                         {c.pending_review}
                                                     </span>
                                                 </td>
 
                                                 {/* Still at ward/constituency */}
                                                 <td className="py-4 px-4 text-center">
-                                                    <span className={`text-sm font-semibold ${c.in_pipeline > 0 ? 'text-iec-pink-600' : 'text-slate-500'}`}>
+                                                    <span className={`text-sm font-semibold ${c.in_pipeline > 0 ? 'text-iec-pink-600' : 'text-slate-600'}`}>
                                                         {c.in_pipeline}
                                                     </span>
                                                 </td>
@@ -130,7 +130,7 @@ export default function ConstituencyBreakdowns({ auth, adminArea, constituencies
                                                             Review ({c.pending_review})
                                                         </button>
                                                     ) : (
-                                                        <span className="px-4 py-2 text-slate-500 text-sm">
+                                                        <span className="px-4 py-2 text-slate-600 text-sm">
                                                             {c.in_pipeline > 0 ? 'Awaiting pipeline' : c.certified_count > 0 ? 'Done ✓' : '—'}
                                                         </span>
                                                     )}
@@ -143,18 +143,18 @@ export default function ConstituencyBreakdowns({ auth, adminArea, constituencies
                         </div>
                     ) : (
                         <div className="p-12 text-center">
-                            <p className="text-slate-500">No constituency data available.</p>
-                            <p className="text-slate-500 text-sm mt-1">Configure the administrative hierarchy first.</p>
+                            <p className="text-slate-600">No constituency data available.</p>
+                            <p className="text-slate-600 text-sm mt-1">Configure the administrative hierarchy first.</p>
                         </div>
                     )}
                 </div>
 
                 {/* Pipeline explanation */}
                 <div className="mt-4 p-4 bg-slate-50 rounded-xl border border-slate-200">
-                    <p className="text-slate-500 text-xs leading-relaxed">
-                        <strong className="text-slate-500">Column guide:</strong>
+                    <p className="text-slate-600 text-xs leading-relaxed">
+                        <strong className="text-slate-600">Column guide:</strong>
                         &nbsp;<strong className="text-iec-pink-600">Area Certified</strong> — results certified by you (out of those that reached this level) &nbsp;·&nbsp;
-                        <strong className="text-orange-400">Pending Review</strong> — ready and waiting for your decision &nbsp;·&nbsp;
+                        <strong className="text-orange-600">Pending Review</strong> — ready and waiting for your decision &nbsp;·&nbsp;
                         <strong className="text-iec-pink-600">In Pipeline</strong> — still being certified at ward/constituency level below you
                     </p>
                 </div>

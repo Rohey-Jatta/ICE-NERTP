@@ -121,7 +121,7 @@ export default function WardApprovalQueue({ auth, ward, results = [], filter = '
 
                 {flash && !selectedResult && (
                     <div className={`mb-4 p-4 rounded-xl border ${
-                        flash.type === 'error' ? 'bg-red-500/20 border-red-500/50 text-red-300' : 'bg-iec-pink-500/20 border-teal-500/50 text-iec-pink-600'
+                        flash.type === 'error' ? 'bg-red-500/20 border-red-500/50 text-red-600' : 'bg-iec-pink-500/20 border-teal-500/50 text-iec-pink-600'
                     }`}>
                         {flash.text}
                     </div>
@@ -194,15 +194,15 @@ export default function WardApprovalQueue({ auth, ward, results = [], filter = '
                                                     </span>
                                                 )}
                                             </div>
-                                            <p className="text-slate-500 text-sm">
+                                            <p className="text-slate-600 text-sm">
                                                 Submitted by <strong className="text-slate-600">{result.officer}</strong> · {result.submitted_at}
                                             </p>
                                         </div>
                                         {/* Party responses shown as informational only */}
                                         <div className="text-right text-sm flex-shrink-0">
-                                            <div className="text-slate-400 text-xs">Party Responses</div>
+                                            <div className="text-slate-500 text-xs">Party Responses</div>
                                             <div className={`font-semibold text-sm ${
-                                                result.party_total === 0 ? 'text-slate-400' :
+                                                result.party_total === 0 ? 'text-slate-500' :
                                                 result.party_accepted === result.party_total ? 'text-iec-pink-600' : 'text-slate-500'
                                             }`}>
                                                 {result.party_total === 0 ? 'N/A' : `${result.party_accepted}/${result.party_total} Responded`}

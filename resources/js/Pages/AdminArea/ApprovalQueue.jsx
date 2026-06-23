@@ -4,10 +4,10 @@ import { Link, router } from '@inertiajs/react';
 import { RESULT_STATUS, getResultStatusMeta } from '@/Utils/resultStatus';
 
 const PARTY_STATUS_CONFIG = {
-    accepted:                  { label: 'Accepted',            color: 'bg-green-500/20 text-green-300 border-green-500/30',   icon: '✓' },
-    accepted_with_reservation: { label: 'Accepted (Reserved)', color: 'bg-yellow-500/20 text-yellow-300 border-yellow-500/30', icon: '⚠' },
-    rejected:                  { label: 'Rejected',            color: 'bg-red-500/20 text-red-300 border-red-500/30',         icon: '✗' },
-    pending:                   { label: 'Pending',             color: 'bg-slate-100 text-slate-600 border-slate-200',      icon: '…' },
+    accepted:                  { label: 'Accepted',            color: 'bg-green-500/20 text-green-800 border-green-500/30',   icon: '✓' },
+    accepted_with_reservation: { label: 'Accepted (Reserved)', color: 'bg-yellow-500/20 text-yellow-800 border-yellow-500/30', icon: '⚠' },
+    rejected:                  { label: 'Rejected',            color: 'bg-red-500/20 text-red-800 border-red-500/30',         icon: '✗' },
+    pending:                   { label: 'Pending',             color: 'bg-slate-100 text-slate-800 border-slate-200',      icon: '…' },
 };
 
 const ACTION_CONFIG = {
@@ -106,17 +106,17 @@ export default function AdminAreaApprovalQueue({ auth, adminArea, results = [], 
         <AppLayout user={auth?.user}>
             <div className="container mx-auto px-4 py-8">
                 <div className="mb-6">
-                    <Link href="/admin-area/dashboard" className="text-slate-500 hover:text-iec-navy text-sm mb-2 inline-flex items-center gap-1">
+                    <Link href="/admin-area/dashboard" className="text-slate-800 hover:text-iec-navy text-sm mb-2 inline-flex items-center gap-1">
                         ← Admin-Area Dashboard
                     </Link>
                     <h1 className="text-3xl font-bold text-iec-navy">Admin-Area Approval Queue</h1>
-                    {adminArea?.name && <p className="text-iec-pink-600 mt-1">{adminArea.name}</p>}
-                    <p className="text-slate-500 text-sm mt-1">Review constituency-certified results and certify at administrative area level</p>
+                    {adminArea?.name && <p className="text-iec-pink-800 mt-1">{adminArea.name}</p>}
+                    <p className="text-slate-800 text-sm mt-1">Review constituency-certified results and certify at administrative area level</p>
                 </div>
 
                 {flash && !selectedResult && (
                     <div className={`mb-4 p-4 rounded-xl border ${
-                        flash.type === 'error' ? 'bg-red-500/20 border-red-500/50 text-red-300' : 'bg-iec-pink-500/20 border-teal-500/50 text-iec-pink-600'
+                        flash.type === 'error' ? 'bg-red-500/20 border-red-500/50 text-red-600' : 'bg-iec-pink-500/20 border-teal-500/50 text-iec-pink-800'
                     }`}>
                         {flash.text}
                     </div>
@@ -130,7 +130,7 @@ export default function AdminAreaApprovalQueue({ auth, adminArea, results = [], 
                         return (
                             <button key={tab.key} onClick={() => handleFilterChange(tab.key)}
                                 className={`flex items-center gap-2 px-4 py-2 rounded-lg font-semibold text-sm transition-all ${
-                                    active ? cfg.active : 'bg-white text-slate-500 hover:bg-white border border-slate-200'
+                                    active ? cfg.active : 'bg-white text-slate-800 hover:bg-white border border-slate-200'
                                 }`}
                             >
                                 {!active && <span className={`w-2 h-2 rounded-full ${cfg.dot}`} />}
@@ -145,7 +145,7 @@ export default function AdminAreaApprovalQueue({ auth, adminArea, results = [], 
 
                 {results.length === 0 ? (
                     <div className="bg-white rounded-xl p-12 border border-slate-200 text-center">
-                        <p className="text-slate-600 text-lg">
+                        <p className="text-slate-800 text-lg">
                             {filter === 'pending' ? 'No results pending admin-area certification'
                             : filter === 'approved' ? 'No admin-area certified results yet'
                             : filter === 'rejected' ? 'No rejected results' : 'No results found'}
@@ -166,25 +166,25 @@ export default function AdminAreaApprovalQueue({ auth, adminArea, results = [], 
                                         <div className="flex-1 min-w-0">
                                             <div className="flex items-center gap-3 mb-1 flex-wrap">
                                                 <h3 className="text-lg font-bold text-iec-navy">{result.polling_station}</h3>
-                                                <span className="text-xs font-mono text-slate-500">{result.polling_station_code}</span>
+                                                <span className="text-xs font-mono text-slate-800">{result.polling_station_code}</span>
                                                 <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${statusCfg.badgeClass}`}>{statusCfg.label}</span>
                                                 {result.rejection_count > 0 && (
-                                                    <span className="px-2 py-0.5 rounded-full text-xs bg-orange-500/20 text-orange-300">
+                                                    <span className="px-2 py-0.5 rounded-full text-xs bg-orange-500/20 text-orange-800">
                                                         Rejected {result.rejection_count}×
                                                     </span>
                                                 )}
                                             </div>
-                                            <div className="flex flex-wrap gap-3 text-sm text-slate-500 mt-1">
-                                                <span>📍 <strong className="text-slate-600">{result.constituency}</strong></span>
-                                                <span>⬡ <strong className="text-slate-600">{result.ward}</strong></span>
+                                            <div className="flex flex-wrap gap-3 text-sm text-slate-800 mt-1">
+                                                <span>📍 <strong className="text-slate-800">{result.constituency}</strong></span>
+                                                <span>⬡ <strong className="text-slate-800">{result.ward}</strong></span>
                                                 <span>Submitted {result.submitted_at}</span>
                                             </div>
                                         </div>
                                         <div className="text-right text-sm flex-shrink-0">
-                                            <div className="text-slate-500">Party Status</div>
+                                            <div className="text-slate-800">Party Status</div>
                                             <div className={`font-semibold ${
-                                                result.party_total === 0 ? 'text-slate-500' :
-                                                result.party_accepted === result.party_total ? 'text-green-300' : 'text-amber-300'
+                                                result.party_total === 0 ? 'text-slate-800' :
+                                                result.party_accepted === result.party_total ? 'text-green-800' : 'text-amber-800'
                                             }`}>
                                                 {result.party_total === 0 ? 'N/A' : `${result.party_accepted}/${result.party_total} Accepted`}
                                             </div>
@@ -200,7 +200,7 @@ export default function AdminAreaApprovalQueue({ auth, adminArea, results = [], 
                                             { label: 'Turnout',    value: `${result.turnout}%` },
                                         ].map(s => (
                                             <div key={s.label} className="bg-white p-3 rounded-lg">
-                                                <div className="text-xs text-slate-500 mb-0.5">{s.label}</div>
+                                                <div className="text-xs text-slate-800 mb-0.5">{s.label}</div>
                                                 <div className="font-bold text-iec-navy">{s.value}</div>
                                             </div>
                                         ))}
@@ -209,13 +209,13 @@ export default function AdminAreaApprovalQueue({ auth, adminArea, results = [], 
                                     {/* Candidate Votes */}
                                     {result.candidate_votes?.length > 0 && (
                                         <div className="px-5 pb-4">
-                                            <div className="text-xs text-slate-500 mb-2 uppercase tracking-wide">Candidate Results</div>
+                                            <div className="text-xs text-slate-800 mb-2 uppercase tracking-wide">Candidate Results</div>
                                             <div className="space-y-2">
                                                 {result.candidate_votes.map((cv, idx) => (
                                                     <div key={idx} className="flex items-center gap-3">
                                                         <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: cv.party_color }} />
-                                                        <span className="text-slate-600 text-sm w-36 truncate">{cv.candidate}</span>
-                                                        <span className="text-xs text-slate-500 w-10">{cv.party}</span>
+                                                        <span className="text-slate-800 text-sm w-36 truncate">{cv.candidate}</span>
+                                                        <span className="text-xs text-slate-800 w-10">{cv.party}</span>
                                                         <div className="flex-1 bg-white rounded-full h-1.5">
                                                             <div className="h-1.5 rounded-full" style={{ width: `${cv.percentage || 0}%`, backgroundColor: cv.party_color }} />
                                                         </div>
@@ -229,7 +229,7 @@ export default function AdminAreaApprovalQueue({ auth, adminArea, results = [], 
                                     {/* Party Acceptance Status WITH inline comments */}
                                     {result.party_acceptances?.length > 0 && (
                                         <div className="px-5 pb-4">
-                                            <div className="text-xs text-slate-500 mb-2 uppercase tracking-wide">Party Representative Status</div>
+                                            <div className="text-xs text-slate-800 mb-2 uppercase tracking-wide">Party Representative Status</div>
                                             <div className="space-y-2">
                                                 {result.party_acceptances.map((pa, idx) => {
                                                     const cfg = PARTY_STATUS_CONFIG[pa.status] || PARTY_STATUS_CONFIG.pending;
@@ -239,7 +239,7 @@ export default function AdminAreaApprovalQueue({ auth, adminArea, results = [], 
                                                                 {cfg.icon} {pa.abbr} — {cfg.label}
                                                             </span>
                                                             {pa.comments && (
-                                                                <p className="text-xs text-slate-500 italic mt-1 ml-3 pl-2 border-l-2 border-slate-200">
+                                                                <p className="text-xs text-slate-800 italic mt-1 ml-3 pl-2 border-l-2 border-slate-200">
                                                                     "{pa.comments}"
                                                                 </p>
                                                             )}
@@ -255,20 +255,20 @@ export default function AdminAreaApprovalQueue({ auth, adminArea, results = [], 
                                         <div className="mx-5 mb-4 space-y-2">
                                             {result.ward_comments && (
                                                 <div className="p-3 bg-iec-pink-500/10 border border-blue-500/30 rounded-lg">
-                                                    <div className="text-xs text-iec-pink-600 font-semibold mb-1">📋 Ward Approver Note</div>
-                                                    <div className="text-blue-200 text-sm">{result.ward_comments}</div>
+                                                    <div className="text-xs text-iec-pink-800 font-semibold mb-1">📋 Ward Approver Note</div>
+                                                    <div className="text-blue-800 text-sm">{result.ward_comments}</div>
                                                 </div>
                                             )}
                                             {result.constituency_comments && (
                                                 <div className="p-3 bg-cyan-500/10 border border-cyan-500/30 rounded-lg">
-                                                    <div className="text-xs text-cyan-400 font-semibold mb-1">📋 Constituency Approver Note</div>
-                                                    <div className="text-cyan-200 text-sm">{result.constituency_comments}</div>
+                                                    <div className="text-xs text-cyan-800 font-semibold mb-1">📋 Constituency Approver Note</div>
+                                                    <div className="text-cyan-800 text-sm">{result.constituency_comments}</div>
                                                 </div>
                                             )}
                                             {result.area_comments && (
                                                 <div className="p-3 bg-iec-pink-500/10 border border-teal-500/30 rounded-lg">
-                                                    <div className="text-xs text-iec-pink-600 font-semibold mb-1">📋 Admin-Area Certification Note</div>
-                                                    <div className="text-teal-200 text-sm">{result.area_comments}</div>
+                                                    <div className="text-xs text-iec-pink-800 font-semibold mb-1">📋 Admin-Area Certification Note</div>
+                                                    <div className="text-teal-800 text-sm">{result.area_comments}</div>
                                                 </div>
                                             )}
                                         </div>
@@ -277,8 +277,8 @@ export default function AdminAreaApprovalQueue({ auth, adminArea, results = [], 
                                     {/* Prior rejection reason */}
                                     {result.last_rejection_reason && (
                                         <div className="mx-5 mb-4 p-3 bg-red-500/10 border border-red-500/30 rounded-lg">
-                                            <div className="text-xs text-red-400 mb-1 font-semibold">Previous Rejection Reason</div>
-                                            <div className="text-red-300 text-sm">{result.last_rejection_reason}</div>
+                                            <div className="text-xs text-red-6 mb-1 font-semibold">Previous Rejection Reason</div>
+                                            <div className="text-red-800 text-sm">{result.last_rejection_reason}</div>
                                         </div>
                                     )}
 
@@ -286,7 +286,7 @@ export default function AdminAreaApprovalQueue({ auth, adminArea, results = [], 
                                     {result.photo_url && (
                                         <div className="px-5 pb-4">
                                             <a href={result.photo_url} target="_blank" rel="noopener noreferrer"
-                                               className="inline-flex items-center gap-2 text-sm text-iec-pink-600 hover:text-iec-pink-600">
+                                               className="inline-flex items-center gap-2 text-sm text-iec-pink-800 hover:text-iec-pink-800">
                                                 📄 View Result Sheet Photo
                                             </a>
                                         </div>
@@ -325,12 +325,12 @@ export default function AdminAreaApprovalQueue({ auth, adminArea, results = [], 
                             <div className="flex items-start justify-between gap-4">
                                 <div>
                                     <h2 className="text-lg font-bold text-iec-navy">{ACTION_CONFIG[action].title}</h2>
-                                    <p className="text-slate-500 text-xs mt-0.5">
+                                    <p className="text-slate-800 text-xs mt-0.5">
                                         {selectedResult.polling_station} — {selectedResult.constituency}
                                     </p>
                                 </div>
                                 <button onClick={closePanel} disabled={processing}
-                                    className="text-slate-500 hover:text-iec-navy text-2xl leading-none w-8 h-8 flex items-center justify-center flex-shrink-0">
+                                    className="text-slate-800 hover:text-iec-navy text-2xl leading-none w-8 h-8 flex items-center justify-center flex-shrink-0">
                                     ×
                                 </button>
                             </div>
@@ -338,7 +338,7 @@ export default function AdminAreaApprovalQueue({ auth, adminArea, results = [], 
 
                         {/* Scrollable Content */}
                         <div className="px-6 py-5 overflow-y-auto flex-1 space-y-4">
-                            <div className="p-3 bg-white rounded-xl text-sm text-slate-600">
+                            <div className="p-3 bg-white rounded-xl text-sm text-slate-800">
                                 {ACTION_CONFIG[action].description}
                             </div>
 
@@ -349,22 +349,22 @@ export default function AdminAreaApprovalQueue({ auth, adminArea, results = [], 
                                     { label: 'Turnout',     value: `${selectedResult.turnout}%` },
                                 ].map(s => (
                                     <div key={s.label} className="bg-white p-3 rounded-xl text-center">
-                                        <div className="text-xs text-slate-500 mb-0.5">{s.label}</div>
+                                        <div className="text-xs text-slate-800 mb-0.5">{s.label}</div>
                                         <div className="text-iec-navy font-bold">{s.value}</div>
                                     </div>
                                 ))}
                             </div>
 
                             {flash && (
-                                <div className={`p-3 rounded-lg text-sm ${flash.type === 'error' ? 'bg-red-500/20 text-red-300' : 'bg-iec-pink-500/20 text-iec-pink-600'}`}>
+                                <div className={`p-3 rounded-lg text-sm ${flash.type === 'error' ? 'bg-red-500/20 text-red-800' : 'bg-iec-pink-500/20 text-iec-pink-800'}`}>
                                     {flash.text}
                                 </div>
                             )}
 
                             <div className="bg-white border border-slate-200 rounded-xl p-4">
-                                <label className="block text-gray-200 font-semibold mb-2 text-sm">
+                                <label className="block text-gray-800 font-semibold mb-2 text-sm">
                                     {ACTION_CONFIG[action].commentLabel}
-                                    {ACTION_CONFIG[action].commentReq && <span className="text-red-400 ml-1">*</span>}
+                                    {ACTION_CONFIG[action].commentReq && <span className="text-red-800 ml-1">*</span>}
                                 </label>
                                 <textarea
                                     value={comment}

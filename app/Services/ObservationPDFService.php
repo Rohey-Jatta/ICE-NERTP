@@ -3,8 +3,7 @@
 namespace App\Services;
 
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
-use PDF;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 
 class ObservationPDFService
@@ -20,7 +19,22 @@ class ObservationPDFService
             ->leftJoin('polling_stations', 'monitor_observations.polling_station_id', '=', 'polling_stations.id')
             ->leftJoin('administrative_hierarchy as wards', 'polling_stations.ward_id', '=', 'wards.id')
             ->select(
-                'monitor_observations.*',
+                'monitor_observations.id',
+                'monitor_observations.election_monitor_id',
+                'monitor_observations.polling_station_id',
+                'monitor_observations.election_id',
+                'monitor_observations.observation_type',
+                'monitor_observations.title',
+                'monitor_observations.observation',
+                'monitor_observations.severity',
+                'monitor_observations.photo_paths',
+                'monitor_observations.documents_paths',
+                'monitor_observations.latitude',
+                'monitor_observations.longitude',
+                'monitor_observations.is_public',
+                'monitor_observations.observed_at',
+                'monitor_observations.created_at',
+                'monitor_observations.updated_at',
                 'polling_stations.name as station_name',
                 'polling_stations.code as station_code',
                 'wards.name as ward_name'
@@ -38,21 +52,17 @@ class ObservationPDFService
         // Generate unique reference number
         $referenceNumber = 'OBS-' . str_pad($observation->id, 8, '0', STR_PAD_LEFT) . '-' . strtoupper(substr(md5($observation->id . $observation->created_at), 0, 4));
 
-        // Create PDF
-        $pdf = PDF::loadView('monitor.observation-pdf', [
+        // Create PDF using the correct facade
+        $pdf = Pdf::loadView('monitor.observation-pdf', [
             'observation'     => $observation,
             'referenceNumber' => $referenceNumber,
             'documents'       => $documents,
             'photos'          => $photos,
             'monitor'         => $monitor,
             'generatedAt'     => Carbon::now()->format('Y-m-d H:i:s'),
-        ], [], [
-            'format'       => 'A4',
-            'margin_left'  => 10,
-            'margin_right' => 10,
-            'margin_top'   => 20,
-            'margin_bottom'=> 20,
         ]);
+
+        $pdf->setPaper('A4', 'portrait');
 
         return $pdf;
     }
@@ -68,7 +78,22 @@ class ObservationPDFService
             ->leftJoin('polling_stations', 'monitor_observations.polling_station_id', '=', 'polling_stations.id')
             ->leftJoin('administrative_hierarchy as wards', 'polling_stations.ward_id', '=', 'wards.id')
             ->select(
-                'monitor_observations.*',
+                'monitor_observations.id',
+                'monitor_observations.election_monitor_id',
+                'monitor_observations.polling_station_id',
+                'monitor_observations.election_id',
+                'monitor_observations.observation_type',
+                'monitor_observations.title',
+                'monitor_observations.observation',
+                'monitor_observations.severity',
+                'monitor_observations.photo_paths',
+                'monitor_observations.documents_paths',
+                'monitor_observations.latitude',
+                'monitor_observations.longitude',
+                'monitor_observations.is_public',
+                'monitor_observations.observed_at',
+                'monitor_observations.created_at',
+                'monitor_observations.updated_at',
                 'polling_stations.name as station_name',
                 'polling_stations.code as station_code',
                 'wards.name as ward_name'
@@ -81,18 +106,14 @@ class ObservationPDFService
 
         $generatedAt = Carbon::now()->format('Y-m-d H:i:s');
 
-        $pdf = PDF::loadView('monitor.observations-batch-pdf', [
+        $pdf = Pdf::loadView('monitor.observations-batch-pdf', [
             'observations' => $observations,
             'monitor'      => $monitor,
             'generatedAt'  => $generatedAt,
             'count'        => $observations->count(),
-        ], [], [
-            'format'       => 'A4',
-            'margin_left'  => 10,
-            'margin_right' => 10,
-            'margin_top'   => 20,
-            'margin_bottom'=> 20,
         ]);
+
+        $pdf->setPaper('A4', 'portrait');
 
         return $pdf;
     }

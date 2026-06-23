@@ -88,7 +88,7 @@ export default function Submissions({ auth, submissions = [], station }) {
                         </div>
                     )}
                     {rejectedCount > 0 && (
-                        <div className="px-4 py-2 bg-red-500/15 border border-red-500/30 rounded-full text-red-300 text-sm">
+                        <div className="px-4 py-2 bg-red-500/15 border border-red-500/30 rounded-full text-red-500 text-sm">
                             ✗ {rejectedCount} rejected — action required
                         </div>
                     )}
@@ -186,8 +186,8 @@ export default function Submissions({ auth, submissions = [], station }) {
                                             {/* Rejection reason */}
                                             {submission.last_rejection_reason && (
                                                 <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-lg">
-                                                    <div className="text-xs text-red-400 font-semibold mb-1">Rejection Reason</div>
-                                                    <div className="text-red-200 text-sm"
+                                                    <div className="text-xs text-red-600 font-semibold mb-1">Rejection Reason</div>
+                                                    <div className="text-red-500 text-sm"
                                                          dangerouslySetInnerHTML={{ __html: submission.last_rejection_reason }} />
                                                 </div>
                                             )}

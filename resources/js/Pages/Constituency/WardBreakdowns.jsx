@@ -9,7 +9,7 @@ export default function WardBreakdowns({ auth, constituency, wards = [] }) {
 
     const statusColors = {
         'Fully Certified':     'bg-iec-pink-500/20 text-iec-pink-600 border-teal-500/30',
-        'Partially Certified': 'bg-amber-500/20 text-amber-300 border-amber-500/30',
+        'Partially Certified': 'bg-amber-500/20 text-amber-600 border-amber-500/30',
         'Pending':             'bg-slate-100 text-slate-600 border-slate-200',
     };
 
@@ -19,7 +19,7 @@ export default function WardBreakdowns({ auth, constituency, wards = [] }) {
 
                 {/* Header with back link */}
                 <div className="mb-6">
-                    <Link href="/constituency/dashboard" className="text-slate-500 hover:text-iec-navy text-sm mb-2 inline-flex items-center gap-1">
+                    <Link href="/constituency/dashboard" className="text-slate-600 hover:text-iec-navy text-sm mb-2 inline-flex items-center gap-1">
                         Back to Constituency Dashboard
                     </Link>
                     <h1 className="text-3xl font-bold text-iec-navy">Ward Breakdowns</h1>
