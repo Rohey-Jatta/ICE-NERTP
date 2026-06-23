@@ -75,22 +75,76 @@ function AreaRow({ name, rate }) {
     );
 }
 
-// ── Stat Pill ─────────────────────────────────────────────────────────────────
-function StatPill({ icon, label, value, bg, textColor }) {
+// ── Observation type config ────────────────────────────────────────────────────
+const OBS_TYPE_CONFIG = {
+    general:         { label: 'General',         bg: 'bg-blue-100',   text: 'text-blue-800',   icon: '📋' },
+    positive:        { label: 'Positive',        bg: 'bg-green-100',  text: 'text-green-800',  icon: '✅' },
+    process_concern: { label: 'Process Concern', bg: 'bg-amber-100',  text: 'text-amber-800',  icon: '⚠️' },
+    irregularity:    { label: 'Irregularity',    bg: 'bg-orange-100', text: 'text-orange-800', icon: '🚨' },
+    incident:        { label: 'Incident',        bg: 'bg-red-100',    text: 'text-red-800',    icon: '🔴' },
+};
+
+const SEVERITY_CONFIG = {
+    low:      { label: 'Low',      dot: 'bg-green-500',  border: 'border-green-200',  badge: 'bg-green-100 text-green-800' },
+    medium:   { label: 'Medium',   dot: 'bg-amber-500',  border: 'border-amber-200',  badge: 'bg-amber-100 text-amber-800' },
+    high:     { label: 'High',     dot: 'bg-orange-500', border: 'border-orange-200', badge: 'bg-orange-100 text-orange-800' },
+    critical: { label: 'Critical', dot: 'bg-red-600',    border: 'border-red-300',    badge: 'bg-red-100 text-red-800' },
+};
+
+// ── Observation Card ──────────────────────────────────────────────────────────
+function ObservationCard({ obs }) {
+    const type     = OBS_TYPE_CONFIG[obs.observation_type]  || OBS_TYPE_CONFIG.general;
+    const severity = SEVERITY_CONFIG[obs.severity] || SEVERITY_CONFIG.low;
+
     return (
-        <div className={`flex flex-col items-center p-2 rounded-lg ${bg}`}>
-            <span className="text-xl mb-0.5">{icon}</span>
-            <span className={`text-[10px] font-bold uppercase tracking-wide ${textColor}`}>{label}</span>
-            <span className={`text-2xl font-extrabold ${textColor}`}>{value}</span>
+        <div className={`bg-white rounded-lg border ${severity.border} p-4 flex flex-col gap-2`}>
+            {/* Header row */}
+            <div className="flex items-start justify-between gap-2">
+                <div className="flex items-center gap-2 flex-wrap flex-1 min-w-0">
+                    <span className="text-base">{type.icon}</span>
+                    <span className="font-bold text-slate-900 text-sm truncate">{obs.title}</span>
+                </div>
+                <div className="flex items-center gap-1.5 flex-shrink-0">
+                    <span className={`w-2.5 h-2.5 rounded-full ${severity.dot}`} />
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${severity.badge}`}>
+                        {severity.label}
+                    </span>
+                </div>
+            </div>
+
+            {/* Type badge */}
+            <div>
+                <span className={`text-[10px] font-semibold px-2 py-0.5 rounded ${type.bg} ${type.text}`}>
+                    {type.label}
+                </span>
+            </div>
+
+            {/* Observation text */}
+            <p className="text-xs text-slate-600 leading-relaxed line-clamp-2">{obs.observation}</p>
+
+            {/* Location + monitor info */}
+            <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[10px] text-slate-500 mt-1">
+                <span>📍 <strong>{obs.station_code}</strong> — {obs.station_name}</span>
+                {obs.ward_name && <span>⬡ {obs.ward_name}</span>}
+                {obs.admin_area_name && <span>🏛 {obs.admin_area_name}</span>}
+                <span>👤 {obs.monitor_name}</span>
+                {obs.has_photos && <span>📷 Photos</span>}
+            </div>
+
+            {/* Timestamp */}
+            <div className="text-[10px] text-slate-400 mt-0.5">
+                Observed: {obs.observed_at ? new Date(obs.observed_at).toLocaleString() : '—'}
+            </div>
         </div>
     );
 }
 
 // ── Main Dashboard ────────────────────────────────────────────────────────────
 export default function ElectionOperationsDashboard({ auth, data: initialData }) {
-    const [data, setData]           = useState(initialData ?? {});
+    const [data, setData]             = useState(initialData ?? {});
     const [refreshing, setRefreshing] = useState(false);
     const [lastUpdated, setLastUpdated] = useState(new Date());
+    const [obsExpanded, setObsExpanded] = useState(false);
 
     const refresh = useCallback(async () => {
         setRefreshing(true);
@@ -101,10 +155,6 @@ export default function ElectionOperationsDashboard({ auth, data: initialData })
             if (res.ok) {
                 setData(await res.json());
                 setLastUpdated(new Date());
-                // Bust cache so next Inertia visit is fresh
-                if (typeof window !== 'undefined') {
-                    window.dispatchEvent(new Event('iec:ops-refreshed'));
-                }
             }
         } catch (e) {
             console.warn('[ElectionOps] Refresh failed:', e);
@@ -121,10 +171,13 @@ export default function ElectionOperationsDashboard({ auth, data: initialData })
     const p   = data.progress     ?? {};
     const inc = data.incidents    ?? {};
     const ua  = data.userActivity ?? {};
+    const obs = data.observations ?? { total: 0, critical: 0, flagged: 0, recent: [] };
 
-    const byArea         = p.byArea   ?? [];
-    const incByArea      = inc.byArea ?? [];
-    const loginActivity  = ua.loginActivity ?? [];
+    const byArea        = p.byArea   ?? [];
+    const incByArea     = inc.byArea ?? [];
+    const loginActivity = ua.loginActivity ?? [];
+
+    const visibleObs = obsExpanded ? obs.recent : obs.recent.slice(0, 6);
 
     return (
         <AppLayout user={auth?.user}>
@@ -184,7 +237,6 @@ export default function ElectionOperationsDashboard({ auth, data: initialData })
 
                     {/* ── Column 1: Election Progress Report ── */}
                     <div className="bg-white rounded-xl border-2 border-blue-200 shadow-sm overflow-hidden flex flex-col">
-                        {/* Card header */}
                         <div className="bg-blue-800 text-white px-4 py-3 flex items-center gap-2">
                             <span className="text-xl" aria-hidden>📊</span>
                             <span className="font-extrabold text-sm tracking-widest uppercase">
@@ -193,7 +245,6 @@ export default function ElectionOperationsDashboard({ auth, data: initialData })
                         </div>
 
                         <div className="p-4 flex flex-col gap-4 flex-1">
-                            {/* Displays list */}
                             <div>
                                 <p className="text-[10px] font-extrabold text-blue-800 uppercase tracking-widest mb-1">Displays:</p>
                                 <ul className="text-xs text-slate-600 space-y-0.5 list-disc list-inside">
@@ -202,7 +253,6 @@ export default function ElectionOperationsDashboard({ auth, data: initialData })
                                 </ul>
                             </div>
 
-                            {/* Ring + donut */}
                             <div className="flex items-center justify-between gap-2">
                                 <RingProgress percentage={p.reportingRate ?? 0} />
                                 <div className="flex-1">
@@ -225,7 +275,6 @@ export default function ElectionOperationsDashboard({ auth, data: initialData })
                                 </div>
                             </div>
 
-                            {/* Reporting Overview table */}
                             <div>
                                 <p className="text-[10px] font-extrabold text-blue-800 uppercase tracking-widest mb-2 border-b border-blue-100 pb-1">
                                     Reporting Overview
@@ -245,7 +294,6 @@ export default function ElectionOperationsDashboard({ auth, data: initialData })
                                 </div>
                             </div>
 
-                            {/* Progress by Admin Area */}
                             <div className="flex-1">
                                 <p className="text-[10px] font-extrabold text-blue-800 uppercase tracking-widest mb-2 border-b border-blue-100 pb-1">
                                     Progress by Administrative Area
@@ -271,7 +319,6 @@ export default function ElectionOperationsDashboard({ auth, data: initialData })
                         </div>
 
                         <div className="p-4 flex flex-col gap-4 flex-1">
-                            {/* Displays */}
                             <div>
                                 <p className="text-[10px] font-extrabold text-green-800 uppercase tracking-widest mb-1">Displays:</p>
                                 <ul className="text-xs text-slate-600 space-y-0.5 list-disc list-inside">
@@ -281,7 +328,6 @@ export default function ElectionOperationsDashboard({ auth, data: initialData })
                                 </ul>
                             </div>
 
-                            {/* Incident Summary */}
                             <div>
                                 <p className="text-[10px] font-extrabold text-green-800 uppercase tracking-widest mb-2 text-center border-b border-green-100 pb-1">
                                     Incident Summary
@@ -311,7 +357,6 @@ export default function ElectionOperationsDashboard({ auth, data: initialData })
                                 </div>
                             </div>
 
-                            {/* Incidents by Area Table */}
                             <div className="flex-1">
                                 <p className="text-[10px] font-extrabold text-green-800 uppercase tracking-widest mb-2 border-b border-green-100 pb-1">
                                     Incidents by Administrative Area
@@ -383,7 +428,6 @@ export default function ElectionOperationsDashboard({ auth, data: initialData })
                         </div>
 
                         <div className="p-4 flex flex-col gap-4 flex-1">
-                            {/* Tracks */}
                             <div>
                                 <p className="text-[10px] font-extrabold text-purple-900 uppercase tracking-widest mb-1">Tracks:</p>
                                 <ul className="text-xs text-slate-600 space-y-0.5 list-disc list-inside">
@@ -393,7 +437,6 @@ export default function ElectionOperationsDashboard({ auth, data: initialData })
                                 </ul>
                             </div>
 
-                            {/* User Activity Overview */}
                             <div>
                                 <p className="text-[10px] font-extrabold text-purple-900 uppercase tracking-widest mb-2 border-b border-purple-100 pb-1">
                                     User Activity Overview
@@ -420,7 +463,6 @@ export default function ElectionOperationsDashboard({ auth, data: initialData })
                                 </div>
                             </div>
 
-                            {/* Login Activity Chart */}
                             <div>
                                 <p className="text-[10px] font-extrabold text-purple-900 uppercase tracking-widest mb-2 border-b border-purple-100 pb-1">
                                     Login Activity (Last 7 Days)
@@ -446,7 +488,6 @@ export default function ElectionOperationsDashboard({ auth, data: initialData })
                                 </div>
                             </div>
 
-                            {/* Top Actions */}
                             <div className="flex-1">
                                 <p className="text-[10px] font-extrabold text-purple-900 uppercase tracking-widest mb-2 border-b border-purple-100 pb-1">
                                     Top Actions Performed
@@ -479,26 +520,75 @@ export default function ElectionOperationsDashboard({ auth, data: initialData })
                     </div>
                 </div>
 
-                {/* ── Key Benefits ───────────────────────────────────────────
-                <div className="bg-slate-100 border-t border-slate-200 px-4 py-4">
-                    <div className="max-w-7xl mx-auto flex flex-wrap items-center gap-6">
-                        <span className="text-xs font-extrabold text-slate-700 uppercase tracking-widest">
-                            Key Benefits
-                        </span>
-                        {[
-                            { icon: '🕐', label: 'Real-time visibility',                        color: 'text-blue-700'   },
-                            { icon: '🎯', label: 'Proactive incident management',               color: 'text-green-700'  },
-                            { icon: '📈', label: 'Data-driven decision making',                 color: 'text-orange-700' },
-                            { icon: '🛡️', label: 'Improved accountability & transparency',      color: 'text-purple-700' },
-                            { icon: '👥', label: 'Greater public trust & confidence',            color: 'text-pink-700'   },
-                        ].map(b => (
-                            <div key={b.label} className="flex items-center gap-2">
-                                <span className="text-xl">{b.icon}</span>
-                                <span className={`text-[11px] font-semibold ${b.color}`}>{b.label}</span>
+                {/* ── Election Monitor Observations ────────────────────────── */}
+                <div className="max-w-7xl mx-auto px-4 pb-8">
+                    <div className="bg-white rounded-xl border-2 border-pink-200 shadow-sm overflow-hidden">
+
+                        {/* Section header */}
+                        <div className="bg-pink-800 text-white px-5 py-3 flex items-center justify-between gap-3">
+                            <div className="flex items-center gap-2">
+                                <span className="text-xl" aria-hidden>🔍</span>
+                                <span className="font-extrabold text-sm tracking-widest uppercase">
+                                    Election Monitor Observations
+                                </span>
+                                {/* <span className="ml-2 px-2 py-0.5 bg-teal-600 rounded-full text-[11px] font-bold">
+                                    Public only
+                                </span> */}
                             </div>
-                        ))}
+                            <div className="text-[11px] text-pink-200">
+                                Submitted by accredited election monitors — visible to all IEC staff
+                            </div>
+                        </div>
+
+                        {/* Summary bar */}
+                        <div className="border-b border-pink-100 px-5 py-3 flex flex-wrap gap-6 bg-pink-50">
+                            <div className="flex items-center gap-2">
+                                <span className="text-2xl font-extrabold text-pink-800">{obs.total}</span>
+                                <span className="text-xs text-pink-700 font-semibold">Total Public Observations</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <span className="text-2xl font-extrabold text-red-800">{obs.critical}</span>
+                                <span className="text-xs text-red-800 font-semibold">Critical Severity</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <span className="text-2xl font-extrabold text-orange-700">{obs.flagged}</span>
+                                <span className="text-xs text-orange-700 font-semibold">Flagged (Irregularities / Incidents / Process Concerns)</span>
+                            </div>
+                        </div>
+
+                        {/* Observations grid */}
+                        <div className="p-5">
+                            {obs.recent.length === 0 ? (
+                                <div className="text-center py-10 text-slate-400">
+                                    <div className="text-4xl mb-3">🔍</div>
+                                    <p className="text-sm font-semibold">No public observations submitted yet.</p>
+                                    <p className="text-xs mt-1">Observations will appear here as election monitors file them in the field.</p>
+                                </div>
+                            ) : (
+                                <>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+                                        {visibleObs.map(o => (
+                                            <ObservationCard key={o.id} obs={o} />
+                                        ))}
+                                    </div>
+
+                                    {obs.recent.length > 6 && (
+                                        <div className="mt-4 text-center">
+                                            <button
+                                                onClick={() => setObsExpanded(v => !v)}
+                                                className="px-5 py-2 bg-teal-700 hover:bg-teal-800 text-white text-sm font-bold rounded-lg transition-colors"
+                                            >
+                                                {obsExpanded
+                                                    ? '▲ Show Less'
+                                                    : `▼ Show All ${obs.recent.length} Observations`}
+                                            </button>
+                                        </div>
+                                    )}
+                                </>
+                            )}
+                        </div>
                     </div>
-                </div> */}
+                </div>
 
             </div>
         </AppLayout>

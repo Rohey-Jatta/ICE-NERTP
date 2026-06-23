@@ -18,7 +18,7 @@ class ObservationPDFService
             ->where('id', $observationId)
             ->where('election_monitor_id', $monitor->id)
             ->leftJoin('polling_stations', 'monitor_observations.polling_station_id', '=', 'polling_stations.id')
-            ->leftJoin('administrative_hierarchies as wards', 'polling_stations.ward_id', '=', 'wards.id')
+            ->leftJoin('administrative_hierarchy as wards', 'polling_stations.ward_id', '=', 'wards.id')
             ->select(
                 'monitor_observations.*',
                 'polling_stations.name as station_name',
@@ -66,7 +66,7 @@ class ObservationPDFService
             ->whereIn('id', $observationIds)
             ->where('election_monitor_id', $monitor->id)
             ->leftJoin('polling_stations', 'monitor_observations.polling_station_id', '=', 'polling_stations.id')
-            ->leftJoin('administrative_hierarchies as wards', 'polling_stations.ward_id', '=', 'wards.id')
+            ->leftJoin('administrative_hierarchy as wards', 'polling_stations.ward_id', '=', 'wards.id')
             ->select(
                 'monitor_observations.*',
                 'polling_stations.name as station_name',

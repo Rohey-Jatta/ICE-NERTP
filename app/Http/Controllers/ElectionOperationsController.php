@@ -51,6 +51,7 @@ class ElectionOperationsController extends Controller
             'progress'     => $this->electionProgress($electionId),
             'incidents'    => $this->incidentReport($electionId),
             'userActivity' => $this->userActivity($electionId),
+            'observations' => $this->recentPublicObservations($electionId),
         ];
     }
 
@@ -129,12 +130,6 @@ class ElectionOperationsController extends Controller
         $rejections    = (clone $base())->rejections()->count();
         $resubmissions = (clone $base())->resubmissions()->count();
 
-        // NOTE: PostgreSQL cannot resolve SELECT aliases (disputes, rejections,
-        // resubmissions) when they appear inside a compound ORDER BY expression
-        // — it tries to resolve each identifier against the underlying table's
-        // real columns instead, which causes "column does not exist" errors.
-        // Fix: repeat the full SUM(CASE...) expressions in the ORDER BY clause
-        // rather than referencing the SELECT aliases.
         $byArea = Incident::forElection($electionId)
             ->whereNotNull('administrative_area_name')
             ->selectRaw("
@@ -166,6 +161,95 @@ class ElectionOperationsController extends Controller
             'resubmissions' => $resubmissions,
             'byArea'        => $byArea,
         ];
+    }
+
+    // ── Recent Public Observations (from Election Monitors) ───────────────
+
+    private function recentPublicObservations(?int $electionId): array
+    {
+        try {
+            $rows = DB::table('monitor_observations as mo')
+                ->join('polling_stations as ps', 'mo.polling_station_id', '=', 'ps.id')
+                ->join('election_monitors as em', 'mo.election_monitor_id', '=', 'em.id')
+                ->join('users as u', 'em.user_id', '=', 'u.id')
+                ->leftJoin('administrative_hierarchy as w',   'ps.ward_id',  '=', 'w.id')
+                ->leftJoin('administrative_hierarchy as con', 'w.parent_id', '=', 'con.id')
+                ->leftJoin('administrative_hierarchy as aa',  'con.parent_id','=', 'aa.id')
+                ->where('mo.is_public', true)
+                ->when($electionId, fn ($q) => $q->where('mo.election_id', $electionId))
+                ->select(
+                    'mo.id',
+                    'mo.title',
+                    'mo.observation',
+                    'mo.observation_type',
+                    'mo.severity',
+                    'mo.observed_at',
+                    'mo.created_at',
+                    'mo.latitude',
+                    'mo.longitude',
+                    'mo.photo_paths',
+                    'ps.name as station_name',
+                    'ps.code as station_code',
+                    'w.name as ward_name',
+                    'con.name as constituency_name',
+                    'aa.name as admin_area_name',
+                    'u.name as monitor_name'
+                )
+                ->orderByDesc('mo.observed_at')
+                ->limit(20)
+                ->get();
+
+            $totalCount = DB::table('monitor_observations as mo')
+                ->join('election_monitors as em', 'mo.election_monitor_id', '=', 'em.id')
+                ->where('mo.is_public', true)
+                ->when($electionId, fn ($q) => $q->where('mo.election_id', $electionId))
+                ->count();
+
+            $criticalCount = DB::table('monitor_observations as mo')
+                ->join('election_monitors as em', 'mo.election_monitor_id', '=', 'em.id')
+                ->where('mo.is_public', true)
+                ->where('mo.severity', 'critical')
+                ->when($electionId, fn ($q) => $q->where('mo.election_id', $electionId))
+                ->count();
+
+            $flaggedCount = DB::table('monitor_observations as mo')
+                ->join('election_monitors as em', 'mo.election_monitor_id', '=', 'em.id')
+                ->where('mo.is_public', true)
+                ->whereIn('mo.observation_type', ['irregularity', 'incident', 'process_concern'])
+                ->when($electionId, fn ($q) => $q->where('mo.election_id', $electionId))
+                ->count();
+
+            return [
+                'total'    => $totalCount,
+                'critical' => $criticalCount,
+                'flagged'  => $flaggedCount,
+                'recent'   => $rows->map(fn ($obs) => [
+                    'id'               => $obs->id,
+                    'title'            => $obs->title,
+                    'observation'      => mb_substr($obs->observation, 0, 200) . (mb_strlen($obs->observation) > 200 ? '…' : ''),
+                    'observation_type' => $obs->observation_type,
+                    'severity'         => $obs->severity,
+                    'observed_at'      => $obs->observed_at,
+                    'station_name'     => $obs->station_name,
+                    'station_code'     => $obs->station_code,
+                    'ward_name'        => $obs->ward_name,
+                    'constituency_name'=> $obs->constituency_name,
+                    'admin_area_name'  => $obs->admin_area_name,
+                    'monitor_name'     => $obs->monitor_name,
+                    'latitude'         => $obs->latitude,
+                    'longitude'        => $obs->longitude,
+                    'has_photos'       => !empty($obs->photo_paths),
+                ])->toArray(),
+            ];
+        } catch (\Throwable $e) {
+            // Non-fatal — don't crash the whole dashboard if observations table has issues
+            return [
+                'total'    => 0,
+                'critical' => 0,
+                'flagged'  => 0,
+                'recent'   => [],
+            ];
+        }
     }
 
     // ── User Activity ──────────────────────────────────────────────────────
