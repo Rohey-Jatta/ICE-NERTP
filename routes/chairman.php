@@ -33,6 +33,28 @@ if (!function_exists('bustPublicCachesForElection')) {
     }
 }
 
+// ── Shared helper: polling stations belonging to an election, INCLUDING
+//    stations whose own election_id doesn't match the one currently being
+//    viewed but that already have a result recorded under it (a known
+//    data-entry mismatch — see the identical OR-fallback pattern used in
+//    PublicResultsController / ResultsStationsController / ResultsMapController).
+//    Without this fallback, the chairman's counters can show "0 Total
+//    Stations" while still showing non-zero certified votes for the very
+//    same election, which is exactly the inconsistency reported. ───────────
+if (!function_exists('chairmanStationsQueryForElection')) {
+    function chairmanStationsQueryForElection(int $electionId)
+    {
+        return PollingStation::where(function ($query) use ($electionId) {
+            $query->where('election_id', $electionId)
+                  ->orWhereIn('id', function ($sub) use ($electionId) {
+                      $sub->select('polling_station_id')
+                          ->from('results')
+                          ->where('election_id', $electionId);
+                  });
+        });
+    }
+}
+
 Route::middleware(['auth', 'role:iec-chairman'])
     ->prefix('chairman')
     ->name('chairman.')
@@ -40,17 +62,19 @@ Route::middleware(['auth', 'role:iec-chairman'])
 
     // ── Dashboard ─────────────────────────────────────────────────────────────
     Route::get('/dashboard', function () {
-        // Resolve the election we should be displaying stats for.
-        // Prefer live/certifying over a closed certified election.
-        $activeElection = Election::whereIn('status', ['active', 'certifying', 'results_pending'])
-            ->latest('start_date')->first()
-            ?? Election::where('status', 'certified')->latest('start_date')->first();
+        // Resolve the election we should be displaying stats for. ALWAYS
+        // resolved through Election::currentOrLatestCertified() so this
+        // page, /analytics, /all-results and /publish never disagree
+        // about which election is "current" (previously some of these
+        // ordered by created_at and others by start_date, which could
+        // each resolve to a DIFFERENT election).
+        $activeElection = Election::currentOrLatestCertified();
 
         $electionId = $activeElection?->id;
 
         // Include election ID in cache key so stale data from a previous
         // election is never served to the chairman after a new one starts.
-        $cacheKey = 'chairman_dashboard_stats_' . ($electionId ?? 'none');
+        $cacheKey = 'chairman_dashboard_stats_v2_' . ($electionId ?? 'none');
 
         $pendingNational     = 0;
         $nationallyCertified = 0;
@@ -75,10 +99,14 @@ Route::middleware(['auth', 'role:iec-chairman'])
             $pendingNational     = (int) ($statusCounts[Result::STATUS_PENDING_NATIONAL] ?? 0);
             $nationallyCertified = (int) ($statusCounts[Result::STATUS_NATIONALLY_CERTIFIED] ?? 0);
 
-            // ── Filter station counts to the active election ──────────────
-            $stationAgg = PollingStation::when($electionId, fn($q) => $q->where('election_id', $electionId))
-                ->selectRaw('COUNT(*) as total, COALESCE(SUM(registered_voters), 0) as total_voters')
-                ->first();
+            // ── Filter station counts to the active election, using the
+            //    OR-fallback so a stale polling_station.election_id can't
+            //    make "Total Stations" read 0 while results exist ────────
+            $stationAgg = $electionId
+                ? chairmanStationsQueryForElection($electionId)
+                    ->selectRaw('COUNT(*) as total, COALESCE(SUM(registered_voters), 0) as total_voters')
+                    ->first()
+                : (object) ['total' => 0, 'total_voters' => 0];
 
             $totalStations = (int) ($stationAgg->total ?? 0);
             $totalVoters   = (int) ($stationAgg->total_voters ?? 0);
@@ -133,10 +161,7 @@ Route::middleware(['auth', 'role:iec-chairman'])
 
     // ── National Certification Queue ──────────────────────────────────────────
     Route::get('/national-queue', function () {
-        // Scope queue to the active election only
-        $activeElection = Election::whereIn('status', ['active', 'certifying', 'results_pending'])
-            ->latest('start_date')->first()
-            ?? Election::where('status', 'certified')->latest('start_date')->first();
+        $activeElection = Election::currentOrLatestCertified();
 
         $results = Result::where('certification_status', Result::STATUS_PENDING_NATIONAL)
             ->when($activeElection, fn($q) => $q->where('election_id', $activeElection->id))
@@ -214,9 +239,10 @@ Route::middleware(['auth', 'role:iec-chairman'])
         $user   = Auth::user();
         $filter = $request->get('filter', 'all');
 
-        $activeElection = Election::whereIn('status', ['active', 'certifying', 'results_pending', 'certified'])
-            ->latest()
-            ->first();
+        // FIX: was Election::whereIn(...)->latest()->first() — ordered by
+        // created_at, which could resolve to a DIFFERENT election than
+        // the dashboard (which ordered by start_date). Standardized.
+        $activeElection = Election::currentOrLatestCertified();
 
         $counts  = ['all' => 0, 'pending_national' => 0, 'in_pipeline' => 0, 'nationally_certified' => 0];
         $results = collect();
@@ -280,9 +306,10 @@ Route::middleware(['auth', 'role:iec-chairman'])
     Route::get('/analytics', function () {
         $user = Auth::user();
 
-        $activeElection = Election::whereIn('status', ['active', 'certifying', 'results_pending', 'certified'])
-            ->latest()
-            ->first();
+        // FIX: standardized resolution (was created_at ordering here vs
+        // start_date ordering on the dashboard — could disagree on which
+        // election is "current").
+        $activeElection = Election::currentOrLatestCertified();
 
         $nationalStats     = [
             'totalStations' => 0, 'registeredVoters' => 0, 'votesCast' => 0,
@@ -291,7 +318,10 @@ Route::middleware(['auth', 'role:iec-chairman'])
         $regionalBreakdown = [];
 
         if ($activeElection) {
-            $stationAgg = PollingStation::where('election_id', $activeElection->id)
+            // FIX: use the OR-fallback station query so "Total Polling
+            // Stations" can't read 0 while certified votes for the same
+            // election are non-zero.
+            $stationAgg = chairmanStationsQueryForElection($activeElection->id)
                 ->selectRaw('COUNT(*) as total, COALESCE(SUM(registered_voters), 0) as total_voters')
                 ->first();
 
@@ -350,7 +380,14 @@ Route::middleware(['auth', 'role:iec-chairman'])
                          ->where('r.election_id', $activeElection->id)
                          ->where('r.certification_status', Result::STATUS_NATIONALLY_CERTIFIED);
                 })
-                ->where('ps.election_id', $activeElection->id)
+                ->where(function ($query) use ($activeElection) {
+                    $query->where('ps.election_id', $activeElection->id)
+                          ->orWhereIn('ps.id', function ($sub) use ($activeElection) {
+                              $sub->select('polling_station_id')
+                                  ->from('results')
+                                  ->where('election_id', $activeElection->id);
+                          });
+                })
                 ->groupBy('aa.id', 'aa.name')
                 ->selectRaw("
                     aa.name,
@@ -383,9 +420,8 @@ Route::middleware(['auth', 'role:iec-chairman'])
     Route::get('/publish', function () {
         $user = Auth::user();
 
-        $election = Election::whereIn('status', ['active', 'certifying', 'results_pending', 'certified'])
-            ->latest()
-            ->first();
+        // FIX: standardized resolution (was created_at ordering).
+        $election = Election::currentOrLatestCertified();
 
         $summary        = [
             'total' => 0, 'certified' => 0, 'pendingNational' => 0,
@@ -394,7 +430,9 @@ Route::middleware(['auth', 'role:iec-chairman'])
         $readinessCheck = ['canPublish' => false, 'canClose' => false];
 
         if ($election) {
-            $totalStations  = PollingStation::where('election_id', $election->id)->count();
+            // FIX: use the OR-fallback station query — same reasoning as
+            // the dashboard/analytics fix above.
+            $totalStations  = chairmanStationsQueryForElection($election->id)->count();
             $certifiedCount = Result::where('election_id', $election->id)
                 ->where('certification_status', Result::STATUS_NATIONALLY_CERTIFIED)
                 ->count();
@@ -466,7 +504,7 @@ Route::middleware(['auth', 'role:iec-chairman'])
 
     Route::post('/publish-results', function () {
         $election = Election::whereIn('status', ['active', 'certifying'])
-            ->latest()->first();
+            ->latest('start_date')->first();
 
         if (!$election) {
             return back()->withErrors(['error' => 'No active election found to publish.']);
@@ -489,7 +527,7 @@ Route::middleware(['auth', 'role:iec-chairman'])
 
     Route::post('/close-election', function () {
         $election = Election::whereIn('status', ['active', 'certifying', 'results_pending'])
-            ->latest()->first();
+            ->latest('start_date')->first();
 
         if (!$election) {
             return back()->withErrors(['error' => 'No open election found to close.']);

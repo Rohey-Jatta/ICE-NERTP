@@ -20,9 +20,7 @@ Route::middleware(['auth', 'role:ward-approver'])
     // ── Dashboard ────────────────────────────────────────────────────────────
     Route::get('/dashboard', function () {
         $user           = Auth::user();
-        $activeElection = Election::whereIn('status', ['active', 'certifying', 'results_pending'])
-            ->latest('start_date')
-            ->first();
+        $activeElection = Election::current();
 
         $ward = AdministrativeHierarchy::where('assigned_approver_id', $user->id)
             ->where('level', 'ward')
@@ -132,7 +130,7 @@ Route::middleware(['auth', 'role:ward-approver'])
     // ── Approval Queue ────────────────────────────────────────────────────────
     Route::get('/approval-queue', function (Request $request) {
         $user           = Auth::user();
-        $activeElection = Election::where('status', 'active')->latest()->first();
+        $activeElection = Election::current();
         $ward           = AdministrativeHierarchy::where('assigned_approver_id', $user->id)
             ->where('level', 'ward')->first();
         $filter         = $request->get('filter', 'pending');
@@ -140,11 +138,20 @@ Route::middleware(['auth', 'role:ward-approver'])
         $results = collect();
         $counts  = ['pending' => 0, 'approved' => 0, 'rejected' => 0, 'all' => 0];
 
-        if ($ward) {
+        // FIX: previously resolved via Election::where('status','active')
+        // which returned null as soon as the election moved to
+        // 'certifying'/'results_pending'. Because the query below used
+        // ->when($activeElection, ...), a null $activeElection silently
+        // disabled the election filter entirely — showing results from
+        // EVERY election ever created instead of just the current one.
+        // Guarding with `$ward && $activeElection` and removing the
+        // when() means: no current election => explicit zeros, never an
+        // unscoped query.
+        if ($ward && $activeElection) {
             $stationIds = PollingStation::where('ward_id', $ward->id)->pluck('id');
 
             $base = fn() => Result::whereIn('polling_station_id', $stationIds)
-                ->when($activeElection, fn($q) => $q->where('election_id', $activeElection->id));
+                ->where('election_id', $activeElection->id);
 
             // Parallel workflow: pending_ward + legacy pending_party_acceptance = actionable by ward approver
             $counts['pending']  = $base()->whereIn('certification_status', [
@@ -306,7 +313,7 @@ Route::middleware(['auth', 'role:ward-approver'])
     // ── Analytics ─────────────────────────────────────────────────────────────
     Route::get('/analytics', function () {
         $user           = Auth::user();
-        $activeElection = Election::where('status', 'active')->latest()->first();
+        $activeElection = Election::current();
         $ward           = AdministrativeHierarchy::where('assigned_approver_id', $user->id)
             ->where('level', 'ward')->first();
 

@@ -28,6 +28,21 @@
     --shadow-pink: 0 4px 14px rgba(233,30,140,0.25);
 }
 
+/* Global overflow guard */
+html, body {
+    overflow-x: hidden;
+}
+
+/* ─── Authenticated workspace surface ────────────────────────── */
+.workspace-light-surface {
+    background-color: #f6f9fc;
+    color: #334155;
+}
+
+.ws-shell {
+    overflow-x: hidden;
+}
+
 /* ─── Top Info Bar ───────────────────────────────────────────── */
 .iec-top-bar {
     background-color: var(--iec-pink);

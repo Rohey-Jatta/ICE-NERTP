@@ -24,12 +24,14 @@ Route::middleware(['auth', 'role:polling-officer'])
         $user = Auth::user();
         $station = PollingStation::where('assigned_officer_id', $user->id)->first();
 
-        $activeElection = Election::whereIn('status', ['active', 'results_pending', 'certifying'])
-            ->latest()
-            ->first();
+        // FIX: was Election::whereIn(...)->latest()->first() (created_at
+        // ordering). Election::current() resolves the same status set but
+        // ordered by start_date, matching every other workspace page.
+        $activeElection = Election::current();
 
+        // If no open election, check for a recently closed one to show status
         $closedElection = !$activeElection
-            ? Election::where('status', 'certified')->latest()->first()
+            ? Election::where('status', 'certified')->latest('start_date')->first()
             : null;
 
         $electionForDisplay = $activeElection ?? $closedElection;
@@ -97,9 +99,8 @@ Route::middleware(['auth', 'role:polling-officer'])
         $user    = Auth::user();
         $station = PollingStation::where('assigned_officer_id', $user->id)->first();
 
-        $election = Election::whereIn('status', ['active', 'results_pending', 'certifying'])
-            ->latest()
-            ->first();
+        // FIX: standardized to Election::current() (was created_at ordering).
+        $election = Election::current();
 
         if (!$station) {
             return redirect()->route('officer.dashboard')
@@ -107,11 +108,18 @@ Route::middleware(['auth', 'role:polling-officer'])
         }
 
         if (!$election) {
-            // Redirect silently — the dashboard already shows the
-            // "Election Closed" or "No active election" banner itself.
-            return redirect()->route('officer.dashboard');
+            // Check if there's a closed election to give a helpful message
+            $closedElection = Election::where('status', 'certified')->latest('start_date')->first();
+            if ($closedElection) {
+                return redirect()->route('officer.dashboard')
+                    ->with('error', 'The election has been officially closed. Result submissions are no longer accepted.');
+            }
+            return redirect()->route('officer.dashboard')
+                ->with('error', 'No active election found. Contact the administrator.');
         }
 
+        // A result that is NOT editable (already in pipeline for this active election).
+        // This includes resubmitted rejected results that have already been resubmitted.
         $existingResult = Result::where('polling_station_id', $station->id)
             ->where('election_id', $election->id)
             ->whereIn('certification_status', Result::CERTIFICATION_PIPELINE_STATUSES)
@@ -122,6 +130,7 @@ Route::middleware(['auth', 'role:polling-officer'])
             ->latest('submitted_at')
             ->first();
 
+        // A rejected result the officer can fix and resubmit.
         $editableResult = Result::where('polling_station_id', $station->id)
             ->where('election_id', $election->id)
             ->where('submitted_by', $user->id)
@@ -190,11 +199,14 @@ Route::middleware(['auth', 'role:polling-officer'])
             'candidate_votes'   => 'required|array|min:1',
         ]);
 
+        // Allow submissions while election is open: active, results_pending, or certifying.
+        // 'certified' means the Chairman has explicitly closed the election — block submissions.
         $election = Election::where('id', $request->election_id)
             ->whereIn('status', ['active', 'results_pending', 'certifying'])
             ->first();
 
         if (!$election) {
+            // Give a helpful, specific error depending on whether the election is closed vs missing
             $closedElection = Election::where('id', $request->election_id)
                 ->whereIn('status', ['certified', 'archived'])
                 ->first();
@@ -344,9 +356,9 @@ Route::middleware(['auth', 'role:polling-officer'])
         $user    = Auth::user();
         $station = PollingStation::where('assigned_officer_id', $user->id)->first();
 
-        $activeElection = Election::whereIn('status', ['active', 'results_pending', 'certifying', 'certified'])
-            ->latest()
-            ->first();
+        // FIX: standardized to Election::currentOrLatestCertified() (was
+        // created_at ordering, inconsistent with the dashboard above).
+        $activeElection = Election::currentOrLatestCertified();
 
         $results = Result::where('submitted_by', $user->id)
             ->when($activeElection, fn ($q) => $q->where('election_id', $activeElection->id))

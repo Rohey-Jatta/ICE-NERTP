@@ -10,18 +10,10 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
-use App\Services\CurrentElectionResolver;
 
 class Election extends Model
 {
     use HasFactory, SoftDeletes;
-
-    /**
-     * Statuses considered "operational" / current — see CurrentElectionResolver.
-     * Mirrored here as a convenience constant so model-level scopes/helpers
-     * don't need to import the service just to reference these strings.
-     */
-    public const CURRENT_STATUSES = CurrentElectionResolver::CURRENT_STATUSES;
 
     protected $fillable = [
         'name', 'slug', 'type', 'description', 'legal_instrument',
@@ -40,6 +32,12 @@ class Election extends Model
         'allow_provisional_public_display' => 'boolean',
     ];
 
+    /**
+     * Statuses considered "in flight" — there is active certification
+     * workflow happening for the election in this state.
+     */
+    const IN_PROGRESS_STATUSES = ['active', 'certifying', 'results_pending'];
+
     protected static function booted(): void
     {
         static::creating(function (Election $election) {
@@ -50,15 +48,6 @@ class Election extends Model
 
         $bust = function (Election $election): void {
             self::forgetPublicCaches($election->id, $election->status);
-
-            // Status transitions (activation, moving into submitting/
-            // certifying/certified, etc.) must invalidate the current-election
-            // resolver cache immediately — otherwise polling stations,
-            // submissions, and dashboards could briefly resolve against a
-            // stale "current" election for up to the cache TTL.
-            if ($election->wasChanged('status') || $election->wasRecentlyCreated) {
-                CurrentElectionResolver::forgetCache();
-            }
         };
 
         static::saved($bust);
@@ -68,12 +57,47 @@ class Election extends Model
         }
     }
 
+    /**
+     * The election currently "in flight" for active certification
+     * workflow.
+     *
+     * IMPORTANT: this is the single source of truth for "which election
+     * is current". Every dashboard / approval queue / analytics page
+     * MUST resolve the election through this method (or
+     * currentOrLatestCertified() below) rather than writing its own
+     * Election::where(...) query. Resolving the "current" election
+     * differently on different pages — e.g. ordering by created_at on
+     * one page and start_date on another, or restricting to only
+     * status = 'active' on one page while another accepts
+     * 'active'/'certifying'/'results_pending' — is what causes
+     * different pages to silently disagree about which election is
+     * current and display stale/inconsistent figures.
+     */
+    public static function current(): ?self
+    {
+        return static::whereIn('status', self::IN_PROGRESS_STATUSES)
+            ->latest('start_date')
+            ->first();
+    }
+
+    /**
+     * The election that should be treated as "the current one" for
+     * display purposes: the in-flight election if one exists, otherwise
+     * the most recently closed (certified) election. Used by views that
+     * need to keep showing final results after an election has been
+     * closed (e.g. the Chairman's dashboard/analytics/publish pages).
+     */
+    public static function currentOrLatestCertified(): ?self
+    {
+        return static::current()
+            ?? static::where('status', 'certified')->latest('start_date')->first();
+    }
+
     public static function forgetPublicCaches(int $electionId, ?string $status = null): void
     {
         $statuses = array_unique(array_filter([
             $status,
             'active',
-            'submitting',
             'certifying',
             'results_pending',
             'certified',
@@ -102,7 +126,7 @@ class Election extends Model
 
     public function bustPublicCaches(): void
     {
-        foreach (['draft', 'active', 'submitting', 'certifying', 'results_pending', 'certified', 'archived'] as $status) {
+        foreach (['draft', 'active', 'certifying', 'results_pending', 'certified', 'archived'] as $status) {
             Cache::forget("results_summary_v7_{$this->id}_{$status}");
             Cache::forget("results_summary_v3_{$this->id}_{$status}");
         }
@@ -120,16 +144,7 @@ class Election extends Model
 
     public function createdBy(): BelongsTo { return $this->belongsTo(User::class, 'created_by'); }
     public function administrativeHierarchy(): HasMany { return $this->hasMany(AdministrativeHierarchy::class); }
-
-    /**
-     * Stations historically "last seen" under this election. This is NOT
-     * the authoritative set of stations for the election — that is always
-     * resolved dynamically via CurrentElectionResolver against ALL active
-     * polling stations. This relation exists only for historical/reporting
-     * lookups (e.g. "what was this station's last known election").
-     */
     public function pollingStations(): HasMany { return $this->hasMany(PollingStation::class); }
-
     public function politicalParties(): HasMany { return $this->hasMany(PoliticalParty::class); }
     public function participatingParties(): BelongsToMany {
         return $this->belongsToMany(PoliticalParty::class, 'election_political_party')
@@ -142,29 +157,18 @@ class Election extends Model
     public function aggregatedResults(): HasMany { return $this->hasMany(AggregatedResult::class); }
 
     public function scopeActive($query) { return $query->where('status', 'active'); }
-
-    /**
-     * Elections currently in an operational status (active, submitting,
-     * certifying). Prefer CurrentElectionResolver::current() for actually
-     * resolving THE current election — this scope is for cases that need
-     * the raw query builder (e.g. composing with other scopes).
-     */
-    public function scopeCurrent($query) { return $query->whereIn('status', self::CURRENT_STATUSES); }
-
     public function isActive(): bool { return $this->status === 'active'; }
-    public function isSubmitting(): bool { return $this->status === 'submitting'; }
-    public function isCurrent(): bool { return in_array($this->status, self::CURRENT_STATUSES, true); }
     public function isCertifying(): bool { return in_array($this->status, ['results_pending', 'certifying']); }
     public function isNationallyCertified(): bool { return $this->status === 'certified'; }
     public function isClosed(): bool { return in_array($this->status, ['certified', 'archived']); }
 
     public function allowsResultSubmission(): bool
     {
-        return in_array($this->status, ['active', 'submitting', 'results_pending', 'certifying']);
+        return in_array($this->status, ['active', 'results_pending', 'certifying']);
     }
 
     public function allowsPublicDisplay(): bool {
         return $this->allow_provisional_public_display
-            && in_array($this->status, ['submitting', 'results_pending', 'certifying', 'certified']);
+            && in_array($this->status, ['results_pending', 'certifying', 'certified']);
     }
 }

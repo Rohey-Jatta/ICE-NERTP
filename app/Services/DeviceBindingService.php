@@ -89,7 +89,7 @@ class DeviceBindingService
 
         if (!$device) {
             // Store pending fingerprint so registration can use it
-            $this->storePendingFingerprint($user, $request, $fingerprint);
+            $this->storePendingFingerprintPublic($user, $request, $fingerprint);
             return 'no_device_bound';
         }
 
@@ -262,7 +262,7 @@ class DeviceBindingService
 
     // ── Pending fingerprint (stored in cache during 2FA flow) ─────────────────
 
-    private function storePendingFingerprint(User $user, Request $request, string $fingerprint): void
+    public function storePendingFingerprintPublic(User $user, Request $request, string $fingerprint): void
     {
         Cache::put(
             'pending_device_' . $user->id,

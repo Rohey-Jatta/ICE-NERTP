@@ -2,13 +2,17 @@ import AppLayout from '@/Layouts/AppLayout';
 import { Link } from '@inertiajs/react';
 
 export default function AdminAreaAnalytics({ auth, adminArea, stats = {}, constituencies = [] }) {
+    // Defensive cap — the backend now derives "certified" as a count of
+    // fully-certified constituencies so this can never legitimately
+    // exceed 100%, but capping here protects the layout even if bad data
+    // ever slips through.
     const certificationRate = stats.totalConstituencies > 0
-        ? Math.round((stats.certified / stats.totalConstituencies) * 100)
+        ? Math.min(100, Math.round((stats.certified / stats.totalConstituencies) * 100))
         : 0;
 
     return (
         <AppLayout user={auth?.user}>
-            <div className="container mx-auto px-4 py-8">
+            <div className="container mx-auto px-4 py-8 overflow-x-hidden">
 
                 {/* Header */}
                 <div className="mb-6">
@@ -32,8 +36,8 @@ export default function AdminAreaAnalytics({ auth, adminArea, stats = {}, consti
                         { label: 'Avg Turnout',     value: `${stats.avgTurnout || 0}%`,                 color: 'text-amber-300'   },
                         { label: 'Cert. Rate',      value: `${certificationRate}%`,                     color: 'text-iec-pink-600'  },
                     ].map((card, i) => (
-                        <div key={i} className="bg-white rounded-xl p-5 border border-slate-200">
-                            <div className={`text-2xl font-bold mb-1 ${card.color}`}>{card.value}</div>
+                        <div key={i} className="bg-white rounded-xl p-5 border border-slate-200 min-w-0 overflow-hidden">
+                            <div className={`text-2xl font-bold mb-1 break-words ${card.color}`}>{card.value}</div>
                             <div className="text-slate-500 text-xs">{card.label}</div>
                         </div>
                     ))}
@@ -46,7 +50,7 @@ export default function AdminAreaAnalytics({ auth, adminArea, stats = {}, consti
                             <h2 className="text-lg font-bold text-iec-navy">Admin-Area Certification Progress</h2>
                             <span className="text-iec-navy font-bold text-xl">{certificationRate}%</span>
                         </div>
-                        <div className="w-full bg-white rounded-full h-5">
+                        <div className="w-full bg-white rounded-full h-5 overflow-hidden">
                             <div
                                 className="bg-gradient-to-r from-teal-600 to-teal-400 h-5 rounded-full transition-all"
                                 style={{ width: `${certificationRate}%` }}
@@ -86,23 +90,23 @@ export default function AdminAreaAnalytics({ auth, adminArea, stats = {}, consti
                         <h2 className="text-lg font-bold text-iec-navy mb-5">Certification Progress by Constituency</h2>
                         <div className="space-y-4">
                             {constituencies.map((constituency, i) => (
-                                <div key={i}>
-                                    <div className="flex justify-between items-center mb-1">
-                                        <span className="text-slate-600 text-sm font-medium">{constituency.name}</span>
+                                <div key={i} className="min-w-0">
+                                    <div className="flex justify-between items-center mb-1 flex-wrap gap-1">
+                                        <span className="text-slate-600 text-sm font-medium truncate">{constituency.name}</span>
                                         <div className="flex items-center gap-3 text-sm">
                                             <span className="text-slate-500">{(constituency.votes || 0).toLocaleString()} votes</span>
                                             <span className="text-slate-500">{constituency.turnout}% turnout</span>
                                             <span className="text-iec-navy font-bold w-10 text-right">{constituency.progress}%</span>
                                         </div>
                                     </div>
-                                    <div className="w-full bg-white rounded-full h-3">
+                                    <div className="w-full bg-white rounded-full h-3 overflow-hidden">
                                         <div
                                             className={`h-3 rounded-full transition-all ${
                                                 constituency.progress === 100
                                                     ? 'bg-gradient-to-r from-teal-600 to-teal-400'
                                                     : 'bg-gradient-to-r from-amber-600 to-amber-400'
                                             }`}
-                                            style={{ width: `${constituency.progress || 0}%` }}
+                                            style={{ width: `${Math.min(100, constituency.progress || 0)}%` }}
                                         />
                                     </div>
                                 </div>

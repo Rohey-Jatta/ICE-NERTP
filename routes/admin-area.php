@@ -20,22 +20,31 @@ Route::middleware(['auth', 'role:admin-area-approver'])
         $user      = Auth::user();
         $adminArea = AdministrativeHierarchy::where('assigned_approver_id', $user->id)
             ->where('level', 'admin_area')->first();
+        $election  = Election::current();
 
         $pendingResults = 0;
         $statistics    = [
             'approved'       => 0,
-            'constituencies' => 0,
+            'constituencies' => $adminArea
+                ? AdministrativeHierarchy::where('parent_id', $adminArea->id)->where('level', 'constituency')->count()
+                : 0,
             'progress'       => 0,
             'awaitingBelow'  => 0,
         ];
 
-        if ($adminArea) {
-            $cacheKey = "admin_area_dashboard_{$user->id}_{$adminArea->id}";
+        // NOTE: stats are intentionally NOT computed unless a current
+        // (in-progress) election exists. Without this guard, the cached
+        // block below would otherwise tally Result rows from EVERY
+        // election ever created (including closed/old ones), which is
+        // exactly the "stale data from a previous election" bug.
+        if ($adminArea && $election) {
+            $cacheKey = "admin_area_dashboard_v2_{$user->id}_{$adminArea->id}_{$election->id}";
 
-            $dashboardData = Cache::remember($cacheKey, 30, function () use ($adminArea) {
-                $areaScope = fn($q) => $q->whereHas('pollingStation.ward', fn($q2) =>
-                    $q2->whereHas('parent', fn($q3) => $q3->where('parent_id', $adminArea->id))
-                );
+            $dashboardData = Cache::remember($cacheKey, 30, function () use ($adminArea, $election) {
+                $areaScope = fn($q) => $q->where('election_id', $election->id)
+                    ->whereHas('pollingStation.ward', fn($q2) =>
+                        $q2->whereHas('parent', fn($q3) => $q3->where('parent_id', $adminArea->id))
+                    );
 
                 $statusCounts = $areaScope(Result::query())
                     ->selectRaw('certification_status, COUNT(*) as count')
@@ -87,17 +96,19 @@ Route::middleware(['auth', 'role:admin-area-approver'])
         $user      = Auth::user();
         $adminArea = AdministrativeHierarchy::where('assigned_approver_id', $user->id)
             ->where('level', 'admin_area')->first();
+        $election  = Election::current();
         $filter    = $request->get('filter', 'pending');
 
         $results = collect();
         $counts  = ['pending' => 0, 'approved' => 0, 'rejected' => 0, 'all' => 0];
 
-        if ($adminArea) {
-            $areaScope = fn($q) => $q->whereHas('pollingStation.ward', fn($q2) =>
-                $q2->whereHas('parent', fn($q3) => $q3->where('parent_id', $adminArea->id))
-            );
+        if ($adminArea && $election) {
+            $areaScope = fn($q) => $q->where('election_id', $election->id)
+                ->whereHas('pollingStation.ward', fn($q2) =>
+                    $q2->whereHas('parent', fn($q3) => $q3->where('parent_id', $adminArea->id))
+                );
 
-            $countsCacheKey = "admin_area_queue_counts_{$user->id}_{$adminArea->id}_{$filter}";
+            $countsCacheKey = "admin_area_queue_counts_v2_{$user->id}_{$adminArea->id}_{$election->id}_{$filter}";
             $counts = Cache::remember($countsCacheKey, 15, function () use ($areaScope) {
                 $baseCounts = $areaScope(Result::query())
                     ->selectRaw(
@@ -267,6 +278,7 @@ Route::middleware(['auth', 'role:admin-area-approver'])
         $user      = Auth::user();
         $adminArea = AdministrativeHierarchy::where('assigned_approver_id', $user->id)
             ->where('level', 'admin_area')->first();
+        $election  = Election::current();
 
         $constituencies = collect();
         $stats          = [];
@@ -282,11 +294,16 @@ Route::middleware(['auth', 'role:admin-area-approver'])
             $awaitingCount     = 0;
 
             $constituencies = $constituencyNodes->map(function ($constituency) use (
-                &$totalVotesCounted, &$certifiedCount, &$pendingCount, &$awaitingCount
+                $election, &$totalVotesCounted, &$certifiedCount, &$pendingCount, &$awaitingCount
             ) {
-                $allResults = Result::whereHas('pollingStation.ward', fn($q) =>
-                    $q->where('parent_id', $constituency->id)
-                )->get();
+                // No current election in progress => no result data to show
+                // for this constituency (never fall back to an older
+                // election's results).
+                $allResults = $election
+                    ? Result::where('election_id', $election->id)
+                        ->whereHas('pollingStation.ward', fn($q) => $q->where('parent_id', $constituency->id))
+                        ->get()
+                    : collect();
 
                 $atAdminLevel = $allResults->whereIn('certification_status', [
                     Result::STATUS_PENDING_ADMIN_AREA,
@@ -374,10 +391,9 @@ Route::middleware(['auth', 'role:admin-area-approver'])
 
         return Inertia::render('AdminArea/ConstituencyBreakdowns', [
             'auth'           => ['user' => $user],
-            'adminArea'      => $adminArea ? ['id' => $adminArea->id,
-            'name' => $adminArea->name] : null,
+            'adminArea'      => $adminArea ? ['id' => $adminArea->id, 'name' => $adminArea->name] : null,
             'constituencies' => $constituencies,
-            'stats' => $stats,
+            'stats'          => $stats,
         ]);
     })->name('constituency-breakdowns')->middleware('permission:view-constituency-breakdowns');
 
@@ -386,8 +402,17 @@ Route::middleware(['auth', 'role:admin-area-approver'])
         $user      = Auth::user();
         $adminArea = AdministrativeHierarchy::where('assigned_approver_id', $user->id)
             ->where('level', 'admin_area')->first();
+        $election  = Election::current();
 
-        $stats          = [];
+        $stats = [
+            'totalConstituencies' => 0,
+            'certified'           => 0,
+            'totalWards'          => 0,
+            'totalVotes'          => 0,
+            'avgTurnout'          => 0,
+            'highestTurnout'      => 0,
+            'lowestTurnout'       => 0,
+        ];
         $constituencies = collect();
 
         if ($adminArea) {
@@ -397,59 +422,77 @@ Route::middleware(['auth', 'role:admin-area-approver'])
             $totalWards = AdministrativeHierarchy::where('level', 'ward')
                 ->whereIn('parent_id', $constituencyNodes->pluck('id'))->count();
 
-            $allResults = Result::whereHas('pollingStation.ward', fn($q) =>
-                $q->whereHas('parent', fn($q2) => $q2->where('parent_id', $adminArea->id))
-            )->get();
+            $stats['totalConstituencies'] = $constituencyNodes->count();
+            $stats['totalWards']          = $totalWards;
 
-            $totalVotes      = $allResults->sum('total_votes_cast');
-            $totalRegistered = $allResults->sum('total_registered_voters');
-            $certifiedCount  = $allResults->whereIn('certification_status', [
-                Result::STATUS_ADMIN_AREA_CERTIFIED,
-                Result::STATUS_PENDING_NATIONAL,
-                Result::STATUS_NATIONALLY_CERTIFIED,
-            ])->count();
+            if ($election) {
+                $totalVotesAll              = 0;
+                $totalRegisteredAll         = 0;
+                // FIX: "certified" must be counted in the SAME unit as
+                // totalConstituencies (i.e. "how many constituencies are
+                // fully certified"), not the raw number of certified
+                // polling-station result rows. Counting raw result rows
+                // here against a denominator of "number of constituencies"
+                // is what produced nonsensical rates like "1267%".
+                $certifiedConstituencyCount = 0;
+                $turnoutValues              = [];
 
-            $stats = [
-                'totalConstituencies' => $constituencyNodes->count(),
-                'certified'           => $certifiedCount,
-                'totalWards'          => $totalWards,
-                'totalVotes'          => $totalVotes,
-                'avgTurnout'          => $totalRegistered > 0
-                    ? round(($totalVotes / $totalRegistered) * 100, 1) : 0,
-                'highestTurnout'      => 0,
-                'lowestTurnout'       => 0,
-            ];
+                $constituencies = $constituencyNodes->map(function ($constituency) use (
+                    $election, &$totalVotesAll, &$totalRegisteredAll,
+                    &$certifiedConstituencyCount, &$turnoutValues
+                ) {
+                    $results = Result::where('election_id', $election->id)
+                        ->whereHas('pollingStation.ward', fn($q) => $q->where('parent_id', $constituency->id))
+                        ->get();
 
-            $turnoutValues  = [];
-            $constituencies = $constituencyNodes->map(function ($constituency) use (&$turnoutValues) {
-                $results    = Result::whereHas('pollingStation.ward', fn($q) =>
-                    $q->where('parent_id', $constituency->id)
-                )->get();
+                    $votes      = $results->sum('total_votes_cast');
+                    $registered = $results->sum('total_registered_voters');
+                    $total      = $results->count();
+                    $certified  = $results->whereIn('certification_status', [
+                        Result::STATUS_ADMIN_AREA_CERTIFIED,
+                        Result::STATUS_PENDING_NATIONAL,
+                        Result::STATUS_NATIONALLY_CERTIFIED,
+                    ])->count();
 
-                $votes      = $results->sum('total_votes_cast');
-                $registered = $results->sum('total_registered_voters');
-                $total      = $results->count();
-                $certified  = $results->whereIn('certification_status', [
-                    Result::STATUS_ADMIN_AREA_CERTIFIED,
-                    Result::STATUS_PENDING_NATIONAL,
-                    Result::STATUS_NATIONALLY_CERTIFIED,
-                ])->count();
+                    $progress = $total > 0 ? round(($certified / $total) * 100) : 0;
+                    $turnout  = $registered > 0 ? round(($votes / $registered) * 100, 1) : 0;
 
-                $progress = $total > 0 ? round(($certified / $total) * 100) : 0;
-                $turnout  = $registered > 0 ? round(($votes / $registered) * 100, 1) : 0;
-                $turnoutValues[] = $turnout;
+                    $totalVotesAll      += $votes;
+                    $totalRegisteredAll += $registered;
+                    if ($total > 0 && $certified === $total) {
+                        $certifiedConstituencyCount++;
+                    }
+                    if ($total > 0) {
+                        $turnoutValues[] = $turnout;
+                    }
 
-                return [
-                    'name'     => $constituency->name,
-                    'votes'    => $votes,
-                    'progress' => $progress,
-                    'turnout'  => $turnout,
-                ];
-            });
+                    return [
+                        'name'     => $constituency->name,
+                        'votes'    => $votes,
+                        'progress' => $progress,
+                        'turnout'  => $turnout,
+                    ];
+                });
 
-            if (!empty($turnoutValues)) {
-                $stats['highestTurnout'] = max($turnoutValues);
-                $stats['lowestTurnout']  = min($turnoutValues);
+                $stats['certified']  = $certifiedConstituencyCount;
+                $stats['totalVotes'] = $totalVotesAll;
+                $stats['avgTurnout'] = $totalRegisteredAll > 0
+                    ? round(($totalVotesAll / $totalRegisteredAll) * 100, 1) : 0;
+
+                if (!empty($turnoutValues)) {
+                    $stats['highestTurnout'] = max($turnoutValues);
+                    $stats['lowestTurnout']  = min($turnoutValues);
+                }
+            } else {
+                // No election currently in progress — keep structural
+                // counts (constituencies/wards) but never show stale
+                // result data from a closed/previous election.
+                $constituencies = $constituencyNodes->map(fn($c) => [
+                    'name'     => $c->name,
+                    'votes'    => 0,
+                    'progress' => 0,
+                    'turnout'  => 0,
+                ]);
             }
         }
 
