@@ -6,9 +6,11 @@ use App\Http\Middleware\ForcePasswordChange;
 use App\Http\Middleware\HandleInertiaRequests;
 use App\Http\Middleware\AuditRequestMiddleware;
 use App\Http\Middleware\RedirectIfAuthenticated;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
+use Spatie\Permission\Exceptions\UnauthorizedException;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -53,7 +55,34 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
-        //
+        /**
+         * FIX: Spatie's PermissionMiddleware (and any 403 AuthorizationException)
+         * normally renders a plain HTML error page with no `X-Inertia` header.
+         * Inertia's client can't recognise that as an Inertia response, so it
+         * falls back to a hard `window.location` reload — wiping out any
+         * in-progress form (e.g. Monitor > Submit Observation) with NO visible
+         * error message, which looks exactly like "it just hangs then resets".
+         *
+         * For any request coming from the Inertia client (X-Inertia header
+         * present), convert these into a normal redirect-back-with-errors
+         * response instead, so Inertia handles it as a proper SPA navigation
+         * and the error is actually shown to the user.
+         */
+        $exceptions->render(function (UnauthorizedException $e, $request) {
+            if ($request->header('X-Inertia')) {
+                return back()->withErrors([
+                    'error' => 'You do not have permission to perform this action. Please contact the IEC Administrator if this seems wrong.',
+                ]);
+            }
+        });
+
+        $exceptions->render(function (AuthorizationException $e, $request) {
+            if ($request->header('X-Inertia')) {
+                return back()->withErrors([
+                    'error' => 'You do not have permission to perform this action. Please contact the IEC Administrator if this seems wrong.',
+                ]);
+            }
+        });
     })
     ->booting(function () {
         if (env('VERCEL')) {

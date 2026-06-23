@@ -19,10 +19,83 @@ const SEVERITIES = [
     { value: 'critical', label: 'Critical', color: 'bg-red-500/20 text-red-500 border-red-500/40' },
 ];
 
+// ── Upload safety limits ───────────────────────────────────────────────────
+// Large, uncompressed mobile-camera photos (often 5-10MB each) combined with
+// multiple documents can push a single submission past common PHP/server
+// upload limits (post_max_size / upload_max_filesize). When that happens,
+// the server can reject or time out the request AFTER the full upload has
+// already completed — which feels exactly like "it hangs for a while, then
+// resets with no error". Compressing photos client-side keeps payloads
+// small and predictable.
+const MAX_PHOTO_DIMENSION = 1600;
+const PHOTO_QUALITY = 0.75;
+const MAX_TOTAL_UPLOAD_BYTES = 35 * 1024 * 1024; // 35MB safety cap
+
+function formatBytes(bytes) {
+    if (!bytes) return '0 MB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+}
+
+function compressImage(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+
+        reader.onload = (e) => {
+            const img = new Image();
+
+            img.onload = () => {
+                let { width, height } = img;
+
+                if (width > MAX_PHOTO_DIMENSION || height > MAX_PHOTO_DIMENSION) {
+                    if (width > height) {
+                        height = Math.round((height * MAX_PHOTO_DIMENSION) / width);
+                        width = MAX_PHOTO_DIMENSION;
+                    } else {
+                        width = Math.round((width * MAX_PHOTO_DIMENSION) / height);
+                        height = MAX_PHOTO_DIMENSION;
+                    }
+                }
+
+                const canvas = document.createElement('canvas');
+                canvas.width = width;
+                canvas.height = height;
+
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, width, height);
+
+                canvas.toBlob(
+                    (blob) => {
+                        if (!blob) {
+                            reject(new Error('Failed to compress image'));
+                            return;
+                        }
+                        const compressed = new File(
+                            [blob],
+                            file.name.replace(/\.\w+$/, '.jpg'),
+                            { type: 'image/jpeg' }
+                        );
+                        resolve(compressed);
+                    },
+                    'image/jpeg',
+                    PHOTO_QUALITY
+                );
+            };
+
+            img.onerror = () => reject(new Error('Could not read image'));
+            img.src = e.target.result;
+        };
+
+        reader.onerror = () => reject(new Error('Could not read file'));
+        reader.readAsDataURL(file);
+    });
+}
+
 export default function SubmitObservation({ auth, monitor, stations = [], preselectedStation }) {
     const [photoPreviews, setPhotoPreviews] = useState([]);
     const [documentPreviews, setDocumentPreviews] = useState([]);
     const [locationLoading, setLocationLoading] = useState(false);
+    const [compressingPhotos, setCompressingPhotos] = useState(false);
+    const [uploadProgress, setUploadProgress] = useState(0);
     const { toasts, removeNotification, notify } = useNotifications();
 
     const { data, setData, post, processing, errors, reset } = useForm({
@@ -39,27 +112,43 @@ export default function SubmitObservation({ auth, monitor, stations = [], presel
         documents:          [],
     });
 
-    const handlePhotoChange = (e) => {
+    const handlePhotoChange = async (e) => {
         const files = Array.from(e.target.files);
         if (files.length > 5) {
             notify.error('Maximum 5 photos allowed.');
             return;
         }
-        setData('photos', files);
 
-        // Generate previews
-        const previews = [];
-        files.forEach(file => {
-            const reader = new FileReader();
-            reader.onloadend = () => {
-                previews.push(reader.result);
-                if (previews.length === files.length) {
-                    setPhotoPreviews([...previews]);
-                }
-            };
-            reader.readAsDataURL(file);
-        });
-        if (files.length === 0) setPhotoPreviews([]);
+        if (files.length === 0) {
+            setData('photos', []);
+            setPhotoPreviews([]);
+            return;
+        }
+
+        setCompressingPhotos(true);
+        try {
+            const compressed = await Promise.all(files.map((file) => compressImage(file)));
+            setData('photos', compressed);
+
+            const previews = await Promise.all(
+                compressed.map(
+                    (file) =>
+                        new Promise((resolve) => {
+                            const reader = new FileReader();
+                            reader.onloadend = () => resolve(reader.result);
+                            reader.readAsDataURL(file);
+                        })
+                )
+            );
+            setPhotoPreviews(previews);
+        } catch (err) {
+            console.error('Photo compression failed:', err);
+            notify.error('Could not process one of the selected photos. Please try a different image.');
+            setData('photos', []);
+            setPhotoPreviews([]);
+        } finally {
+            setCompressingPhotos(false);
+        }
     };
 
     const removePhoto = (index) => {
@@ -68,11 +157,6 @@ export default function SubmitObservation({ auth, monitor, stations = [], presel
         setPhotoPreviews(prev => prev.filter((_, i) => i !== index));
     };
 
-    const ALLOWED_DOCUMENT_TYPES = ['application/pdf', 'application/msword', 
-        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-        'application/vnd.ms-excel',
-        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        'text/csv', 'text/plain'];
     const ALLOWED_EXTENSIONS = ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'csv', 'txt'];
 
     const handleDocumentChange = (e) => {
@@ -141,15 +225,38 @@ export default function SubmitObservation({ auth, monitor, stations = [], presel
         );
     };
 
+    const totalUploadBytes =
+        (data.photos || []).reduce((sum, f) => sum + (f.size || 0), 0) +
+        (data.documents || []).reduce((sum, f) => sum + (f.size || 0), 0);
+
     const handleSubmit = (e) => {
         e.preventDefault();
+
+        if (totalUploadBytes > MAX_TOTAL_UPLOAD_BYTES) {
+            notify.error(
+                `Attachments are too large (${formatBytes(totalUploadBytes)}). ` +
+                `Please remove some photos or documents and try again (max ${formatBytes(MAX_TOTAL_UPLOAD_BYTES)}).`
+            );
+            return;
+        }
+
+        setUploadProgress(0);
+
         post('/monitor/observations', {
             forceFormData: true,
-            preserveState: false,
+            // IMPORTANT: keep state on error so a failed submission doesn't
+            // wipe out everything the user just typed, and so any returned
+            // validation/authorization error is actually visible.
+            preserveState: true,
+            preserveScroll: true,
             onStart: () => notify.info('Submitting observation...'),
+            onProgress: (event) => {
+                if (event?.percentage != null) {
+                    setUploadProgress(event.percentage);
+                }
+            },
             onSuccess: (page) => {
                 notify.success('Observation submitted successfully');
-                // Optionally reset previews and form
                 setPhotoPreviews([]);
                 setDocumentPreviews([]);
                 reset();
@@ -164,11 +271,14 @@ export default function SubmitObservation({ auth, monitor, stations = [], presel
                 const message = messages.length ? messages.join(' — ') : 'Failed to submit observation.';
                 notify.error(message);
             },
-            onFinish: () => {},
+            onFinish: () => {
+                setUploadProgress(0);
+            },
         });
     };
 
     const selectedType = OBSERVATION_TYPES.find(t => t.value === data.observation_type);
+    const hasErrors = Object.keys(errors).length > 0;
 
     return (
         <AppLayout user={auth?.user}>
@@ -191,11 +301,19 @@ export default function SubmitObservation({ auth, monitor, stations = [], presel
                     </div>
                 ) : (
                     <>
-                        {errors.error && (
-                            <div className="mb-4 p-4 rounded-xl border border-red-500/30 bg-red-500/10 text-red-300 text-sm">
-                                ⚠ {Array.isArray(errors.error) ? errors.error[0] : errors.error}
+                        {/* General error banner — catches anything not displayed inline below,
+                            including permission/authorization failures returned from the server. */}
+                        {hasErrors && (
+                            <div className="mb-4 p-4 rounded-xl border border-red-500/30 bg-red-500/10 text-red-700 text-sm">
+                                <p className="font-semibold mb-1">⚠ There was a problem submitting your observation:</p>
+                                <ul className="list-disc list-inside space-y-0.5">
+                                    {Object.entries(errors).map(([key, msg]) => (
+                                        <li key={key}>{Array.isArray(msg) ? msg[0] : msg}</li>
+                                    ))}
+                                </ul>
                             </div>
                         )}
+
                         <form onSubmit={handleSubmit} className="space-y-6">
 
                         {/* Station Selection */}
@@ -357,7 +475,9 @@ export default function SubmitObservation({ auth, monitor, stations = [], presel
                         {/* Photos */}
                         <div className="bg-white rounded-xl p-6 border border-slate-200">
                             <h2 className="text-lg font-bold text-iec-navy mb-4">4. Supporting Photos (Optional)</h2>
-                            <p className="text-slate-500 text-sm mb-4">Upload up to 5 photos as evidence. Max 5MB each.</p>
+                            <p className="text-slate-500 text-sm mb-4">
+                                Upload up to 5 photos as evidence. Photos are automatically compressed before upload.
+                            </p>
 
                             {/* Photo upload */}
                             <div className="border-2 border-dashed border-slate-200 rounded-lg p-6 text-center hover:border-teal-500/50 transition-colors">
@@ -368,11 +488,14 @@ export default function SubmitObservation({ auth, monitor, stations = [], presel
                                     onChange={handlePhotoChange}
                                     className="hidden"
                                     id="photo-upload"
+                                    disabled={compressingPhotos}
                                 />
                                 <label htmlFor="photo-upload" className="cursor-pointer">
                                     <div className="text-4xl mb-2">📷</div>
-                                    <p className="text-iec-navy font-semibold">Click to upload photos</p>
-                                    <p className="text-slate-500 text-sm mt-1">PNG, JPG up to 5MB each · Max 5 photos</p>
+                                    <p className="text-iec-navy font-semibold">
+                                        {compressingPhotos ? 'Processing photos…' : 'Click to upload photos'}
+                                    </p>
+                                    <p className="text-slate-500 text-sm mt-1">PNG, JPG · Max 5 photos · Compressed automatically</p>
                                 </label>
                             </div>
 
@@ -516,11 +639,38 @@ export default function SubmitObservation({ auth, monitor, stations = [], presel
                             </div>
                         </div>
 
+                        {/* Attachment size summary */}
+                        {totalUploadBytes > 0 && (
+                            <div className={`text-xs px-4 py-2 rounded-lg ${
+                                totalUploadBytes > MAX_TOTAL_UPLOAD_BYTES
+                                    ? 'bg-red-50 text-red-600 border border-red-200'
+                                    : 'bg-slate-50 text-slate-500 border border-slate-200'
+                            }`}>
+                                Total attachments: {formatBytes(totalUploadBytes)} / {formatBytes(MAX_TOTAL_UPLOAD_BYTES)} max
+                            </div>
+                        )}
+
+                        {/* Upload progress */}
+                        {processing && (
+                            <div className="bg-white rounded-xl p-4 border border-slate-200">
+                                <div className="flex justify-between text-xs text-slate-500 mb-1">
+                                    <span>Uploading…</span>
+                                    <span>{uploadProgress}%</span>
+                                </div>
+                                <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
+                                    <div
+                                        className="h-2 bg-iec-pink-600 rounded-full transition-all"
+                                        style={{ width: `${uploadProgress}%` }}
+                                    />
+                                </div>
+                            </div>
+                        )}
+
                         {/* Submit */}
                         <div className="flex gap-4">
                             <button
                                 type="submit"
-                                disabled={processing || stations.length === 0}
+                                disabled={processing || compressingPhotos || stations.length === 0}
                                 className="flex-1 px-6 py-4 bg-iec-pink-600 hover:bg-iec-pink-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold rounded-lg text-lg"
                             >
                                 {processing ? (
@@ -529,9 +679,9 @@ export default function SubmitObservation({ auth, monitor, stations = [], presel
                                             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
                                             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
                                         </svg>
-                                        Submitting…
+                                        Submitting… {uploadProgress > 0 ? `${uploadProgress}%` : ''}
                                     </span>
-                                ) : '📝 Submit Observation'}
+                                ) : compressingPhotos ? 'Processing photos…' : '📝 Submit Observation'}
                             </button>
                             <Link
                                 href="/monitor/dashboard"

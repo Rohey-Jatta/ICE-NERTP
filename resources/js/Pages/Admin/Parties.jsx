@@ -290,7 +290,7 @@ export default function Parties({ auth, parties = [], flash, activeElection }) {
                                                     ))}
                                                 </div>
                                             ) : (
-                                                <p className="text-xs italic text-slate-400">
+                                                <p className="text-xs italic text-slate-600">
                                                     No candidates yet. Add them from Edit Party.
                                                 </p>
                                             )}
@@ -299,12 +299,12 @@ export default function Parties({ auth, parties = [], flash, activeElection }) {
                                         {/* Meta */}
                                         <div className="mb-5 space-y-1 text-sm">
                                             {party.headquarters && (
-                                                <p className="text-slate-500">
+                                                <p className="text-slate-600">
                                                     <span className="font-medium">HQ:</span> {party.headquarters}
                                                 </p>
                                             )}
                                             {party.website && (
-                                                <p className="text-slate-500">
+                                                <p className="text-slate-600">
                                                     <span className="font-medium">Web:</span>{' '}
 
                                                     <a   href={party.website}

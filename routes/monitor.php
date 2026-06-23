@@ -198,6 +198,9 @@ Route::middleware(['auth', 'role:election-monitor'])
             ->first();
 
         if (!$monitor) {
+            Log::warning('[Monitor] Observation submission blocked — no active monitor record.', [
+                'user_id' => $user->id,
+            ]);
             return back()->withErrors(['error' => 'You are not registered as an active election monitor.']);
         }
 
@@ -208,6 +211,11 @@ Route::middleware(['auth', 'role:election-monitor'])
             ->exists();
 
         if (!$isAssigned) {
+            Log::warning('[Monitor] Observation submission blocked — station not assigned to monitor.', [
+                'user_id'    => $user->id,
+                'monitor_id' => $monitor->id,
+                'station_id' => $request->polling_station_id,
+            ]);
             return back()->withErrors(['error' => 'You are not assigned to this polling station.']);
         }
 
@@ -313,11 +321,20 @@ Route::middleware(['auth', 'role:election-monitor'])
                 ]
             );
 
-            return redirect()->route('monitor.observations')
-                ->with('success', 'Observation submitted successfully!' . (count($documentPaths) > 0 ? " ({$documentPaths} documents uploaded)" : ''));
+            $successMessage = 'Observation submitted successfully!';
+            if (count($documentPaths) > 0) {
+                $successMessage .= ' (' . count($documentPaths) . ' document' . (count($documentPaths) > 1 ? 's' : '') . ' uploaded)';
+            }
+
+            return redirect()->route('monitor.observations')->with('success', $successMessage);
 
         } catch (\Exception $e) {
-            Log::error('Monitor observation submission failed', ['error' => $e->getMessage()]);
+            Log::error('Monitor observation submission failed', [
+                'error'      => $e->getMessage(),
+                'trace'      => $e->getTraceAsString(),
+                'user_id'    => $user->id,
+                'monitor_id' => $monitor->id,
+            ]);
             return back()->withErrors(['error' => 'Failed to submit observation: ' . $e->getMessage()]);
         }
     })->name('observations.store')->middleware('permission:submit-observation');

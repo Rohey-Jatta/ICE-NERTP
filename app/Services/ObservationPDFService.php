@@ -15,8 +15,8 @@ class ObservationPDFService
     public static function generate($observationId, $monitor)
     {
         $observation = DB::table('monitor_observations')
-            ->where('id', $observationId)
-            ->where('election_monitor_id', $monitor->id)
+            ->where('monitor_observations.id', $observationId)
+            ->where('monitor_observations.election_monitor_id', $monitor->id)
             ->leftJoin('polling_stations', 'monitor_observations.polling_station_id', '=', 'polling_stations.id')
             ->leftJoin('administrative_hierarchy as wards', 'polling_stations.ward_id', '=', 'wards.id')
             ->select(
@@ -63,8 +63,8 @@ class ObservationPDFService
     public static function generateBatch($observationIds, $monitor)
     {
         $observations = DB::table('monitor_observations')
-            ->whereIn('id', $observationIds)
-            ->where('election_monitor_id', $monitor->id)
+            ->whereIn('monitor_observations.id', $observationIds)
+            ->where('monitor_observations.election_monitor_id', $monitor->id)
             ->leftJoin('polling_stations', 'monitor_observations.polling_station_id', '=', 'polling_stations.id')
             ->leftJoin('administrative_hierarchy as wards', 'polling_stations.ward_id', '=', 'wards.id')
             ->select(
