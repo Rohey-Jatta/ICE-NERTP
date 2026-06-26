@@ -39,7 +39,8 @@ Route::middleware(['auth', 'role:election-monitor'])
         $recentObservations = collect();
 
         if ($monitor) {
-            $cacheKey = "monitor_dashboard_{$monitor->id}_" . ($monitor->election->id ?? 'none');
+            // Scope cache key to the monitor's election to prevent cross-election pollution
+            $cacheKey = "monitor_dashboard_{$monitor->id}_{$monitor->election_id}";
             $dashboardData = Cache::remember($cacheKey, 30, function () use ($monitor) {
                 $stats = [
                     'assigned_stations' => $monitor->pollingStations->count(),
@@ -48,6 +49,8 @@ Route::middleware(['auth', 'role:election-monitor'])
                     'visited'           => 0,
                 ];
 
+                // FIXED: Scope ALL observation queries to this monitor's election
+                // via election_monitor_id (which is already election-scoped)
                 $baseQuery = DB::table('monitor_observations')
                     ->where('election_monitor_id', $monitor->id);
 
@@ -105,7 +108,9 @@ Route::middleware(['auth', 'role:election-monitor'])
         if ($monitor) {
             $stationIds = $monitor->pollingStations->pluck('id')->all();
 
+            // Scope results to the monitor's election
             $latestResults = Result::whereIn('polling_station_id', $stationIds)
+                ->where('election_id', $monitor->election_id)
                 ->orderByDesc('submitted_at')
                 ->get()
                 ->groupBy('polling_station_id')
@@ -164,7 +169,6 @@ Route::middleware(['auth', 'role:election-monitor'])
             ])->sortBy('code')->values()
             : collect();
 
-        // Pre-select a station if passed as query param
         $preselectedStation = $request->query('station_id');
 
         return Inertia::render('Monitor/SubmitObservation', [
@@ -187,9 +191,9 @@ Route::middleware(['auth', 'role:election-monitor'])
             'latitude'           => 'nullable|numeric',
             'longitude'          => 'nullable|numeric',
             'photos'             => 'nullable|array|max:5',
-            'photos.*'           => 'image|max:5120', // 5MB per photo
+            'photos.*'           => 'image|max:5120',
             'documents'          => 'nullable|array|max:10',
-            'documents.*'        => 'file|mimes:pdf,doc,docx,xls,xlsx,csv,txt|max:10240', // 10MB per document
+            'documents.*'        => 'file|mimes:pdf,doc,docx,xls,xlsx,csv,txt|max:10240',
         ]);
 
         $user    = Auth::user();
@@ -252,7 +256,7 @@ Route::middleware(['auth', 'role:election-monitor'])
             $observationId = DB::table('monitor_observations')->insertGetId([
                 'election_monitor_id' => $monitor->id,
                 'polling_station_id'  => $request->polling_station_id,
-                'election_id'         => $monitor->election_id,
+                'election_id'         => $monitor->election_id,  // Always use monitor's election
                 'observation_type'    => $request->observation_type,
                 'title'               => $request->title,
                 'observation'         => $request->observation,
@@ -268,7 +272,6 @@ Route::middleware(['auth', 'role:election-monitor'])
             ]);
 
             // ── Auto-create Incident from Observation ─────────────────────
-            // Classify observation type → incident type
             $incidentType = match ($request->observation_type) {
                 'irregularity', 'incident', 'process_concern' => 'dispute',
                 default => null,
@@ -295,13 +298,15 @@ Route::middleware(['auth', 'role:election-monitor'])
                         'description'              => $request->title,
                     ]);
 
-                    // Bust operations dashboard cache
+                    // Bust operations dashboard cache so it reflects immediately
                     Cache::forget('election_operations_dashboard');
                 } catch (\Throwable $e) {
                     Log::warning('[Incident] Failed to create dispute incident: ' . $e->getMessage());
                 }
             }
-            // ── End incident creation ──────────────────────────────────────
+
+            // Always bust the monitor dashboard cache on new observation
+            Cache::forget("monitor_dashboard_{$monitor->id}_{$monitor->election_id}");
 
             AuditLog::record(
                 action:    'monitor.observation.submitted',
@@ -370,7 +375,6 @@ Route::middleware(['auth', 'role:election-monitor'])
 
             $observations = $query->orderByDesc('monitor_observations.observed_at')->get()
                 ->map(function ($obs) {
-                    // Parse photo paths
                     $photoPaths = [];
                     if ($obs->photo_paths) {
                         $photoPaths = collect(json_decode($obs->photo_paths, true))
@@ -378,7 +382,6 @@ Route::middleware(['auth', 'role:election-monitor'])
                             ->toArray();
                     }
 
-                    // Parse document paths and metadata
                     $documents = [];
                     if ($obs->documents_paths) {
                         $documents = collect(json_decode($obs->documents_paths, true))
@@ -409,7 +412,6 @@ Route::middleware(['auth', 'role:election-monitor'])
                 });
         }
 
-        // Count stats for display
         $typeCounts = $monitor
             ? DB::table('monitor_observations')
                 ->where('election_monitor_id', $monitor->id)
@@ -459,7 +461,6 @@ Route::middleware(['auth', 'role:election-monitor'])
             ->orderByDesc('monitor_observations.observed_at')
             ->get();
 
-        // Build CSV content
         $csvRows   = [];
         $csvRows[] = ['ID', 'Station Code', 'Station Name', 'Type', 'Title', 'Observation', 'Severity', 'Observed At', 'Public', 'Latitude', 'Longitude'];
 
@@ -512,7 +513,6 @@ Route::middleware(['auth', 'role:election-monitor'])
             abort(403, 'Not an active monitor.');
         }
 
-        // Verify observation belongs to this monitor
         $observation = DB::table('monitor_observations')
             ->where('id', $id)
             ->where('election_monitor_id', $monitor->id)
@@ -524,7 +524,7 @@ Route::middleware(['auth', 'role:election-monitor'])
 
         try {
             $pdf = ObservationPDFService::generate($id, $monitor);
-            
+
             AuditLog::record(
                 action:    'monitor.observation.pdf-downloaded',
                 event:     'exported',
@@ -556,7 +556,6 @@ Route::middleware(['auth', 'role:election-monitor'])
         $typeFilter     = $request->get('type', 'all');
         $severityFilter = $request->get('severity', 'all');
 
-        // Build query
         $query = DB::table('monitor_observations')
             ->where('election_monitor_id', $monitor->id);
 
@@ -606,7 +605,9 @@ Route::middleware(['auth', 'role:election-monitor'])
         $results = collect();
         if ($monitor) {
             $stationIds = $monitor->pollingStations->pluck('id');
+            // Scope to monitor's election
             $results    = Result::whereIn('polling_station_id', $stationIds)
+                ->where('election_id', $monitor->election_id)
                 ->with(['pollingStation.ward', 'candidateVotes.candidate.politicalParty', 'partyAcceptances'])
                 ->get()
                 ->map(function ($r) {
@@ -663,7 +664,6 @@ Route::middleware(['auth', 'role:election-monitor'])
             abort(400, 'Document path is required.');
         }
 
-        // Verify the path is actually in the documents_paths JSON
         $documents = json_decode($observation->documents_paths, true) ?? [];
         $docExists = collect($documents)->firstWhere('path', $documentPath);
 
@@ -676,7 +676,6 @@ Route::middleware(['auth', 'role:election-monitor'])
             abort(404, 'File not found on disk.');
         }
 
-        // Log document download
         AuditLog::record(
             action:    'monitor.observation.document-downloaded',
             event:     'downloaded',

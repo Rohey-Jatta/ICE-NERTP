@@ -15,14 +15,6 @@ use Illuminate\Support\Facades\Log;
 
 /**
  * CertificationWorkflowService — Sequential approval state machine.
- *
- * Active workflow:
- * Submitted → Pending Ward → Ward Certified → Pending Constituency →
- * Constituency Certified → Pending Admin Area → Admin Area Certified →
- * Pending National → Nationally Certified.
- *
- * Party review is parallel and non-blocking. The pending_party_acceptance status
- * is accepted only for legacy ward-level records.
  */
 class CertificationWorkflowService
 {
@@ -106,6 +98,7 @@ class CertificationWorkflowService
                     'outcome'     => 'success',
                     'comments'    => $comments,
                     'reservation' => $withReservation ? $comments : null,
+                    'election_id' => $result->election_id,
                 ]
             );
 
@@ -120,8 +113,7 @@ class CertificationWorkflowService
     }
 
     /**
-     * Reject a result at a specific level and return it to the correct earlier
-     * review point. Ward rejections return to the officer for resubmission.
+     * Reject a result at a specific level and return it to the correct earlier review point.
      */
     public function reject(Result $result, User $approver, string $level, string $reason): bool
     {
@@ -168,6 +160,7 @@ class CertificationWorkflowService
                     'reason'         => $reason,
                     'outcome'        => 'failure',
                     'failure_reason' => $reason,
+                    'election_id'    => $result->election_id,
                 ]
             );
 
@@ -233,11 +226,10 @@ class CertificationWorkflowService
         return $query->orderBy('submitted_at')->paginate(20);
     }
 
-    // ── Private helpers ───────────────────────────────────────────────
+    // ── Private helpers ───────────────────────────────────────────────────
 
     /**
      * Auto-create a Rejection incident after a result is rejected.
-     * Non-fatal — a failure here must never block the certification flow.
      */
     private function createRejectionIncident(Result $result, string $level, string $reason): void
     {
@@ -292,6 +284,8 @@ class CertificationWorkflowService
 
         if ($level === 'ward') {
             $allowed[] = Result::STATUS_PENDING_PARTY_ACCEPTANCE;
+            // Also allow rejections that came back to pending_ward
+            // (e.g. rejected from constituency, now at pending_ward with rejection_count > 0)
         }
 
         return in_array($result->certification_status, $allowed, true);
@@ -374,5 +368,14 @@ class CertificationWorkflowService
         Election::forgetPublicCaches($result->election_id, $result->election?->status);
         Cache::forget('chairman_dashboard_stats');
         Cache::forget('election_operations_dashboard');
+        // Also clear ward dashboard cache for this result's ward
+        if ($result->pollingStation?->ward_id) {
+            $ward = AdministrativeHierarchy::find($result->pollingStation->ward_id);
+            if ($ward?->assigned_approver_id) {
+                $approver = $ward->assigned_approver_id;
+                Cache::forget("ward_dashboard_v3_{$approver}_{$ward->id}_{$result->election_id}");
+                Cache::forget("ward_dashboard_v2_{$approver}_{$ward->id}_{$result->election_id}");
+            }
+        }
     }
 }

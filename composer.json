@@ -8,6 +8,7 @@
     "require": {
         "php": "^8.3",
         "africastalking/africastalking": "*",
+        "barryvdh/laravel-dompdf": "^3.1",
         "brick/geo": "^0.13.1",
         "fakerphp/faker": "^1.23",
         "inertiajs/inertia-laravel": "^2.0",

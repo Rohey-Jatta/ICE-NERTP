@@ -96,8 +96,6 @@ class ElectionOperationsController extends Controller
     {
         if (!$electionId) return [];
 
-        // Get all active stations with their admin area via hierarchy join
-        // Count total stations per area and how many have submitted results
         $rows = DB::table('polling_stations as ps')
             ->join('administrative_hierarchy as w',   'ps.ward_id',    '=', 'w.id')
             ->join('administrative_hierarchy as con', 'w.parent_id',   '=', 'con.id')
@@ -139,6 +137,7 @@ class ElectionOperationsController extends Controller
     //   - 'rejection' type: when a ward/constituency/admin/national approver rejects a result
     //   - 'resubmission' type: when a polling officer resubmits a previously rejected result
     //   - 'dispute' type: when an election monitor submits an irregularity/incident/process_concern observation
+    //   - Also from party_acceptances with status = 'rejected'
 
     private function incidentReport(?int $electionId): array
     {
@@ -186,6 +185,8 @@ class ElectionOperationsController extends Controller
     private function recentPublicObservations(?int $electionId): array
     {
         try {
+            // Get the current election's monitor IDs to scope observations correctly
+            // Observations are linked to election_monitors, which are linked to elections
             $query = DB::table('monitor_observations as mo')
                 ->join('polling_stations as ps', 'mo.polling_station_id', '=', 'ps.id')
                 ->join('election_monitors as em', 'mo.election_monitor_id', '=', 'em.id')
@@ -195,9 +196,10 @@ class ElectionOperationsController extends Controller
                 ->leftJoin('administrative_hierarchy as aa',  'con.parent_id','=', 'aa.id')
                 ->where('mo.is_public', true);
 
-            // Scope to the current election if one is active
+            // Scope to the current election via the election_monitor's election_id
+            // This ensures we only see observations from monitors registered for THIS election
             if ($electionId) {
-                $query->where('mo.election_id', $electionId);
+                $query->where('em.election_id', $electionId);
             }
 
             $rows = $query->select(
@@ -222,13 +224,13 @@ class ElectionOperationsController extends Controller
                 ->limit(20)
                 ->get();
 
-            // Count queries — also scoped to election
+            // Count queries — scoped via election_monitor's election_id
             $countBase = DB::table('monitor_observations as mo')
                 ->join('election_monitors as em', 'mo.election_monitor_id', '=', 'em.id')
                 ->where('mo.is_public', true);
 
             if ($electionId) {
-                $countBase->where('mo.election_id', $electionId);
+                $countBase->where('em.election_id', $electionId);
             }
 
             $totalCount    = (clone $countBase)->count();
@@ -274,13 +276,24 @@ class ElectionOperationsController extends Controller
 
     private function userActivity(?int $electionId): array
     {
-        $totalUsers           = User::count();
-        $totalLogins          = AuditLog::where('action', 'auth.login.success')->count();
-        $certificationActions = AuditLog::where('action', 'like', 'certification.%.approved')->count();
+        // Total users and logins are system-wide metrics (not election-scoped)
+        $totalUsers  = User::count();
 
-        // Login activity last 7 days
+        // Login activity last 7 days — system-wide (who logged in recently)
         $sevenDaysAgo = now()->subDays(6)->startOfDay();
-        $loginCounts  = AuditLog::where('action', 'auth.login.success')
+
+        $totalLogins = AuditLog::where('action', 'auth.login.success')
+            ->where('created_at', '>=', $sevenDaysAgo)
+            ->count();
+
+        // Certification actions scoped to current election via audit log election_id
+        $certificationActions = AuditLog::where('action', 'like', 'certification.%.approved')
+            ->when($electionId, fn ($q) => $q->where('election_id', $electionId))
+            ->where('created_at', '>=', $sevenDaysAgo)
+            ->count();
+
+        // Login activity chart — last 7 days
+        $loginCounts = AuditLog::where('action', 'auth.login.success')
             ->where('created_at', '>=', $sevenDaysAgo)
             ->selectRaw("DATE(created_at) as date, COUNT(*) as count")
             ->groupBy('date')
@@ -294,7 +307,7 @@ class ElectionOperationsController extends Controller
             ];
         })->values();
 
-        // Scope submissions/validations/certifications to the current election
+        // Election-scoped submission/validation/certification stats
         $submissions = Result::when($electionId, fn ($q) => $q->where('election_id', $electionId))->count();
 
         $validations = ResultCertification::where('status', 'approved')
