@@ -37,7 +37,7 @@ const ELECTION_STATUS_LABELS = {
     configured:       'Election Configured',
     active:           'Election Active',
     submitting:       'Receiving Results',
-    results_pending:  'Results Pending',
+    results_pending:  'Certification in Progress',
     certifying:       'Certification in Progress',
     certified:        'Official Certified Results',
     archived:         'Election Archived',

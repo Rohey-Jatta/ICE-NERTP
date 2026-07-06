@@ -4,14 +4,15 @@ use App\Models\Election;
 use App\Models\ElectionMonitor;
 use App\Models\Incident;
 use App\Models\PollingStation;
+use App\Models\Result;
 use App\Services\AuditTrailService;
 use App\Services\ObservationPDFService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Route;
-use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 
 Route::middleware(['auth', 'role:election-monitor'])
@@ -26,7 +27,7 @@ Route::middleware(['auth', 'role:election-monitor'])
             ->with(['pollingStations', 'election'])
             ->first();
 
-        $activeElection = Election::where('status', 'active')->latest()->first();
+        $activeElection = Election::currentOrLatestCertified();
 
         $observationStats = ['total' => 0, 'pending' => 0, 'resolved' => 0, 'critical' => 0];
         $assignedStations = [];
@@ -46,10 +47,10 @@ Route::middleware(['auth', 'role:election-monitor'])
                     ->when($activeElection, fn($q) => $q->where('election_id', $activeElection->id))
                     ->selectRaw(
                         'COUNT(*) as total, '
-                        . 'SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) as pending, '
-                        . 'SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) as resolved, '
+                        . '0 as pending, '
+                        . '0 as resolved, '
                         . 'SUM(CASE WHEN severity = ? THEN 1 ELSE 0 END) as critical',
-                        ['pending', 'resolved', 'critical']
+                        ['critical']
                     )
                     ->first();
 
@@ -62,6 +63,19 @@ Route::middleware(['auth', 'role:election-monitor'])
             }
         }
 
+        $recentObservations = $monitor
+            ? DB::table('monitor_observations as mo')
+                ->leftJoin('polling_stations as ps', 'ps.id', '=', 'mo.polling_station_id')
+                ->where('mo.election_monitor_id', $monitor->id)
+                ->when($activeElection, fn($q) => $q->where('mo.election_id', $activeElection->id))
+                ->orderByDesc('mo.created_at')
+                ->limit(5)
+                ->get([
+                    'mo.id', 'mo.observation_type', 'mo.severity', 'mo.title', 'mo.observed_at',
+                    'ps.name as station_name', 'ps.code as station_code',
+                ])
+            : collect();
+
         return Inertia::render('Monitor/Dashboard', [
             'auth'              => ['user' => $user],
             'monitor'           => $monitor ? [
@@ -70,6 +84,25 @@ Route::middleware(['auth', 'role:election-monitor'])
                 'type'         => $monitor->type,
                 'election'     => $monitor->election ? ['id' => $monitor->election->id, 'name' => $monitor->election->name] : null,
             ] : null,
+            'stats'             => [
+                'assigned_stations' => count($assignedStations),
+                'observations'      => $observationStats['total'],
+                'visited'           => $monitor
+                    ? DB::table('monitor_observations')
+                        ->where('election_monitor_id', $monitor->id)
+                        ->when($activeElection, fn($q) => $q->where('election_id', $activeElection->id))
+                        ->distinct('polling_station_id')
+                        ->count('polling_station_id')
+                    : 0,
+                'flagged'           => $monitor
+                    ? DB::table('monitor_observations')
+                        ->where('election_monitor_id', $monitor->id)
+                        ->when($activeElection, fn($q) => $q->where('election_id', $activeElection->id))
+                        ->whereIn('observation_type', ['irregularity', 'process_concern', 'incident'])
+                        ->count()
+                    : 0,
+            ],
+            'recentObservations'=> $recentObservations,
             'assignedStations'  => $assignedStations,
             'observationStats'  => $observationStats,
             'activeElection'    => $activeElection ? ['id' => $activeElection->id, 'name' => $activeElection->name] : null,
@@ -89,24 +122,26 @@ Route::middleware(['auth', 'role:election-monitor'])
                 ->with('error', 'You are not accredited as an election monitor for any station.');
         }
 
-        $activeElection = Election::where('status', 'active')->latest()->first();
+        $activeElection = Election::current();
 
-        return Inertia::render('Monitor/ObservationCreate', [
+        return Inertia::render('Monitor/SubmitObservation', [
             'auth'            => ['user' => $user],
             'monitor'         => ['id' => $monitor->id, 'organization' => $monitor->organization, 'type' => $monitor->type],
-            'assignedStations'=> $monitor->pollingStations->map(fn($s) => [
+            'stations'         => $monitor->pollingStations->map(fn($s) => [
                 'id'   => $s->id,
                 'name' => $s->name,
                 'code' => $s->code,
             ])->values(),
             'activeElection'  => $activeElection ? ['id' => $activeElection->id, 'name' => $activeElection->name] : null,
-            'observationTypes'=> [
-                'irregularity', 'incident', 'violence', 'voter_intimidation',
-                'ballot_stuffing', 'equipment_failure', 'access_denied', 'general',
-            ],
+            'preselectedStation' => request()->query('station_id'),
+            'observationTypes'=> ['general', 'irregularity', 'process_concern', 'positive', 'incident'],
             'severityLevels'  => ['low', 'medium', 'high', 'critical'],
         ]);
     })->name('observations.create')->middleware('permission:submit-observation');
+
+    Route::get('/submit-observation', fn() => redirect()->route('monitor.observations.create', request()->query()))
+        ->name('submit-observation')
+        ->middleware('permission:submit-observation');
 
     Route::post('/observations', function (Request $request) {
         $user    = Auth::user();
@@ -120,13 +155,16 @@ Route::middleware(['auth', 'role:election-monitor'])
 
         $validated = $request->validate([
             'polling_station_id' => 'required|exists:polling_stations,id',
-            'type'               => 'required|string|in:irregularity,incident,violence,voter_intimidation,ballot_stuffing,equipment_failure,access_denied,general',
+            'observation_type'   => 'required|string|in:general,irregularity,process_concern,positive,incident',
             'severity'           => 'required|string|in:low,medium,high,critical',
             'title'              => 'required|string|max:255',
-            'description'        => 'required|string|max:5000',
-            'occurred_at'        => 'nullable|date',
-            'documents'          => 'nullable|array|max:5',
-            'documents.*'        => 'file|mimes:jpg,jpeg,png,pdf|max:10240',
+            'observation'        => 'required|string|max:5000',
+            'observed_at'        => 'nullable|date',
+            'is_public'          => 'sometimes|boolean',
+            'photos'             => 'nullable|array|max:5',
+            'photos.*'           => 'file|mimes:jpg,jpeg,png|max:10240',
+            'documents'          => 'nullable|array|max:10',
+            'documents.*'        => 'file|mimes:pdf,doc,docx,xls,xlsx,csv,txt,jpg,jpeg,png|max:10240',
             'latitude'           => 'nullable|numeric|between:-90,90',
             'longitude'          => 'nullable|numeric|between:-180,180',
         ]);
@@ -137,17 +175,26 @@ Route::middleware(['auth', 'role:election-monitor'])
             return back()->withErrors(['error' => 'You are not assigned to this polling station.']);
         }
 
-        $activeElection = Election::where('status', 'active')->latest()->first();
+        $activeElection = Election::current();
         if (!$activeElection) {
             return back()->withErrors(['error' => 'No active election. Observations cannot be submitted outside an active election period.']);
         }
 
-        // Handle document uploads
+        // Handle uploads into the JSON columns defined for monitor observations.
+        $photoPaths = [];
+        if ($request->hasFile('photos')) {
+            foreach ($request->file('photos') as $photo) {
+                if ($photo->isValid()) {
+                    $photoPaths[] = $photo->store('monitor-observations/photos', 'public');
+                }
+            }
+        }
+
         $documentPaths = [];
         if ($request->hasFile('documents')) {
             foreach ($request->file('documents') as $doc) {
                 if ($doc->isValid()) {
-                    $documentPaths[] = $doc->store('monitor-observations', 'public');
+                    $documentPaths[] = $doc->store('monitor-observations/documents', 'public');
                 }
             }
         }
@@ -157,15 +204,16 @@ Route::middleware(['auth', 'role:election-monitor'])
                 'election_monitor_id' => $monitor->id,
                 'election_id'         => $activeElection->id,
                 'polling_station_id'  => $validated['polling_station_id'],
-                'type'                => $validated['type'],
+                'observation_type'    => $validated['observation_type'],
                 'severity'            => $validated['severity'],
                 'title'               => $validated['title'],
-                'description'         => $validated['description'],
-                'occurred_at'         => $validated['occurred_at'] ?? now(),
+                'observation'         => $validated['observation'],
+                'observed_at'         => $validated['observed_at'] ?? now(),
                 'latitude'            => $validated['latitude'] ?? null,
                 'longitude'           => $validated['longitude'] ?? null,
-                'status'              => 'pending',
-                'documents'           => json_encode($documentPaths),
+                'is_public'           => $request->boolean('is_public', true),
+                'photo_paths'         => json_encode($photoPaths),
+                'documents_paths'     => json_encode($documentPaths),
                 'created_at'          => now(),
                 'updated_at'          => now(),
             ]);
@@ -178,14 +226,16 @@ Route::middleware(['auth', 'role:election-monitor'])
                 electionId:       $activeElection->id,
                 pollingStationId: $validated['polling_station_id'],
                 stationCode:      $station?->code ?? (string) $validated['polling_station_id'],
-                type:             $validated['type'],
+                type:             $validated['observation_type'],
                 severity:         $validated['severity'],
                 title:            $validated['title']
             );
 
+            Cache::forget('election_operations_dashboard');
+
             // Auto-escalate critical observations to Incidents table
             if ($validated['severity'] === 'critical') {
-                $this->createCriticalIncident(
+                createCriticalIncident(
                     $observation,
                     $activeElection->id,
                     $validated,
@@ -219,7 +269,7 @@ Route::middleware(['auth', 'role:election-monitor'])
             ]);
         }
 
-        $activeElection = Election::where('status', 'active')->latest()->first();
+        $activeElection = Election::currentOrLatestCertified();
 
         $observations = DB::table('monitor_observations as mo')
             ->leftJoin('polling_stations as ps', 'ps.id', '=', 'mo.polling_station_id')
@@ -227,24 +277,31 @@ Route::middleware(['auth', 'role:election-monitor'])
             ->when($activeElection, fn($q) => $q->where('mo.election_id', $activeElection->id))
             ->orderByDesc('mo.created_at')
             ->select([
-                'mo.id', 'mo.type', 'mo.severity', 'mo.title',
-                'mo.description', 'mo.status', 'mo.occurred_at',
-                'mo.created_at', 'mo.documents',
+                'mo.id', 'mo.observation_type', 'mo.severity', 'mo.title',
+                'mo.observation', 'mo.is_public', 'mo.observed_at',
+                'mo.created_at', 'mo.photo_paths', 'mo.documents_paths', 'mo.latitude', 'mo.longitude',
                 'ps.name as station_name', 'ps.code as station_code',
             ])
             ->get()
             ->map(fn($o) => [
                 'id'           => $o->id,
-                'type'         => $o->type,
+                'observation_type' => $o->observation_type,
                 'severity'     => $o->severity,
                 'title'        => $o->title,
-                'description'  => $o->description,
-                'status'       => $o->status,
+                'observation'  => $o->observation,
+                'is_public'    => (bool) $o->is_public,
                 'station_name' => $o->station_name ?? 'Unknown',
                 'station_code' => $o->station_code ?? '—',
-                'occurred_at'  => $o->occurred_at,
+                'observed_at'  => $o->observed_at,
                 'submitted_at' => $o->created_at,
-                'document_count' => count(json_decode($o->documents ?? '[]', true)),
+                'latitude'     => $o->latitude,
+                'longitude'    => $o->longitude,
+                'photo_paths'  => array_map(fn($path) => asset('storage/' . $path), json_decode($o->photo_paths ?? '[]', true) ?: []),
+                'documents'    => array_map(fn($path) => [
+                    'name' => basename($path),
+                    'path' => asset('storage/' . $path),
+                ], json_decode($o->documents_paths ?? '[]', true) ?: []),
+                'document_count' => count(json_decode($o->documents_paths ?? '[]', true) ?: []),
             ]);
 
         return Inertia::render('Monitor/Observations', [
@@ -253,6 +310,34 @@ Route::middleware(['auth', 'role:election-monitor'])
             'noAssignment' => false,
         ]);
     })->name('observations.index')->middleware('permission:submit-observation');
+
+
+    Route::get('/observations/pdf/batch', function (Request $request, ObservationPDFService $pdfService) {
+        $user    = Auth::user();
+        $monitor = ElectionMonitor::where('user_id', $user->id)->first();
+
+        if (!$monitor) {
+            abort(403);
+        }
+
+        $activeElection = Election::currentOrLatestCertified();
+        $ids = DB::table('monitor_observations')
+            ->where('election_monitor_id', $monitor->id)
+            ->when($activeElection, fn($q) => $q->where('election_id', $activeElection->id))
+            ->when($request->query('type') && $request->query('type') !== 'all', fn($q) => $q->where('observation_type', $request->query('type')))
+            ->when($request->query('severity') && $request->query('severity') !== 'all', fn($q) => $q->where('severity', $request->query('severity')))
+            ->orderByDesc('created_at')
+            ->limit(50)
+            ->pluck('id')
+            ->all();
+
+        if (empty($ids)) {
+            return back()->withErrors(['error' => 'No observations found for the selected filters.']);
+        }
+
+        return $pdfService::generateBatch($ids, $monitor)
+            ->download('monitor-observations-' . now()->format('Ymd-His') . '.pdf');
+    })->name('observations.pdf.batch')->middleware('permission:submit-observation');
 
     // ── Single Observation Detail ─────────────────────────────────────────────
     Route::get('/observations/{id}', function (int $id) {
@@ -278,24 +363,27 @@ Route::middleware(['auth', 'role:election-monitor'])
             abort(404, 'Observation not found.');
         }
 
-        $docs     = json_decode($observation->documents ?? '[]', true);
+        $docs     = json_decode($observation->documents_paths ?? '[]', true);
         $docUrls  = array_map(fn($path) => asset('storage/' . $path), $docs);
+        $photos   = json_decode($observation->photo_paths ?? '[]', true);
+        $photoUrls = array_map(fn($path) => asset('storage/' . $path), $photos);
 
         return Inertia::render('Monitor/ObservationDetail', [
             'auth'        => ['user' => $user],
             'observation' => [
                 'id'           => $observation->id,
-                'type'         => $observation->type,
+                'observation_type' => $observation->observation_type,
                 'severity'     => $observation->severity,
                 'title'        => $observation->title,
-                'description'  => $observation->description,
-                'status'       => $observation->status,
+                'observation'  => $observation->observation,
+                'is_public'    => (bool) $observation->is_public,
                 'station_name' => $observation->station_name ?? 'Unknown',
                 'station_code' => $observation->station_code ?? '—',
-                'occurred_at'  => $observation->occurred_at,
+                'observed_at'  => $observation->observed_at,
                 'submitted_at' => $observation->created_at,
                 'latitude'     => $observation->latitude,
                 'longitude'    => $observation->longitude,
+                'photo_urls'   => $photoUrls,
                 'document_urls'=> $docUrls,
             ],
         ]);
@@ -330,13 +418,14 @@ Route::middleware(['auth', 'role:election-monitor'])
                 'Election Monitor %s (ID:%d) downloaded PDF for observation ID:%d (type:%s, severity:%s) at %s.',
                 $user->name, $user->id,
                 $observation->id,
-                $observation->type,
+                $observation->observation_type,
                 $observation->severity,
                 now()->toDateTimeString()
             ),
         ]);
 
-        return $pdfService->downloadSingle($observation);
+        return $pdfService::generate($observation->id, $monitor)
+            ->download('observation-' . $observation->id . '.pdf');
     })->name('observations.pdf')->middleware('permission:submit-observation');
 
     // ── Batch PDF download ────────────────────────────────────────────────────
@@ -374,8 +463,70 @@ Route::middleware(['auth', 'role:election-monitor'])
             ),
         ]);
 
-        return $pdfService->downloadBatch($observations);
+        return $pdfService::generateBatch($observations->pluck('id')->all(), $monitor)
+            ->download('monitor-observations-' . now()->format('Ymd-His') . '.pdf');
     })->name('observations.batch-pdf')->middleware('permission:submit-observation');
+
+
+    // ── Read-only Results for Assigned Stations ──────────────────────────────
+    Route::get('/results', function () {
+        $user    = Auth::user();
+        $monitor = ElectionMonitor::where('user_id', $user->id)
+            ->with(['pollingStations.ward'])
+            ->first();
+
+        if (!$monitor) {
+            return Inertia::render('Monitor/Results', [
+                'auth'    => ['user' => $user],
+                'monitor' => null,
+                'results' => [],
+            ]);
+        }
+
+        $activeElection = Election::currentOrLatestCertified();
+        $stationIds = $monitor->pollingStations->pluck('id');
+
+        $results = Result::with(['pollingStation.ward', 'candidateVotes.candidate.politicalParty'])
+            ->whereIn('polling_station_id', $stationIds)
+            ->when($activeElection, fn($q) => $q->where('election_id', $activeElection->id))
+            ->orderByDesc('submitted_at')
+            ->get()
+            ->unique('polling_station_id')
+            ->map(function (Result $result) {
+                $station = $result->pollingStation;
+                $registeredVoters = (int) ($station?->registered_voters ?? $result->total_registered_voters ?? 0);
+                $turnout = $registeredVoters > 0
+                    ? round(($result->total_votes_cast / $registeredVoters) * 100, 1)
+                    : 0;
+
+                return [
+                    'id'               => $result->id,
+                    'station_name'     => $station?->name ?? 'Unknown',
+                    'station_code'     => $station?->code ?? '—',
+                    'ward'             => $station?->ward?->name ?? '—',
+                    'status'           => $result->certification_status,
+                    'submitted_at'     => $result->submitted_at?->format('Y-m-d H:i'),
+                    'updated_at'       => $result->updated_at?->format('Y-m-d H:i'),
+                    'total_votes_cast' => (int) $result->total_votes_cast,
+                    'valid_votes'      => (int) $result->valid_votes,
+                    'rejected_votes'   => (int) $result->rejected_votes,
+                    'turnout'          => $turnout,
+                    'candidate_votes'  => $result->candidateVotes->map(fn($cv) => [
+                        'candidate'   => $cv->candidate?->name ?? 'Unknown',
+                        'party'       => $cv->candidate?->politicalParty?->abbreviation ?? 'IND',
+                        'party_color' => $cv->candidate?->politicalParty?->color ?? '#6b7280',
+                        'votes'       => (int) $cv->votes,
+                    ])->values(),
+                ];
+            })
+            ->values();
+
+        return Inertia::render('Monitor/Results', [
+            'auth'    => ['user' => $user],
+            'monitor' => ['id' => $monitor->id, 'organization' => $monitor->organization, 'type' => $monitor->type],
+            'results' => $results,
+        ]);
+    })->name('results')->middleware('permission:view-assigned-stations');
 
     // ── My Assigned Stations ──────────────────────────────────────────────────
     Route::get('/stations', function () {
@@ -392,7 +543,7 @@ Route::middleware(['auth', 'role:election-monitor'])
             ]);
         }
 
-        $activeElection = Election::where('status', 'active')->latest()->first();
+        $activeElection = Election::currentOrLatestCertified();
 
         $stationIds         = $monitor->pollingStations->pluck('id');
         $observationCounts  = $stationIds->isNotEmpty()
@@ -406,17 +557,39 @@ Route::middleware(['auth', 'role:election-monitor'])
                 ->keyBy('polling_station_id')
             : collect();
 
-        $stations = $monitor->pollingStations->map(fn($s) => [
-            'id'                  => $s->id,
-            'name'                => $s->name,
-            'code'                => $s->code,
-            'ward_name'           => $s->ward?->name ?? '—',
-            'registered_voters'   => $s->registered_voters,
-            'latitude'            => $s->latitude,
-            'longitude'           => $s->longitude,
-            'observation_count'   => (int) ($observationCounts->get($s->id)?->count ?? 0),
-            'max_severity'        => $observationCounts->get($s->id)?->max_severity ?? null,
-        ])->values();
+        $latestResults = $stationIds->isNotEmpty()
+            ? Result::whereIn('polling_station_id', $stationIds)
+                ->when($activeElection, fn($q) => $q->where('election_id', $activeElection->id))
+                ->orderByDesc('submitted_at')
+                ->get()
+                ->unique('polling_station_id')
+                ->keyBy('polling_station_id')
+            : collect();
+
+        $stations = $monitor->pollingStations->map(function ($s) use ($observationCounts, $latestResults) {
+            $result = $latestResults->get($s->id);
+            $turnout = $result && $s->registered_voters > 0
+                ? round(($result->total_votes_cast / $s->registered_voters) * 100, 1)
+                : null;
+
+            return [
+                'id'                  => $s->id,
+                'name'                => $s->name,
+                'code'                => $s->code,
+                'ward'                => $s->ward?->name ?? '—',
+                'ward_name'           => $s->ward?->name ?? '—',
+                'address'             => $s->address,
+                'registered_voters'   => $s->registered_voters,
+                'latitude'            => $s->latitude,
+                'longitude'           => $s->longitude,
+                'result_status'       => $result?->certification_status ?? 'no_result',
+                'total_votes_cast'    => $result?->total_votes_cast,
+                'turnout'             => $turnout,
+                'observations_count'  => (int) ($observationCounts->get($s->id)?->count ?? 0),
+                'observation_count'   => (int) ($observationCounts->get($s->id)?->count ?? 0),
+                'max_severity'        => $observationCounts->get($s->id)?->max_severity ?? null,
+            ];
+        })->values();
 
         return Inertia::render('Monitor/Stations', [
             'auth'     => ['user' => $user],
@@ -487,7 +660,8 @@ if (!function_exists('createCriticalIncident')) {
 
             Incident::create([
                 'election_id'              => $electionId,
-                'type'                     => 'monitor_critical_observation',
+                'observation_id'           => $observationId,
+                'type'                     => 'dispute',
                 'administrative_area_id'   => $adminArea?->id,
                 'administrative_area_name' => $adminArea?->name,
                 'polling_station_id'       => $validated['polling_station_id'],
@@ -496,7 +670,7 @@ if (!function_exists('createCriticalIncident')) {
                     '[CRITICAL] Election Monitor (org: %s) submitted a critical %s observation: "%s". '
                     . 'Station: %s. Observation ID: %d.',
                     $monitor->organization ?? 'Unknown',
-                    str_replace('_', ' ', $validated['type']),
+                    str_replace('_', ' ', $validated['observation_type']),
                     $validated['title'],
                     $station?->code ?? 'Unknown',
                     $observationId

@@ -10,7 +10,6 @@ use App\Models\Result;
 use App\Models\ResultCertification;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -31,7 +30,7 @@ class ElectionOperationsController extends Controller
 
     private function getData(): array
     {
-        return Cache::remember('election_operations_dashboard', 25, fn () => $this->computeData());
+        return $this->computeData();
     }
 
     private function computeData(): array
@@ -141,35 +140,95 @@ class ElectionOperationsController extends Controller
 
     private function incidentReport(?int $electionId): array
     {
-        $base = fn () => Incident::forElection($electionId);
+        $incidentBase = fn () => Incident::forElection($electionId);
 
-        $disputes      = (clone $base())->disputes()->count();
-        $rejections    = (clone $base())->rejections()->count();
-        $resubmissions = (clone $base())->resubmissions()->count();
+        $incidentDisputes      = (clone $incidentBase())->disputes()->whereNull('observation_id')->count();
+        $incidentRejections    = (clone $incidentBase())->rejections()->count();
+        $incidentResubmissions = (clone $incidentBase())->resubmissions()->count();
 
-        $byArea = Incident::forElection($electionId)
+        // Some operational events are recorded in their source tables/audit
+        // trail rather than materialized into incidents. Include those sources
+        // so the dashboard cards reflect submitted disputes/resubmissions even
+        // before or without an incident row.
+        $monitorDisputes = DB::table('monitor_observations')
+            ->when($electionId, fn($q) => $q->where('election_id', $electionId))
+            ->whereIn('observation_type', ['irregularity', 'incident', 'process_concern'])
+            ->count();
+
+        $partyDisputes = DB::table('party_acceptances as pa')
+            ->join('results as r', 'r.id', '=', 'pa.result_id')
+            ->when($electionId, fn($q) => $q->where('r.election_id', $electionId))
+            ->where('pa.status', 'rejected')
+            ->count();
+
+        $auditResubmissions = DB::table('audit_logs')
+            ->when($electionId, fn($q) => $q->where('election_id', $electionId))
+            ->where('action', 'result.resubmitted')
+            ->count();
+
+        $disputes      = $incidentDisputes + $monitorDisputes + $partyDisputes;
+        $rejections    = $incidentRejections;
+        $resubmissions = $incidentResubmissions + $auditResubmissions;
+
+        $areaTotals = [];
+        $addAreaRows = function ($rows) use (&$areaTotals) {
+            foreach ($rows as $row) {
+                $name = $row->administrative_area_name ?? 'Unknown';
+                $areaTotals[$name] ??= [
+                    'administrative_area_name' => $name,
+                    'disputes' => 0,
+                    'rejections' => 0,
+                    'resubmissions' => 0,
+                ];
+                $areaTotals[$name]['disputes']      += (int) ($row->disputes ?? 0);
+                $areaTotals[$name]['rejections']    += (int) ($row->rejections ?? 0);
+                $areaTotals[$name]['resubmissions'] += (int) ($row->resubmissions ?? 0);
+            }
+        };
+
+        $addAreaRows(Incident::forElection($electionId)
             ->whereNotNull('administrative_area_name')
-            ->selectRaw("
-                administrative_area_name,
-                SUM(CASE WHEN type = 'dispute'       THEN 1 ELSE 0 END) as disputes,
-                SUM(CASE WHEN type = 'rejection'     THEN 1 ELSE 0 END) as rejections,
-                SUM(CASE WHEN type = 'resubmission'  THEN 1 ELSE 0 END) as resubmissions
-            ")
+            ->selectRaw("administrative_area_name,
+                SUM(CASE WHEN type = 'dispute' AND observation_id IS NULL THEN 1 ELSE 0 END) as disputes,
+                SUM(CASE WHEN type = 'rejection'    THEN 1 ELSE 0 END) as rejections,
+                SUM(CASE WHEN type = 'resubmission' THEN 1 ELSE 0 END) as resubmissions")
             ->groupBy('administrative_area_name')
-            ->orderByRaw("
-                (
-                    SUM(CASE WHEN type = 'dispute'      THEN 1 ELSE 0 END) +
-                    SUM(CASE WHEN type = 'rejection'    THEN 1 ELSE 0 END) +
-                    SUM(CASE WHEN type = 'resubmission' THEN 1 ELSE 0 END)
-                ) DESC
-            ")
-            ->get()
-            ->map(fn ($row) => [
-                'administrative_area_name' => $row->administrative_area_name,
-                'disputes'      => (int) $row->disputes,
-                'rejections'    => (int) $row->rejections,
-                'resubmissions' => (int) $row->resubmissions,
-            ])
+            ->get());
+
+        $hierarchyJoin = function ($query) {
+            return $query
+                ->join('polling_stations as ps', 'ps.id', '=', 'src.polling_station_id')
+                ->leftJoin('administrative_hierarchy as w', 'ps.ward_id', '=', 'w.id')
+                ->leftJoin('administrative_hierarchy as con', 'w.parent_id', '=', 'con.id')
+                ->leftJoin('administrative_hierarchy as aa', 'con.parent_id', '=', 'aa.id');
+        };
+
+        $addAreaRows($hierarchyJoin(DB::table('monitor_observations as src'))
+            ->when($electionId, fn($q) => $q->where('src.election_id', $electionId))
+            ->whereIn('src.observation_type', ['irregularity', 'incident', 'process_concern'])
+            ->selectRaw('aa.name as administrative_area_name, COUNT(*) as disputes, 0 as rejections, 0 as resubmissions')
+            ->groupBy('aa.name')
+            ->get());
+
+        $addAreaRows($hierarchyJoin(DB::table('party_acceptances as pa')
+            ->join('results as src', 'src.id', '=', 'pa.result_id'))
+            ->when($electionId, fn($q) => $q->where('src.election_id', $electionId))
+            ->where('pa.status', 'rejected')
+            ->selectRaw('aa.name as administrative_area_name, COUNT(*) as disputes, 0 as rejections, 0 as resubmissions')
+            ->groupBy('aa.name')
+            ->get());
+
+        $addAreaRows($hierarchyJoin(DB::table('audit_logs as al')
+            ->join('results as src', 'src.id', '=', 'al.result_id'))
+            ->when($electionId, fn($q) => $q->where('al.election_id', $electionId))
+            ->where('al.action', 'result.resubmitted')
+            ->selectRaw('aa.name as administrative_area_name, 0 as disputes, 0 as rejections, COUNT(*) as resubmissions')
+            ->groupBy('aa.name')
+            ->get());
+
+        $byArea = collect($areaTotals)
+            ->sortByDesc(fn($row) => $row['disputes'] + $row['rejections'] + $row['resubmissions'])
+            ->values()
             ->toArray();
 
         return [
@@ -196,10 +255,11 @@ class ElectionOperationsController extends Controller
                 ->leftJoin('administrative_hierarchy as aa',  'con.parent_id','=', 'aa.id')
                 ->where('mo.is_public', true);
 
-            // Scope to the current election via the election_monitor's election_id
-            // This ensures we only see observations from monitors registered for THIS election
+            // Scope to the election recorded on the submitted observation so newly
+            // submitted public observations appear even if monitor accreditation data
+            // is corrected independently.
             if ($electionId) {
-                $query->where('em.election_id', $electionId);
+                $query->where('mo.election_id', $electionId);
             }
 
             $rows = $query->select(
@@ -224,13 +284,13 @@ class ElectionOperationsController extends Controller
                 ->limit(20)
                 ->get();
 
-            // Count queries — scoped via election_monitor's election_id
+            // Count queries — scoped by the observation's election_id for consistency
+            // with the recent rows above.
             $countBase = DB::table('monitor_observations as mo')
-                ->join('election_monitors as em', 'mo.election_monitor_id', '=', 'em.id')
                 ->where('mo.is_public', true);
 
             if ($electionId) {
-                $countBase->where('em.election_id', $electionId);
+                $countBase->where('mo.election_id', $electionId);
             }
 
             $totalCount    = (clone $countBase)->count();
