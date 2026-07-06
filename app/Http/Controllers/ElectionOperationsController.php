@@ -196,10 +196,11 @@ class ElectionOperationsController extends Controller
                 ->leftJoin('administrative_hierarchy as aa',  'con.parent_id','=', 'aa.id')
                 ->where('mo.is_public', true);
 
-            // Scope to the current election via the election_monitor's election_id
-            // This ensures we only see observations from monitors registered for THIS election
+            // Scope to the election recorded on the submitted observation so newly
+            // submitted public observations appear even if monitor accreditation data
+            // is corrected independently.
             if ($electionId) {
-                $query->where('em.election_id', $electionId);
+                $query->where('mo.election_id', $electionId);
             }
 
             $rows = $query->select(
@@ -224,13 +225,13 @@ class ElectionOperationsController extends Controller
                 ->limit(20)
                 ->get();
 
-            // Count queries — scoped via election_monitor's election_id
+            // Count queries — scoped by the observation's election_id for consistency
+            // with the recent rows above.
             $countBase = DB::table('monitor_observations as mo')
-                ->join('election_monitors as em', 'mo.election_monitor_id', '=', 'em.id')
                 ->where('mo.is_public', true);
 
             if ($electionId) {
-                $countBase->where('em.election_id', $electionId);
+                $countBase->where('mo.election_id', $electionId);
             }
 
             $totalCount    = (clone $countBase)->count();
