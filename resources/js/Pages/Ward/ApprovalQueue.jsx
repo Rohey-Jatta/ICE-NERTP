@@ -2,6 +2,7 @@ import { useState } from 'react';
 import AppLayout from '@/Layouts/AppLayout';
 import { Link, router } from '@inertiajs/react';
 import { RESULT_STATUS, getResultStatusMeta } from '@/Utils/resultStatus';
+import { useGlobalNotify } from '@/Contexts/NotificationContext';
 
 const PARTY_STATUS_CONFIG = {
     accepted:                  { label: 'Accepted',             color: 'bg-iec-pink-500/20 text-iec-pink-600 border-teal-500/30',     icon: '✓' },
@@ -19,6 +20,8 @@ const ACTION_CONFIG = {
         commentReq:   false,
         commentLabel: 'Additional Comments (optional)',
         placeholder:  'Add any notes or observations…',
+        successMsg:   'Result certified at ward level and promoted to the Constituency queue.',
+        failMsg:      'Unable to certify this result. Please try again.',
     },
     approve_reservation: {
         title:        'Certify with Reservation',
@@ -28,6 +31,8 @@ const ACTION_CONFIG = {
         commentReq:   true,
         commentLabel: 'Reservation Note (required)',
         placeholder:  'Describe your reservation or concern…',
+        successMsg:   'Result certified with reservation and promoted to the Constituency queue.',
+        failMsg:      'Unable to certify this result with reservation. Please try again.',
     },
     reject: {
         title:        'Reject & Return to Polling Station',
@@ -37,6 +42,8 @@ const ACTION_CONFIG = {
         commentReq:   true,
         commentLabel: 'Rejection Reason (required)',
         placeholder:  'Explain clearly why this result is being rejected and what needs to be corrected…',
+        successMsg:   'Result rejected and returned to the polling officer.',
+        failMsg:      'Unable to reject this result. Please try again.',
     },
 };
 
@@ -46,6 +53,7 @@ export default function WardApprovalQueue({ auth, ward, results = [], filter = '
     const [comment, setComment]               = useState('');
     const [processing, setProcessing]         = useState(false);
     const [flash, setFlash]                   = useState(null);
+    const { notify } = useGlobalNotify();
 
     // Parallel workflow: 3 tabs only — no more blocking "Awaiting Party" tab
     const filterTabs = [
@@ -63,7 +71,10 @@ export default function WardApprovalQueue({ auth, ward, results = [], filter = '
     };
 
     const handleFilterChange = (key) => {
-        router.get('/ward/approval-queue', { filter: key }, { preserveState: false });
+        router.get('/ward/approval-queue', { filter: key }, {
+            preserveState: false,
+            onError: () => notify.error('Unable to load the approval queue. Please try again.'),
+        });
     };
 
     const openAction = (result, actionType) => {
@@ -82,12 +93,19 @@ export default function WardApprovalQueue({ auth, ward, results = [], filter = '
 
     const submitAction = () => {
         if (!selectedResult || !action) return;
-        if (ACTION_CONFIG[action].commentReq && !comment.trim()) {
-            setFlash({ type: 'error', text: 'A comment is required for this action.' });
+
+        const cfg = ACTION_CONFIG[action];
+
+        if (cfg.commentReq && !comment.trim()) {
+            const msg = 'A comment is required for this action.';
+            setFlash({ type: 'error', text: msg });
+            notify.warning(msg);
             return;
         }
+
         setProcessing(true);
         setFlash(null);
+
         const endpoints = {
             approve:             `/ward/approve/${selectedResult.id}`,
             approve_reservation: `/ward/approve-with-reservation/${selectedResult.id}`,
@@ -97,13 +115,19 @@ export default function WardApprovalQueue({ auth, ward, results = [], filter = '
         router.post(endpoints[action], { comments: comment }, {
             preserveState: false,
             preserveScroll: true,
-            onSuccess: () => {
+            onSuccess: (page) => {
+                const successText = page.props.flash?.success || cfg.successMsg;
+                notify.success(successText);
                 closePanel();
             },
-            onError: (errors) => {
-                setFlash({ type: 'error', text: 'An error occurred. Please try again.' });
+            onError: (formErrors) => {
+                const message = formErrors?.error || cfg.failMsg;
+                setFlash({ type: 'error', text: message });
+                notify.error(message);
             },
             onFinish: () => {
+                // ALWAYS restore the button, whether the request
+                // succeeded, failed validation, or errored on the network.
                 setProcessing(false);
             },
         });
@@ -168,7 +192,6 @@ export default function WardApprovalQueue({ auth, ward, results = [], filter = '
                         {results.map(result => {
                             const statusCfg = getResultStatusMeta(result.certification_status);
 
-                            // Parallel workflow: both pending_ward and legacy pending_party_acceptance are actionable
                             const isPending = result.certification_status === RESULT_STATUS.PENDING_WARD
                                 || result.certification_status === RESULT_STATUS.PENDING_PARTY_ACCEPTANCE;
 
@@ -198,7 +221,6 @@ export default function WardApprovalQueue({ auth, ward, results = [], filter = '
                                                 Submitted by <strong className="text-slate-600">{result.officer}</strong> · {result.submitted_at}
                                             </p>
                                         </div>
-                                        {/* Party responses shown as informational only */}
                                         <div className="text-right text-sm flex-shrink-0">
                                             <div className="text-slate-500 text-xs">Party Responses</div>
                                             <div className={`font-semibold text-sm ${
@@ -285,8 +307,6 @@ export default function WardApprovalQueue({ auth, ward, results = [], filter = '
                                         </div>
                                     )}
 
-                                    {/* Prior rejection reason — was nearly invisible (text-red-300 on a pale red
-                                        background). Switched to a solid light bg + dark text combo so it's legible. */}
                                     {result.last_rejection_reason && (
                                         <div className="mx-5 mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
                                             <div className="text-xs text-red-700 mb-1 font-semibold">Previous Rejection Reason</div>
@@ -294,8 +314,6 @@ export default function WardApprovalQueue({ auth, ward, results = [], filter = '
                                         </div>
                                     )}
 
-                                    {/* Ward cert comments (shown in approved tab) — was nearly invisible
-                                        (text-teal-200 on a pale pink background). Fixed contrast below. */}
                                     {result.ward_comments && (
                                         <div className="mx-5 mb-4 p-3 bg-teal-50 border border-teal-200 rounded-lg">
                                             <div className="text-xs text-teal-700 mb-1 font-semibold">Ward Certification Note</div>
@@ -303,7 +321,7 @@ export default function WardApprovalQueue({ auth, ward, results = [], filter = '
                                         </div>
                                     )}
 
-                                    {/* Action Buttons — available immediately in parallel workflow */}
+                                    {/* Action Buttons */}
                                     {isPending && (
                                         <div className="px-5 pb-5 flex flex-wrap gap-3 border-t border-slate-200 pt-4 mt-2">
                                             <button onClick={() => openAction(result, 'approve')} className="flex-1 min-w-[140px] px-4 py-3 bg-iec-pink-600 hover:bg-iec-pink-700 text-white font-bold rounded-lg transition-colors">

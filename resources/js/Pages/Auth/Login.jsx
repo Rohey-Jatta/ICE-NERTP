@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useForm, usePage } from '@inertiajs/react';
+import { useGlobalNotify } from '@/Contexts/NotificationContext';
 
 export default function Login() {
     const { props } = usePage();
     const rawDeviceError = props.flash?.device_error ?? null;
+    const { notify } = useGlobalNotify();
 
     const fingerprint = typeof window !== 'undefined' ? window.deviceFingerprint?.get?.() || '' : '';
     const { data, setData, post, processing, errors } = useForm({
@@ -22,14 +24,17 @@ export default function Login() {
         }
     }, [data.device_id, setData]);
 
-    // Auto-dismiss device error after 15 s
+    // Surface the device error as a toast too, in addition to the inline
+    // banner — this is the "contact IEC Administrator for device
+    // registration" message coming back from the 2FA/device-binding flow.
     useEffect(() => {
         if (rawDeviceError) {
+            notify.error(rawDeviceError, 12000);
             setShowDeviceError(true);
             const t = setTimeout(() => setShowDeviceError(false), 15000);
             return () => clearTimeout(t);
         }
-    }, [rawDeviceError]);
+    }, [rawDeviceError]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // Auto-dismiss login errors after 15 s
     useEffect(() => {
@@ -42,7 +47,14 @@ export default function Login() {
 
     const handleSubmit = (e) => {
         e.preventDefault();
-        post('/auth/login', { preserveScroll: false, preserveState: false });
+        post('/auth/login', {
+            preserveScroll: false,
+            preserveState: false,
+            onError: (formErrors) => {
+                const message = formErrors.email || formErrors.password || 'Unable to sign in. Please check your details and try again.';
+                notify.error(message);
+            },
+        });
     };
 
     // Clear errors when user starts interacting with the form
@@ -119,7 +131,9 @@ export default function Login() {
                                 required
                                 disabled={processing}
                                 autoComplete="email"
-                                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
+                                className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:border-transparent transition-colors ${
+                                    errors.email ? 'border-red-400 focus:ring-red-400' : 'border-gray-300 focus:ring-blue-500'
+                                }`}
                             />
                         </div>
 
@@ -136,7 +150,9 @@ export default function Login() {
                                 required
                                 disabled={processing}
                                 autoComplete="current-password"
-                                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
+                                className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:border-transparent transition-colors ${
+                                    errors.password ? 'border-red-400 focus:ring-red-400' : 'border-gray-300 focus:ring-blue-500'
+                                }`}
                             />
                         </div>
 

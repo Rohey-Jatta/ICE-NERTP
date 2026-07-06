@@ -7,12 +7,12 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
-use App\Models\AuditLog;
 use App\Models\Election;
 use App\Models\Candidate;
 use App\Models\PollingStation;
 use App\Models\Result;
 use App\Models\ResultCandidateVote;
+use App\Services\AuditTrailService;
 
 Route::middleware(['auth', 'role:polling-officer'])
     ->prefix('officer')
@@ -23,13 +23,8 @@ Route::middleware(['auth', 'role:polling-officer'])
     Route::get('/dashboard', function () {
         $user = Auth::user();
         $station = PollingStation::where('assigned_officer_id', $user->id)->first();
-
-        // FIX: was Election::whereIn(...)->latest()->first() (created_at
-        // ordering). Election::current() resolves the same status set but
-        // ordered by start_date, matching every other workspace page.
         $activeElection = Election::current();
 
-        // If no open election, check for a recently closed one to show status
         $closedElection = !$activeElection
             ? Election::where('status', 'certified')->latest('start_date')->first()
             : null;
@@ -98,8 +93,6 @@ Route::middleware(['auth', 'role:polling-officer'])
     Route::get('/results/submit', function () {
         $user    = Auth::user();
         $station = PollingStation::where('assigned_officer_id', $user->id)->first();
-
-        // FIX: standardized to Election::current() (was created_at ordering).
         $election = Election::current();
 
         if (!$station) {
@@ -108,7 +101,6 @@ Route::middleware(['auth', 'role:polling-officer'])
         }
 
         if (!$election) {
-            // Check if there's a closed election to give a helpful message
             $closedElection = Election::where('status', 'certified')->latest('start_date')->first();
             if ($closedElection) {
                 return redirect()->route('officer.dashboard')
@@ -118,8 +110,6 @@ Route::middleware(['auth', 'role:polling-officer'])
                 ->with('error', 'No active election found. Contact the administrator.');
         }
 
-        // A result that is NOT editable (already in pipeline for this active election).
-        // This includes resubmitted rejected results that have already been resubmitted.
         $existingResult = Result::where('polling_station_id', $station->id)
             ->where('election_id', $election->id)
             ->whereIn('certification_status', Result::CERTIFICATION_PIPELINE_STATUSES)
@@ -130,7 +120,6 @@ Route::middleware(['auth', 'role:polling-officer'])
             ->latest('submitted_at')
             ->first();
 
-        // A rejected result the officer can fix and resubmit.
         $editableResult = Result::where('polling_station_id', $station->id)
             ->where('election_id', $election->id)
             ->where('submitted_by', $user->id)
@@ -151,6 +140,11 @@ Route::middleware(['auth', 'role:polling-officer'])
                 'party_abbr'  => $c->politicalParty->abbreviation ?? 'IND',
                 'party_color' => $c->politicalParty->color ?? '#6b7280',
             ]);
+
+        if ($candidates->isEmpty()) {
+            return redirect()->route('officer.dashboard')
+                ->with('error', 'No candidates have been configured for this election yet. Please contact the IEC Administrator before submitting results.');
+        }
 
         return Inertia::render('Officer/ResultSubmit', [
             'auth'           => ['user' => $user],
@@ -184,6 +178,7 @@ Route::middleware(['auth', 'role:polling-officer'])
     // ── Submit / Resubmit Result ──────────────────────────────────────────────
     Route::post('/results/submit', function (Request $request) {
         $user = $request->user();
+        $auditTrail = app(AuditTrailService::class);
 
         if (!$user) {
             return back()->withErrors(['error' => 'Session expired. Please log in again.']);
@@ -197,16 +192,17 @@ Route::middleware(['auth', 'role:polling-officer'])
             'rejected_votes'    => 'required|integer|min:0',
             'photo'             => 'nullable|image|max:10240',
             'candidate_votes'   => 'required|array|min:1',
+        ], [
+            'candidate_votes.required' => 'At least one candidate vote total is required.',
+            'photo.max' => 'The result sheet photo is too large. Maximum size is 10MB.',
+            'photo.image' => 'The result sheet file must be an image.',
         ]);
 
-        // Allow submissions while election is open: active, results_pending, or certifying.
-        // 'certified' means the Chairman has explicitly closed the election — block submissions.
         $election = Election::where('id', $request->election_id)
             ->whereIn('status', ['active', 'results_pending', 'certifying'])
             ->first();
 
         if (!$election) {
-            // Give a helpful, specific error depending on whether the election is closed vs missing
             $closedElection = Election::where('id', $request->election_id)
                 ->whereIn('status', ['certified', 'archived'])
                 ->first();
@@ -261,12 +257,6 @@ Route::middleware(['auth', 'role:polling-officer'])
             })
             ->exists();
 
-        if ($activeSubmissionExists && !$existingResult) {
-            return back()->withErrors([
-                'error' => 'A valid submission already exists for this polling station. You may only resubmit after a rejected result has been returned for correction.',
-            ])->withInput();
-        }
-
         $existingResult = Result::where('polling_station_id', $station->id)
             ->where('election_id', $election->id)
             ->where('submitted_by', $user->id)
@@ -275,13 +265,33 @@ Route::middleware(['auth', 'role:polling-officer'])
             ->latest('submitted_at')
             ->first();
 
+        if ($activeSubmissionExists && !$existingResult) {
+            return back()->withErrors([
+                'error' => 'A valid submission already exists for this polling station.',
+            ])->withInput();
+        }
+
         $photoPath = null;
         if ($request->hasFile('photo')) {
-            $photoPath = $request->file('photo')->store('result-photos', 'public');
+            try {
+                $photoPath = $request->file('photo')->store('result-photos', 'public');
+            } catch (\Throwable $e) {
+                Log::error('Result photo upload failed', [
+                    'error' => $e->getMessage(),
+                    'user_id' => $user->id,
+                ]);
+
+                return back()->withErrors([
+                    'photo' => 'Photo upload failed. Please try again with a smaller image.',
+                ])->withInput();
+            }
         }
 
         try {
             if ($existingResult) {
+                // ── RESUBMISSION ──────────────────────────────────────────────
+                $previousRejectionCount = $existingResult->rejection_count;
+
                 $existingResult->update([
                     'user_id'                 => $user->id,
                     'total_registered_voters' => $registeredVoters,
@@ -306,10 +316,16 @@ Route::middleware(['auth', 'role:polling-officer'])
 
                 \App\Jobs\ProcessResultSubmission::dispatch($existingResult->fresh());
 
+                $auditTrail->resultResubmitted(
+                    $existingResult->fresh(),
+                    $previousRejectionCount
+                );
+
                 return redirect()->route('officer.submissions')
                     ->with('success', 'Result resubmitted successfully!');
             }
 
+            // ── FIRST SUBMISSION ──────────────────────────────────────────────
             $result = Result::create([
                 'submission_uuid'         => \Illuminate\Support\Str::uuid(),
                 'election_id'             => $election->id,
@@ -338,6 +354,8 @@ Route::middleware(['auth', 'role:polling-officer'])
 
             \App\Jobs\ProcessResultSubmission::dispatch($result);
 
+            $auditTrail->resultSubmitted($result);
+
             return redirect()->route('officer.submissions')
                 ->with('success', 'Results submitted successfully!');
 
@@ -355,9 +373,6 @@ Route::middleware(['auth', 'role:polling-officer'])
     Route::get('/submissions', function () {
         $user    = Auth::user();
         $station = PollingStation::where('assigned_officer_id', $user->id)->first();
-
-        // FIX: standardized to Election::currentOrLatestCertified() (was
-        // created_at ordering, inconsistent with the dashboard above).
         $activeElection = Election::currentOrLatestCertified();
 
         $results = Result::where('submitted_by', $user->id)

@@ -67,7 +67,7 @@ export default function ResultDetail({ auth, party, result, myAcceptance }) {
                 {/* Back nav */}
                 <div className="mb-6">
                     <Link href="/party/pending-acceptance"
-                          className="text-slate-500 hover:text-iec-navy text-sm inline-flex items-center gap-1 mb-3">
+                          className="text-slate-700 hover:text-iec-navy text-sm inline-flex items-center gap-1 mb-3">
                         ← Back to Pending Results
                     </Link>
 
@@ -78,10 +78,10 @@ export default function ResultDetail({ auth, party, result, myAcceptance }) {
                                 <span className="text-xs font-mono text-slate-500 bg-white px-2 py-0.5 rounded">
                                     {result.polling_station_code}
                                 </span>
-                                <span className="text-slate-500 text-sm">
+                                <span className="text-slate-700 text-sm">
                                     {RESULT_STATUS_LABELS[result.certification_status] || result.certification_status}
                                 </span>
-                                <span className="text-slate-500 text-xs">Submitted: {result.submitted_at}</span>
+                                <span className="text-slate-700 text-xs">Submitted: {result.submitted_at}</span>
                             </div>
                         </div>
 
@@ -89,10 +89,10 @@ export default function ResultDetail({ auth, party, result, myAcceptance }) {
                         {alreadyDecided && (
                             <div className={`px-4 py-2 rounded-xl font-semibold text-sm border ${
                                 myAcceptance.status === 'accepted'
-                                    ? 'bg-iec-pink-50 text-iec-pink-600 border-iec-pink-200'
+                                    ? 'bg-iec-pink-50 text-iec-pink-800 border-iec-pink-200'
                                     : myAcceptance.status === 'rejected'
-                                    ? 'bg-red-50 text-red-700 border-red-200'
-                                    : 'bg-amber-50 text-amber-800 border-amber-200'
+                                    ? 'bg-red-50 text-red-900 border-red-200'
+                                    : 'bg-amber-50 text-amber-900 border-amber-200'
                             }`}>
                                 {myAcceptance.status === 'accepted' && '✓ You Accepted'}
                                 {myAcceptance.status === 'rejected' && '✗ You Disputed'}
@@ -120,20 +120,20 @@ export default function ResultDetail({ auth, party, result, myAcceptance }) {
                                 ].map((item) => (
                                     <div key={item.label} className="bg-white rounded-lg p-3 text-center">
                                         <div className={`text-xl font-bold mb-1 ${item.color}`}>{item.value}</div>
-                                        <div className="text-slate-500 text-xs">{item.label}</div>
+                                        <div className="text-slate-800 text-xs">{item.label}</div>
                                     </div>
                                 ))}
                             </div>
 
                             {/* Turnout bar */}
                             <div className="mt-4">
-                                <div className="flex justify-between text-xs text-slate-500 mb-1">
+                                <div className="flex justify-between text-xs text-slate-800 mb-1">
                                     <span>Voter Turnout</span>
                                     <span className="font-bold text-iec-navy">{result.turnout_percentage}%</span>
                                 </div>
                                 <div className="w-full bg-white rounded-full h-3">
                                     <div
-                                        className="bg-gradient-to-r from-teal-600 to-teal-400 h-3 rounded-full"
+                                        className="bg-gradient-to-r from-teal-800 to-teal-600 h-3 rounded-full"
                                         style={{ width: `${result.turnout_percentage}%` }}
                                     />
                                 </div>
@@ -167,15 +167,15 @@ export default function ResultDetail({ auth, party, result, myAcceptance }) {
                                                                 <div className="text-iec-navy font-semibold text-sm">
                                                                     {cv.candidate_name}
                                                                     {isLeading && (
-                                                                        <span className="ml-2 text-xs text-iec-pink-600">🏆 Leading</span>
+                                                                        <span className="ml-2 text-xs text-iec-pink-700">🏆 Leading</span>
                                                                     )}
                                                                 </div>
-                                                                <div className="text-slate-500 text-xs">{cv.party_name}</div>
+                                                                <div className="text-slate-800 text-xs">{cv.party_name}</div>
                                                             </div>
                                                         </div>
                                                         <div className="text-right">
                                                             <div className="text-iec-navy font-bold">{cv.votes?.toLocaleString()}</div>
-                                                            <div className="text-slate-500 text-xs">{pct}%</div>
+                                                            <div className="text-slate-800 text-xs">{pct}%</div>
                                                         </div>
                                                     </div>
                                                     <div className="w-full bg-white rounded-full h-2">
@@ -215,14 +215,14 @@ export default function ResultDetail({ auth, party, result, myAcceptance }) {
                                     <a href={result.photo_url}
                                         target="_blank"
                                         rel="noopener noreferrer"
-                                        className="inline-flex items-center gap-1 text-xs text-iec-pink-600 hover:text-iec-pink-600 mt-2"
+                                        className="inline-flex items-center gap-1 text-xs text-iec-pink-800 hover:text-iec-pink-800 mt-2"
                                     >
                                         📄 Open full image in new tab
                                     </a>
                                 </div>
                             ) : (
                                 <div className="p-6 bg-white rounded-lg border border-slate-200 text-center">
-                                    <p className="text-slate-500 text-sm">No result sheet photo attached.</p>
+                                    <p className="text-slate-800 text-sm">No result sheet photo attached.</p>
                                 </div>
                             )}
                         </div>
@@ -235,20 +235,20 @@ export default function ResultDetail({ auth, party, result, myAcceptance }) {
                                     {result.other_party_acceptances.map((pa, idx) => (
                                         <div key={idx} className="flex items-start gap-3 p-3 bg-slate-50 rounded-lg">
                                             <span className={`px-2 py-0.5 rounded text-xs font-semibold flex-shrink-0 ${
-                                                pa.status === 'accepted' ? 'bg-iec-pink-50 text-iec-pink-600' :
-                                                pa.status === 'rejected' ? 'bg-red-50 text-red-700' :
-                                                'bg-amber-50 text-amber-800'
+                                                pa.status === 'accepted' ? 'bg-iec-pink-50 text-iec-pink-800' :
+                                                pa.status === 'rejected' ? 'bg-red-50 text-red-800' :
+                                                'bg-amber-50 text-amber-900'
                                             }`}>
                                                 {pa.abbr}
                                             </span>
                                             <div>
-                                                <div className="text-slate-600 text-sm font-medium">
+                                                <div className="text-slate-800 text-sm font-medium">
                                                     {pa.status === 'accepted' ? '✓ Accepted' :
                                                      pa.status === 'rejected' ? '✗ Disputed' : '⚠ Accepted with Reservation'}
-                                                    {' — '}<span className="text-slate-500 font-normal">{pa.party_name}</span>
+                                                    {' — '}<span className="text-slate-800 font-normal">{pa.party_name}</span>
                                                 </div>
                                                 {pa.comments && (
-                                                    <div className="text-slate-500 text-xs mt-0.5 italic">"{pa.comments}"</div>
+                                                    <div className="text-slate-800 text-xs mt-0.5 italic">"{pa.comments}"</div>
                                                 )}
                                             </div>
                                         </div>
@@ -273,21 +273,21 @@ export default function ResultDetail({ auth, party, result, myAcceptance }) {
                                             : 'bg-amber-50 border-amber-200'
                                     }`}>
                                         <div className={`text-lg font-bold mb-1 ${
-                                            myAcceptance.status === 'accepted' ? 'text-iec-pink-600' :
-                                            myAcceptance.status === 'rejected' ? 'text-red-700' : 'text-amber-800'
+                                            myAcceptance.status === 'accepted' ? 'text-iec-pink-800' :
+                                            myAcceptance.status === 'rejected' ? 'text-red-800' : 'text-amber-800'
                                         }`}>
                                             {myAcceptance.status === 'accepted' && '✓ Accepted'}
                                             {myAcceptance.status === 'rejected' && '✗ Disputed'}
                                             {myAcceptance.status === 'accepted_with_reservation' && '⚠ Accepted with Reservation'}
                                         </div>
-                                        <div className="text-slate-500 text-xs">Recorded on {myAcceptance.decided_at}</div>
+                                        <div className="text-slate-800 text-xs">Recorded on {myAcceptance.decided_at}</div>
                                         {myAcceptance.comments && (
-                                            <div className="mt-3 p-3 bg-white rounded-lg text-slate-600 text-sm italic">
+                                            <div className="mt-3 p-3 bg-white rounded-lg text-slate-900 text-sm italic">
                                                 "{myAcceptance.comments}"
                                             </div>
                                         )}
                                     </div>
-                                    <p className="text-slate-500 text-xs text-center">
+                                    <p className="text-slate-800 text-xs text-center">
                                         Your decision is final and has been logged in the audit trail.
                                     </p>
                                     <Link href="/party/pending-acceptance"
@@ -299,7 +299,7 @@ export default function ResultDetail({ auth, party, result, myAcceptance }) {
                                 /* Decision form */
                                 <div className="bg-white rounded-xl border border-amber-300 p-5">
                                     <h2 className="text-iec-navy font-bold text-lg mb-2">Your Decision</h2>
-                                    <p className="text-slate-500 text-xs mb-5 leading-relaxed">
+                                    <p className="text-slate-800 text-xs mb-5 leading-relaxed">
                                         Review the vote counts and result sheet photo carefully before making your decision.
                                         Your decision will be logged and visible to IEC officials.
                                     </p>
@@ -320,14 +320,14 @@ export default function ResultDetail({ auth, party, result, myAcceptance }) {
                                             >
                                                 <div className={`font-bold text-sm ${
                                                     selectedDecision === key
-                                                        ? key === 'accepted' ? 'text-iec-pink-600'
-                                                        : key === 'rejected' ? 'text-red-700'
+                                                        ? key === 'accepted' ? 'text-iec-pink-800'
+                                                        : key === 'rejected' ? 'text-red-800'
                                                         : 'text-amber-800'
                                                         : 'text-iec-navy'
                                                 }`}>
                                                     {cfg.icon} {cfg.label}
                                                 </div>
-                                                <div className="text-slate-500 text-xs mt-0.5">{cfg.description}</div>
+                                                <div className="text-slate-800 text-xs mt-0.5">{cfg.description}</div>
                                             </button>
                                         ))}
                                     </div>
@@ -336,10 +336,10 @@ export default function ResultDetail({ auth, party, result, myAcceptance }) {
                                     {selectedDecision && (
                                         <form onSubmit={submitDecision}>
                                             <div className="mb-4">
-                                                <label className="block text-slate-600 text-sm font-semibold mb-2">
+                                                <label className="block text-slate-800 text-sm font-semibold mb-2">
                                                     {DECISION_CONFIG[selectedDecision].commentLabel}
                                                     {DECISION_CONFIG[selectedDecision].commentReq && (
-                                                        <span className="text-red-600 ml-1">*</span>
+                                                        <span className="text-red-900 ml-1">*</span>
                                                     )}
                                                 </label>
                                                 <textarea
@@ -357,7 +357,7 @@ export default function ResultDetail({ auth, party, result, myAcceptance }) {
                                                     }
                                                 />
                                                 {errors.comments && (
-                                                    <p className="text-red-600 text-xs mt-1">{errors.comments}</p>
+                                                    <p className="text-red-900 text-xs mt-1">{errors.comments}</p>
                                                 )}
                                             </div>
 
@@ -376,7 +376,7 @@ export default function ResultDetail({ auth, party, result, myAcceptance }) {
                                     )}
 
                                     {!selectedDecision && (
-                                        <p className="text-slate-600 text-xs text-center">
+                                        <p className="text-slate-800 text-xs text-center">
                                             Select a decision above to continue.
                                         </p>
                                     )}
@@ -396,7 +396,7 @@ export default function ResultDetail({ auth, party, result, myAcceptance }) {
                     <div className="relative max-w-5xl w-full" onClick={(e) => e.stopPropagation()}>
                         <button
                             onClick={() => setPhotoOpen(false)}
-                            className="absolute -top-10 right-0 text-iec-navy text-3xl hover:text-slate-600"
+                            className="absolute -top-10 right-0 text-iec-navy text-3xl hover:text-slate-800"
                         >
                             ×
                         </button>

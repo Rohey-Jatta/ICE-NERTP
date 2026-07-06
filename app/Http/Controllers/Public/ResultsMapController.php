@@ -61,6 +61,7 @@ class ResultsMapController extends Controller
                 'election'           => null,
                 'elections'          => $availableElections,
                 'selectedElectionId' => null,
+                'bannerMessage'      => null,
             ]);
         }
 
@@ -70,7 +71,13 @@ class ResultsMapController extends Controller
         $aggKey = "results_map_agg_v4_{$election->id}";
         $agg    = Cache::remember($aggKey, 300, fn() => $this->computeRegionAggregates($election));
 
-        // Compute a single banner message (or null) — prevents duplicate banners
+        // ── Compute a SINGLE banner message here (or null) ──────────────────
+        // This is the only place a "no results yet" / "pending certification"
+        // message should be generated. The frontend must not recompute this
+        // itself — doing so in two places is what previously caused the
+        // message to render twice (once from ScoreCard, once from the page's
+        // own banner section). $bannerMessage is always assigned before use
+        // below, regardless of which branch is taken.
         $stationsWithAnyResult = collect($stations)->filter(fn($s) => isset($s->status) && $s->status !== 'not_reported')->count();
         $stationsWithCertified = collect($stations)->filter(fn($s) => isset($s->status) && $s->status === 'nationally_certified')->count();
         $totalStations         = count($stations);

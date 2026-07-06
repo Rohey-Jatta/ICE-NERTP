@@ -5,23 +5,16 @@ namespace App\Http\Controllers;
 use App\Models\AuditLog;
 use App\Models\PartyAcceptance;
 use App\Models\Result;
+use App\Services\AuditTrailService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 /**
  * AcceptanceController - Party representatives accept/reject results.
- *
- * In the parallel workflow, party reps review results simultaneously with
- * ward approvers. Their responses are informational and do NOT block
- * the ward certification pipeline.
  */
 class AcceptanceController extends Controller
 {
-    /**
-     * Statuses where party reps can submit their acceptance.
-     * Covers the full parallel window through national certification.
-     */
     const ACCEPTABLE_STATUSES = [
         Result::STATUS_PENDING_WARD,
         Result::STATUS_WARD_CERTIFIED,
@@ -31,13 +24,13 @@ class AcceptanceController extends Controller
         Result::STATUS_ADMIN_AREA_CERTIFIED,
         Result::STATUS_PENDING_NATIONAL,
         Result::STATUS_NATIONALLY_CERTIFIED,
-        // Legacy: keep for any results still in old state
         Result::STATUS_PENDING_PARTY_ACCEPTANCE,
     ];
 
-    /**
-     * Submit acceptance decision.
-     */
+    public function __construct(
+        private readonly AuditTrailService $auditTrail,
+    ) {}
+
     public function submit(Request $request): JsonResponse
     {
         $validated = $request->validate([
@@ -48,7 +41,6 @@ class AcceptanceController extends Controller
 
         $result = Result::findOrFail($validated['result_id']);
 
-        // Parallel workflow: party reps can respond during any active stage
         if (!in_array($result->certification_status, self::ACCEPTABLE_STATUSES)) {
             return response()->json([
                 'message' => 'This result is not available for party review at this stage.',
@@ -110,17 +102,12 @@ class AcceptanceController extends Controller
             throw $e;
         }
 
-        AuditLog::record(
-            action:    'party_acceptance.submitted',
-            event:     'created',
-            module:    'PartyAcceptance',
-            auditable: $acceptance,
-            extra:     [
-                'election_id' => $result->election_id,
-                'result_id'   => $result->id,
-                'status'      => $validated['status'],
-                'outcome'     => 'success',
-            ]
+        // Forensic chain-of-custody audit
+        $this->auditTrail->partyAcceptance(
+            result:    $result,
+            partyName: $partyRep->politicalParty?->name ?? 'Unknown Party',
+            status:    $validated['status'],
+            comments:  $validated['comments'] ?? null
         );
 
         return response()->json([
@@ -129,10 +116,6 @@ class AcceptanceController extends Controller
         ], 201);
     }
 
-    /**
-     * Get pending acceptances for party rep.
-     * Shows results in parallel workflow stages where the party hasn't responded yet.
-     */
     public function pending(Request $request): JsonResponse
     {
         $partyRep = $request->user()->partyRepresentatives()->first();

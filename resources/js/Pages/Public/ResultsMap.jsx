@@ -60,40 +60,22 @@ function Avatar({ candidate, size = 48 }) {
 }
 
 // ── National scorecard (CNN-style header) ─────────────────────────────────────
-function ScoreCard({ national, election, stations = [] }) {
+// NOTE: This component intentionally does NOT render its own "no results yet"
+// / "results pending certification" text. That message is computed ONCE on
+// the backend (ResultsMapController::index -> $bannerMessage) and rendered
+// ONCE by the page-level "Contextual banner" section below. Previously this
+// component duplicated that same message locally, which is why it appeared
+// twice stacked on the page. When there are no candidates to show, this
+// component simply renders nothing and lets the single banner carry the
+// messaging.
+function ScoreCard({ national }) {
     const cands = national?.candidates || [];
     const top = cands.slice(0, 4);
     const totalVotes = numeric(national?.total_votes);
     const reporting = numeric(national?.reporting_pct);
 
-    // Count how many stations have ANY result (not just certified)
-    const stationsWithResults = stations.filter(s =>
-        s.status && s.status !== 'not_reported'
-    ).length;
-    const totalStations = stations.length;
-
-    // Show message based on actual station data, not just certified results
     if (cands.length === 0) {
-        const hasAnyResults = stationsWithResults > 0;
-        return (
-            <div className="border-b border-slate-200 bg-white px-4 py-4">
-                {hasAnyResults ? (
-                    <div className="text-center">
-                        <p className="text-sm text-slate-600 font-medium">
-                            Results are being processed for <strong>{publicElectionTitle(election)}</strong>.
-                        </p>
-                        <p className="text-xs text-slate-500 mt-1">
-                            {stationsWithResults} of {totalStations} stations have submitted results.
-                            Candidate totals appear once results are nationally certified.
-                        </p>
-                    </div>
-                ) : (
-                    <p className="text-center text-sm text-slate-500">
-                        No results have been submitted yet for {publicElectionTitle(election)}.
-                    </p>
-                )}
-            </div>
-        );
+        return null;
     }
 
     return (
@@ -419,14 +401,6 @@ function DrillPanel({ regions, drill, onDrill, stations, param, isPublished = fa
     // ── Level 0: All regions list ─────────────────────────────────────────────
     const sorted = [...regions].sort((a, b) => numeric(b.total_votes) - numeric(a.total_votes));
 
-    // Also show regions with submitted (non-certified) results
-    const sortedWithActivity = [...regions].sort((a, b) => {
-        // Prioritize regions with certified votes first, then by reported stations
-        const aScore = numeric(b.total_votes) * 1000 + numeric(b.reported_stations);
-        const bScore = numeric(a.total_votes) * 1000 + numeric(a.reported_stations);
-        return aScore - bScore;
-    });
-
     return (
         <div className="flex h-full flex-col">
             <div className="border-b border-slate-200 px-5 py-3">
@@ -455,7 +429,7 @@ function DrillPanel({ regions, drill, onDrill, stations, param, isPublished = fa
 }
 
 // ── Main ──────────────────────────────────────────────────────────────────────
-export default function ResultsMap({ election, elections = [], selectedElectionId, stations = [], regions = [], national = null, isPublished = false }) {
+export default function ResultsMap({ election, elections = [], selectedElectionId, stations = [], regions = [], national = null, isPublished = false, bannerMessage = null }) {
     const param = selectedElectionId ? `?election=${selectedElectionId}` : '';
 
     const [mode,        setMode]        = useState('regions');
@@ -531,19 +505,6 @@ export default function ResultsMap({ election, elections = [], selectedElectionI
         );
     }
 
-    // Determine banner message based on actual data
-    const stationsWithAnyResult = stationList.filter(s => s.status && s.status !== 'not_reported').length;
-    const stationsWithCertified = stationList.filter(s => s.status === 'nationally_certified').length;
-    const hasCertifiedResults = stationsWithCertified > 0;
-    const hasAnyResults = stationsWithAnyResult > 0;
-
-    let bannerMessage = null;
-    if (!hasCertifiedResults && hasAnyResults) {
-        bannerMessage = `${stationsWithAnyResult} of ${stationList.length} station(s) have submitted results — candidate totals will appear once the IEC Chairman certifies them.`;
-    } else if (!hasAnyResults) {
-        bannerMessage = `No results have been submitted yet for ${publicElectionTitle(election)}.`;
-    }
-
     return (
         <AppLayout>
             <div className="flex flex-col bg-white font-sans" style={{ minHeight: 'calc(100vh - 64px)' }}>
@@ -582,9 +543,11 @@ export default function ResultsMap({ election, elections = [], selectedElectionI
                 </div>
 
                 {/* ── National scorecard ──────────────────────────────────── */}
-                <ScoreCard national={national} election={election} stations={stationList} />
+                <ScoreCard national={national} />
 
-                {/* ── Contextual banner — only show when there's something useful to say ── */}
+                {/* ── Contextual banner — the SINGLE source of "no results yet" /
+                    "pending certification" messaging, computed once on the
+                    backend and passed as the bannerMessage prop. ─────────── */}
                 {bannerMessage && (
                     <div className="border-b border-slate-100 bg-slate-50 px-4 py-2.5 text-center text-sm text-slate-500">
                         {bannerMessage}

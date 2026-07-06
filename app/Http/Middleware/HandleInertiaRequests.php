@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Services\SettingsService;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
 use App\Models\User;
@@ -24,6 +25,11 @@ class HandleInertiaRequests extends Middleware
             'auth' => fn () => [
                 'user' => $this->userPayload($request->user()),
             ],
+            // Global application settings — served from the SettingsService's
+            // permanent cache, so this never hits the database on a normal
+            // request. Every page (public or authenticated) receives it via
+            // `usePage().props.settings`.
+            'settings' => fn () => app(SettingsService::class)->all(),
             'flash' => [
                 'success'      => fn () => $request->session()->get('success'),
                 'error'        => fn () => $request->session()->get('error'),

@@ -23,6 +23,41 @@ function firstColor(value, fallback = '#6b7280') {
     return (value || fallback).split(',')[0].trim();
 }
 
+// ── Status badge — reflects ACTUAL reporting/certification state ────────────
+// Previously this was a hardcoded binary ternary
+// (isCertified ? 'Official Certified Results' : 'Certification in Progress')
+// which meant every non-'certified' election status — including a brand-new
+// election with zero submissions — displayed "Certification in Progress".
+// This now derives the label from the election's real lifecycle status,
+// with an explicit override for "nothing has been submitted yet" so the
+// badge never claims certification is "in progress" when no station has
+// even reported.
+const ELECTION_STATUS_LABELS = {
+    draft:            'Election Not Yet Active',
+    configured:       'Election Configured',
+    active:           'Election Active',
+    submitting:       'Receiving Results',
+    results_pending:  'Results Pending',
+    certifying:       'Certification in Progress',
+    certified:        'Official Certified Results',
+    archived:         'Election Archived',
+};
+
+function resolveStatusLabel(electionStatus, stationsReported) {
+    if (electionStatus === 'certified') {
+        return 'Official Certified Results';
+    }
+
+    // No station has reported anything yet — never show "Certification in
+    // Progress" or any other in-flight label in this case, regardless of
+    // what internal status the election record currently carries.
+    if (stationsReported <= 0) {
+        return 'Awaiting Results';
+    }
+
+    return ELECTION_STATUS_LABELS[electionStatus] || 'Certification in Progress';
+}
+
 // ── Candidate tile ──────────────────────────────────────────────────────────
 function CandidateTile({ candidate, rank, totalValidVotes }) {
     const color = firstColor(candidate.party_color, '#155AA6');
@@ -244,7 +279,14 @@ function HomeResultsPage({ election, elections, selectedElectionId, stats, pipel
     const hasCandidates = Array.isArray(candidates) && candidates.length > 0;
     const regionList = Array.isArray(regions) ? regions : [];
     const isCertified = election?.status === 'certified';
-    const statusLabel = isCertified ? 'Official Certified Results' : 'Certification in Progress';
+    // FIX: previously `statusLabel` was a hardcoded binary ternary
+    // (isCertified ? 'Official Certified Results' : 'Certification in Progress'),
+    // which mislabeled every non-certified election — including a brand-new
+    // election with zero submissions — as "Certification in Progress".
+    // resolveStatusLabel() derives the label from the election's real
+    // lifecycle status and explicitly falls back to "Awaiting Results"
+    // when no station has reported anything yet.
+    const statusLabel = resolveStatusLabel(election?.status, stationsReported);
 
     const workflow = [
         { title: 'Stations Submit', description: 'Polling officers submit results', state: stationsReported > 0 ? 'done' : 'active', meta: stationsReported > 0 ? `${stationsReported.toLocaleString()} received` : 'Awaiting submissions' },

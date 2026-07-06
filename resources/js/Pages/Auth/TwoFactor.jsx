@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useForm, router, usePage } from '@inertiajs/react';
 import { generateDeviceFingerprint, serializeFingerprint } from '../../Utils/deviceFingerprint';
+import { useGlobalNotify } from '@/Contexts/NotificationContext';
 
 export default function TwoFactor({ expiresAt, status }) {
     const { props } = usePage();
+    const { notify } = useGlobalNotify();
 
     const { data, setData, post, processing, errors } = useForm({
         code: '',
@@ -25,11 +27,12 @@ export default function TwoFactor({ expiresAt, status }) {
 
     useEffect(() => {
         if (errors.code) {
+            notify.error(errors.code);
             setShowCodeError(true);
             const t = setTimeout(() => setShowCodeError(false), 15000);
             return () => clearTimeout(t);
         }
-    }, [errors.code]);
+    }, [errors.code]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // Collect device fingerprint on component mount
     useEffect(() => {
@@ -81,8 +84,13 @@ export default function TwoFactor({ expiresAt, status }) {
         setResendError('');
         setShowCodeError(false);
         post('/auth/two-factor', {
-            onError: () => {
+            onError: (formErrors) => {
                 setData('code', '');
+                // errors.code effect above already shows a toast; this
+                // covers any other unexpected error shape (e.g. network).
+                if (!formErrors.code) {
+                    notify.error('Unable to verify your code right now. Please try again.');
+                }
             },
         });
     };
@@ -108,12 +116,17 @@ export default function TwoFactor({ expiresAt, status }) {
             '/auth/two-factor/resend',
             {},
             {
-                onSuccess: () => {
+                onSuccess: (page) => {
                     setCountdown(600);
-                    setResendMessage('A new verification code has been sent to your phone.');
+                    const msg = page.props.flash?.status
+                        || 'A new verification code has been sent to your phone.';
+                    setResendMessage(msg);
+                    notify.success(msg);
                 },
                 onError: () => {
-                    setResendError('Failed to resend code. Please try again.');
+                    const msg = 'Failed to resend code. Please try again.';
+                    setResendError(msg);
+                    notify.error(msg);
                 },
                 onFinish: () => {
                     setIsResending(false);

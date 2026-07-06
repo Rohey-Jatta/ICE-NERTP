@@ -15,7 +15,7 @@ function PipelineBar({ status }) {
 
     return (
         <div>
-            <div className="flex justify-between text-xs text-slate-500 mb-1">
+            <div className="flex justify-between text-xs text-slate-800 mb-1">
                 <span>Certification Progress</span>
                 <span className="font-semibold">{pct}%</span>
             </div>
@@ -57,9 +57,9 @@ export default function Submissions({ auth, submissions = [], station }) {
                         <div>
                             <h1 className="text-3xl font-bold text-iec-navy">My Submissions</h1>
                             {station && (
-                                <p className="text-slate-500 mt-0.5 text-sm">
+                                <p className="text-slate-800 mt-0.5 text-sm">
                                     {station.name}
-                                    <span className="ml-2 font-mono text-xs text-slate-500 bg-white px-1.5 py-0.5 rounded">{station.code}</span>
+                                    <span className="ml-2 font-mono text-xs text-slate-800 bg-white px-1.5 py-0.5 rounded">{station.code}</span>
                                 </p>
                             )}
                         </div>
@@ -74,21 +74,21 @@ export default function Submissions({ auth, submissions = [], station }) {
 
                 {/* Summary */}
                 <div className="flex flex-wrap gap-3 mb-6">
-                    <div className="px-4 py-2 bg-slate-100 border border-slate-200 rounded-full text-slate-600 text-sm">
+                    <div className="px-4 py-2 bg-slate-100 border border-slate-200 rounded-full text-slate-800 text-sm">
                         📋 {submissions.length} total submission{submissions.length !== 1 ? 's' : ''}
                     </div>
                     {pendingCount > 0 && (
-                        <div className="px-4 py-2 bg-pink-500/15 border border-pink-500/30 rounded-full text-pink-500 text-sm">
+                        <div className="px-4 py-2 bg-pink-500/15 border border-pink-500/30 rounded-full text-pink-800 text-sm">
                            {pendingCount} in pipeline
                         </div>
                     )}
                     {certifiedCount > 0 && (
-                        <div className="px-4 py-2 bg-iec-pink-500/15 border border-teal-500/30 rounded-full text-iec-pink-600 text-sm">
+                        <div className="px-4 py-2 bg-iec-pink-500/15 border border-teal-500/30 rounded-full text-iec-pink-800 text-sm">
                             ✓ {certifiedCount} certified
                         </div>
                     )}
                     {rejectedCount > 0 && (
-                        <div className="px-4 py-2 bg-red-500/15 border border-red-500/30 rounded-full text-red-500 text-sm">
+                        <div className="px-4 py-2 bg-red-500/15 border border-red-500/30 rounded-full text-red-800 text-sm">
                             ✗ {rejectedCount} rejected — action required
                         </div>
                     )}
@@ -98,7 +98,7 @@ export default function Submissions({ auth, submissions = [], station }) {
                     <div className="bg-white rounded-xl p-16 border border-slate-200 text-center">
                         <div className="text-5xl mb-4">📋</div>
                         <h2 className="text-xl font-bold text-iec-navy mb-2">No Submissions Yet</h2>
-                        <p className="text-slate-500 text-sm mb-6">Submit your station's election results to get started.</p>
+                        <p className="text-slate-800 text-sm mb-6">Submit your station's election results to get started.</p>
                         <Link href="/officer/results/submit"
                               className="inline-block px-6 py-3 bg-iec-pink-600 hover:bg-iec-pink-700 text-white font-bold rounded-lg">
                             Submit Results →
@@ -126,19 +126,19 @@ export default function Submissions({ auth, submissions = [], station }) {
                                             <div>
                                                 <div className="flex items-center gap-3 flex-wrap">
                                                     <h3 className="text-iec-navy font-bold">{submission.polling_station_name}</h3>
-                                                    <span className="font-mono text-xs text-slate-500 bg-white px-2 py-0.5 rounded">
+                                                    <span className="font-mono text-xs text-slate-800 bg-white px-2 py-0.5 rounded">
                                                         {submission.polling_station_code}
                                                     </span>
                                                     <span className={`px-2.5 py-1 rounded-full text-xs font-semibold border ${cfg.borderedBadgeClass}`}>
                                                         {cfg.icon} {cfg.label}
                                                     </span>
                                                     {submission.rejection_count > 0 && (
-                                                        <span className="px-2 py-0.5 rounded-full text-xs bg-Pink-500/20 text-pink-500">
+                                                        <span className="px-2 py-0.5 rounded-full text-xs bg-Pink-500/20 text-pink-800">
                                                             Rejected {submission.rejection_count}×
                                                         </span>
                                                     )}
                                                 </div>
-                                                <p className="text-slate-500 text-xs mt-1">
+                                                <p className="text-slate-800 text-xs mt-1">
                                                     Submitted: {submission.submitted_at}
                                                     {submission.version > 1 && ` · v${submission.version}`}
                                                 </p>
@@ -153,7 +153,7 @@ export default function Submissions({ auth, submissions = [], station }) {
                                                 )}
                                                 <button
                                                     onClick={() => setExpandedId(isExpanded ? null : submission.id)}
-                                                    className="px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-600 text-xs rounded-lg"
+                                                    className="px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-800 text-xs rounded-lg"
                                                 >
                                                     {isExpanded ? 'Hide' : 'Details'}
                                                 </button>
@@ -170,7 +170,7 @@ export default function Submissions({ auth, submissions = [], station }) {
                                             ].map((s) => (
                                                 <div key={s.label} className="bg-slate-50 rounded-lg p-2.5 text-center">
                                                     <div className={`font-bold text-sm ${s.color}`}>{s.value}</div>
-                                                    <div className="text-slate-500 text-xs">{s.label}</div>
+                                                    <div className="text-slate-800 text-xs">{s.label}</div>
                                                 </div>
                                             ))}
                                         </div>
@@ -186,8 +186,8 @@ export default function Submissions({ auth, submissions = [], station }) {
                                             {/* Rejection reason */}
                                             {submission.last_rejection_reason && (
                                                 <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-lg">
-                                                    <div className="text-xs text-red-600 font-semibold mb-1">Rejection Reason</div>
-                                                    <div className="text-red-500 text-sm"
+                                                    <div className="text-xs text-red-800 font-semibold mb-1">Rejection Reason</div>
+                                                    <div className="text-red-800 text-sm"
                                                          dangerouslySetInnerHTML={{ __html: submission.last_rejection_reason }} />
                                                 </div>
                                             )}
@@ -195,7 +195,7 @@ export default function Submissions({ auth, submissions = [], station }) {
                                             {/* Candidate breakdown */}
                                             {submission.candidate_votes?.length > 0 && (
                                                 <div>
-                                                    <div className="text-xs text-slate-500 uppercase tracking-wide mb-2">Candidate Results</div>
+                                                    <div className="text-xs text-slate-800 uppercase tracking-wide mb-2">Candidate Results</div>
                                                     <div className="space-y-2">
                                                         {[...submission.candidate_votes]
                                                             .sort((a, b) => b.votes - a.votes)
@@ -207,8 +207,8 @@ export default function Submissions({ auth, submissions = [], station }) {
                                                                     <div key={idx} className="flex items-center gap-3">
                                                                         <div className="w-2 h-2 rounded-full flex-shrink-0"
                                                                              style={{ backgroundColor: cv.party_color }} />
-                                                                        <span className="text-slate-600 text-sm w-32 truncate">{cv.candidate_name}</span>
-                                                                        <span className="text-xs text-slate-500 w-8">{cv.party_abbr}</span>
+                                                                        <span className="text-slate-800 text-sm w-32 truncate">{cv.candidate_name}</span>
+                                                                        <span className="text-xs text-slate-800 w-8">{cv.party_abbr}</span>
                                                                         <div className="flex-1 bg-white rounded-full h-1.5">
                                                                             <div className="h-1.5 rounded-full"
                                                                                  style={{ width: `${pct}%`, backgroundColor: cv.party_color }} />
@@ -216,7 +216,7 @@ export default function Submissions({ auth, submissions = [], station }) {
                                                                         <span className="text-iec-navy text-sm font-semibold w-16 text-right">
                                                                             {cv.votes?.toLocaleString()}
                                                                         </span>
-                                                                        <span className="text-slate-500 text-xs w-10 text-right">{pct}%</span>
+                                                                        <span className="text-slate-800 text-xs w-10 text-right">{pct}%</span>
                                                                     </div>
                                                                 );
                                                             })}
@@ -227,9 +227,9 @@ export default function Submissions({ auth, submissions = [], station }) {
                                             {/* Photo */}
                                             {submission.photo_url && (
                                                 <div>
-                                                    <div className="text-xs text-slate-500 uppercase tracking-wide mb-2">Result Sheet Photo</div>
+                                                    <div className="text-xs text-slate-800 uppercase tracking-wide mb-2">Result Sheet Photo</div>
                                                     <a href={submission.photo_url} target="_blank" rel="noopener noreferrer"
-                                                       className="inline-flex items-center gap-2 text-iec-pink-600 hover:text-iec-pink-600 text-sm">
+                                                       className="inline-flex items-center gap-2 text-iec-pink-800 hover:text-iec-pink-800 text-sm">
                                                         📄 View Result Sheet Photo
                                                     </a>
                                                 </div>

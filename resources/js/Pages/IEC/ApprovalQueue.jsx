@@ -1,19 +1,26 @@
 import { useState } from 'react';
 import { router } from '@inertiajs/react';
+import { apiPost, AppError } from '@/Utils/apiClient';
+import { useGlobalNotify } from '@/Contexts/NotificationContext';
 
 /**
  * ApprovalQueue - Dashboard for Ward/Constituency/Admin Area/Chairman approvers.
  *
- * From architecture: resources/js/Pages/IEC/Dashboard.jsx
- *
- * Shows pending results in approval queue with approve/reject actions.
+ * Reworked to use the shared apiClient + global notification system:
+ *  - Every failure (permission, validation, network, server) now shows a
+ *    visible toast with a specific, human-readable reason.
+ *  - The modal/buttons always return to a usable state on failure —
+ *    nothing stays stuck on "Processing...".
+ *  - Field-level errors (e.g. missing rejection reason) are highlighted
+ *    inline in addition to the toast.
  */
 export default function ApprovalQueue({ level, queue, filters }) {
     const [selectedResult, setSelectedResult] = useState(null);
     const [action, setAction] = useState(null); // 'approve' or 'reject'
     const [comments, setComments] = useState('');
     const [processing, setProcessing] = useState(false);
-    const [message, setMessage] = useState({ type: '', text: '' });
+    const [fieldError, setFieldError] = useState('');
+    const { notify, notifyError } = useGlobalNotify();
 
     const levelNames = {
         ward: 'Ward',
@@ -22,57 +29,63 @@ export default function ApprovalQueue({ level, queue, filters }) {
         national: 'National',
     };
 
-    const handleAction = async (result, actionType) => {
+    const handleAction = (result, actionType) => {
         setSelectedResult(result);
         setAction(actionType);
         setComments('');
+        setFieldError('');
+    };
+
+    const closeModal = () => {
+        setSelectedResult(null);
+        setAction(null);
+        setComments('');
+        setFieldError('');
     };
 
     const submitAction = async () => {
         if (!selectedResult) return;
 
-        // Validate rejection reason
+        // Field-level validation — shown inline, not just as a toast.
         if (action === 'reject' && !comments.trim()) {
-            setMessage({ type: 'error', text: 'Rejection reason is required' });
+            setFieldError('Rejection reason is required.');
+            notify.warning('Please provide a reason before rejecting this result.');
             return;
         }
 
         setProcessing(true);
-        setMessage({ type: '', text: '' });
+        setFieldError('');
 
-        try {
-            const endpoint = action === 'approve' ? '/api/approval/approve' : '/api/approval/reject';
-            const body = action === 'approve'
+        const endpoint = action === 'approve' ? '/api/approval/approve' : '/api/approval/reject';
+        const body =
+            action === 'approve'
                 ? { result_id: selectedResult.id, comments }
                 : { result_id: selectedResult.id, reason: comments };
 
-            const response = await fetch(endpoint, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content,
-                },
-                body: JSON.stringify(body),
-            });
+        try {
+            const data = await apiPost(endpoint, body);
 
-            const data = await response.json();
+            notify.success(
+                data.message ||
+                    (action === 'approve'
+                        ? 'Result approved successfully.'
+                        : 'Result rejected and returned to the polling station.')
+            );
 
-            if (response.ok) {
-                setMessage({
-                    type: 'success',
-                    text: data.message,
-                });
-                setSelectedResult(null);
-                setAction(null);
-
-                // Refresh page
-                router.reload({ only: ['queue'] });
-            } else {
-                setMessage({ type: 'error', text: data.message });
+            closeModal();
+            // Refresh the queue in the background — this is a data refresh,
+            // not the confirmation itself, so it doesn't gate the toast.
+            router.reload({ only: ['queue'] });
+        } catch (err) {
+            if (err instanceof AppError && err.fields?.result_id) {
+                setFieldError(err.fields.result_id[0] || err.message);
+            } else if (err instanceof AppError && err.code === 'VALIDATION_ERROR') {
+                setFieldError(err.message);
             }
-        } catch (error) {
-            setMessage({ type: 'error', text: 'Network error. Please try again.' });
+            notifyError(err, `Unable to ${action === 'approve' ? 'approve' : 'reject'} this result. Please try again.`);
         } finally {
+            // ALWAYS restore the button — this is the fix for the
+            // "stuck on Processing..." failure mode.
             setProcessing(false);
         }
     };
@@ -90,17 +103,6 @@ export default function ApprovalQueue({ level, queue, filters }) {
                     </p>
                 </div>
             </div>
-
-            {/* Message Banner */}
-            {message.text && (
-                <div className={`max-w-7xl mx-auto mb-6 p-4 rounded-md border ${
-                    message.type === 'success'
-                        ? 'bg-pink-50 border-pink-200 text-pink-700'
-                        : 'bg-purple-50 border-purple-200 text-purple-700'
-                }`}>
-                    <p>{message.text}</p>
-                </div>
-            )}
 
             {/* Queue Table */}
             <div className="max-w-7xl mx-auto">
@@ -232,19 +234,24 @@ export default function ApprovalQueue({ level, queue, filters }) {
                             </label>
                             <textarea
                                 value={comments}
-                                onChange={(e) => setComments(e.target.value)}
+                                onChange={(e) => { setComments(e.target.value); setFieldError(''); }}
                                 rows={4}
                                 required={action === 'reject'}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 ${
+                                    fieldError ? 'border-red-400 focus:ring-red-400' : 'border-gray-300 focus:ring-blue-500'
+                                }`}
                                 placeholder={action === 'approve' ? 'Add any notes...' : 'Explain why this result is being rejected...'}
                             />
+                            {fieldError && (
+                                <p className="mt-1.5 text-sm text-red-800">{fieldError}</p>
+                            )}
                         </div>
 
                         <div className="flex gap-3">
                             <button
                                 onClick={submitAction}
                                 disabled={processing || (action === 'reject' && !comments.trim())}
-                                className={`flex-1 py-2 px-4 rounded-md font-medium text-iec-navy ${
+                                className={`flex-1 py-2 px-4 rounded-md font-medium text-white ${
                                     action === 'approve'
                                         ? 'bg-green-600 hover:bg-green-700'
                                         : 'bg-red-600 hover:bg-red-700'
@@ -253,10 +260,7 @@ export default function ApprovalQueue({ level, queue, filters }) {
                                 {processing ? 'Processing...' : action === 'approve' ? 'Confirm Approval' : 'Confirm Rejection'}
                             </button>
                             <button
-                                onClick={() => {
-                                    setSelectedResult(null);
-                                    setAction(null);
-                                }}
+                                onClick={closeModal}
                                 disabled={processing}
                                 className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
                             >

@@ -15,6 +15,7 @@ use Illuminate\Support\Facades\Log;
 
 /**
  * CertificationWorkflowService — Sequential approval state machine.
+ * Now uses AuditTrailService for forensic chain-of-custody records.
  */
 class CertificationWorkflowService
 {
@@ -32,17 +33,43 @@ class CertificationWorkflowService
         'national'     => Result::STATUS_PENDING_ADMIN_AREA,
     ];
 
+    // Custody chain: who receives custody at each approval level
+    const NEXT_CUSTODIAN_ON_APPROVE = [
+        'ward'         => 'constituency-approver',
+        'constituency' => 'admin-area-approver',
+        'admin_area'   => 'iec-chairman',
+        'national'     => 'public',
+    ];
+
+    // Who gets it back on rejection
+    const NEXT_CUSTODIAN_ON_REJECT = [
+        'ward'         => 'polling-officer',
+        'constituency' => 'ward-approver',
+        'admin_area'   => 'constituency-approver',
+        'national'     => 'admin-area-approver',
+    ];
+
+    const CURRENT_CUSTODIAN = [
+        'ward'         => 'ward-approver',
+        'constituency' => 'constituency-approver',
+        'admin_area'   => 'admin-area-approver',
+        'national'     => 'iec-chairman',
+    ];
+
+    public function __construct(
+        private readonly AuditTrailService $auditTrail
+    ) {}
+
     /**
      * Approve a result at a specific certification level.
      */
     public function approve(
         Result $result,
-        User $approver,
+        User   $approver,
         string $level,
-        ?string $comments = null,
-        bool $withReservation = false
-    ): bool
-    {
+        ?string $comments      = null,
+        bool    $withReservation = false
+    ): bool {
         if (!$this->canApprove($approver, $level)) {
             throw new \Exception("User does not have permission to approve at {$level} level.");
         }
@@ -50,6 +77,9 @@ class CertificationWorkflowService
         if (!$this->isPendingAtLevel($result, $level)) {
             throw new \Exception("Result is not pending approval at {$level} level. Current status: {$result->certification_status}");
         }
+
+        // Capture BEFORE any status change
+        $previousStatus = $result->certification_status;
 
         DB::beginTransaction();
         try {
@@ -86,23 +116,19 @@ class CertificationWorkflowService
                     : "Approved at {$level} level"
             );
 
-            AuditLog::record(
-                action:    $withReservation
-                    ? "certification.{$level}.approved_with_reservation"
-                    : "certification.{$level}.approved",
-                event:     'updated',
-                module:    'Certification',
-                auditable: $result,
-                extra:     [
-                    'level'       => $level,
-                    'outcome'     => 'success',
-                    'comments'    => $comments,
-                    'reservation' => $withReservation ? $comments : null,
-                    'election_id' => $result->election_id,
-                ]
+            DB::commit();
+
+            // Forensic chain-of-custody audit
+            $this->auditTrail->approval(
+                result:           $result,
+                level:            $level,
+                currentRole:      self::CURRENT_CUSTODIAN[$level],
+                nextRole:         self::NEXT_CUSTODIAN_ON_APPROVE[$level],
+                comments:         $comments,
+                withReservation:  $withReservation,
+                previousStatus:   $previousStatus
             );
 
-            DB::commit();
             $this->forgetWorkflowCaches($result);
             return true;
 
@@ -124,6 +150,9 @@ class CertificationWorkflowService
         if (!$this->isPendingAtLevel($result, $level)) {
             throw new \Exception("Result is not pending approval at {$level} level.");
         }
+
+        // Capture BEFORE any status change
+        $previousStatus = $result->certification_status;
 
         DB::beginTransaction();
         try {
@@ -150,24 +179,21 @@ class CertificationWorkflowService
 
             $this->createVersionSnapshot($result, $approver, "Rejected at {$level} level: {$reason}");
 
-            AuditLog::record(
-                action:    "certification.{$level}.rejected",
-                event:     'updated',
-                module:    'Certification',
-                auditable: $result,
-                extra:     [
-                    'level'          => $level,
-                    'reason'         => $reason,
-                    'outcome'        => 'failure',
-                    'failure_reason' => $reason,
-                    'election_id'    => $result->election_id,
-                ]
+            DB::commit();
+
+            // Forensic chain-of-custody audit
+            $this->auditTrail->rejection(
+                result:          $result,
+                level:           $level,
+                currentRole:     self::CURRENT_CUSTODIAN[$level],
+                returnedToRole:  self::NEXT_CUSTODIAN_ON_REJECT[$level],
+                reason:          $reason,
+                previousStatus:  $previousStatus
             );
 
-            DB::commit();
             $this->forgetWorkflowCaches($result);
 
-            // ── Auto-create Rejection Incident ────────────────────────────
+            // Auto-create Rejection Incident
             $this->createRejectionIncident($result, $level, $reason);
 
             return true;
@@ -192,7 +218,6 @@ class CertificationWorkflowService
             'partyAcceptances.politicalParty',
         ])->where('certification_status', $pendingStatus);
 
-        // Scope to the approver's assigned area
         if ($level === 'ward') {
             $wardId = AdministrativeHierarchy::where('assigned_approver_id', $approver->id)
                 ->where('level', 'ward')->value('id');
@@ -226,18 +251,14 @@ class CertificationWorkflowService
         return $query->orderBy('submitted_at')->paginate(20);
     }
 
-    // ── Private helpers ───────────────────────────────────────────────────
+    // ── Private helpers ───────────────────────────────────────────────
 
-    /**
-     * Auto-create a Rejection incident after a result is rejected.
-     */
     private function createRejectionIncident(Result $result, string $level, string $reason): void
     {
         try {
             $result->loadMissing('pollingStation');
             $station = $result->pollingStation;
 
-            // Resolve admin area via hierarchy
             $adminArea = DB::table('administrative_hierarchy as aa')
                 ->join('administrative_hierarchy as con', 'con.parent_id', '=', 'aa.id')
                 ->join('administrative_hierarchy as w',   'w.parent_id',   '=', 'con.id')
@@ -257,7 +278,6 @@ class CertificationWorkflowService
                 'description'              => "Result rejected at {$level} level: {$reason}",
             ]);
 
-            // Bust operations dashboard cache
             Cache::forget('election_operations_dashboard');
         } catch (\Throwable $e) {
             Log::warning('[Incident] Failed to create rejection incident: ' . $e->getMessage());
@@ -281,13 +301,9 @@ class CertificationWorkflowService
     private function isPendingAtLevel(Result $result, string $level): bool
     {
         $allowed = [$this->getPendingStatus($level)];
-
         if ($level === 'ward') {
             $allowed[] = Result::STATUS_PENDING_PARTY_ACCEPTANCE;
-            // Also allow rejections that came back to pending_ward
-            // (e.g. rejected from constituency, now at pending_ward with rejection_count > 0)
         }
-
         return in_array($result->certification_status, $allowed, true);
     }
 
@@ -350,12 +366,12 @@ class CertificationWorkflowService
     {
         try {
             $result->versions()->create([
-                'version_number'                => $result->versions()->count() + 1,
-                'result_snapshot'               => $result->toArray(),
-                'votes_snapshot'                => $result->candidateVotes->toArray(),
-                'changed_by'                    => $user->id,
-                'change_reason'                 => 'initial_submission',
-                'change_notes'                  => $reason,
+                'version_number'                 => $result->versions()->count() + 1,
+                'result_snapshot'                => $result->toArray(),
+                'votes_snapshot'                 => $result->candidateVotes->toArray(),
+                'changed_by'                     => $user->id,
+                'change_reason'                  => 'initial_submission',
+                'change_notes'                   => $reason,
                 'certification_status_at_version'=> $result->certification_status,
             ]);
         } catch (\Throwable $e) {
@@ -368,7 +384,6 @@ class CertificationWorkflowService
         Election::forgetPublicCaches($result->election_id, $result->election?->status);
         Cache::forget('chairman_dashboard_stats');
         Cache::forget('election_operations_dashboard');
-        // Also clear ward dashboard cache for this result's ward
         if ($result->pollingStation?->ward_id) {
             $ward = AdministrativeHierarchy::find($result->pollingStation->ward_id);
             if ($ward?->assigned_approver_id) {

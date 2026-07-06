@@ -54,6 +54,10 @@ class OfflineSync {
                 status: 'pending',
                 was_offline: true,
                 queued_at: new Date().toISOString(),
+                // Retry bookkeeping — read/written by SyncQueue against the
+                // configurable `max_offline_retries` setting.
+                retry_count: 0,
+                last_error: null,
             };
 
             const request = store.add(submission);
@@ -71,6 +75,25 @@ class OfflineSync {
             const store = transaction.objectStore(STORE_NAME);
             const index = store.index('status');
             const request = index.getAll('pending');
+
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => reject(request.error);
+        });
+    }
+
+    /**
+     * Submissions that exhausted their retry budget (status = 'failed').
+     * Surfaced so a future UI (e.g. Officer/Submissions) can let the
+     * officer manually requeue them.
+     */
+    async getFailedSubmissions() {
+        if (!this.db) await this.init();
+
+        return new Promise((resolve, reject) => {
+            const transaction = this.db.transaction([STORE_NAME], 'readonly');
+            const store = transaction.objectStore(STORE_NAME);
+            const index = store.index('status');
+            const request = index.getAll('failed');
 
             request.onsuccess = () => resolve(request.result);
             request.onerror = () => reject(request.error);
@@ -98,6 +121,105 @@ class OfflineSync {
                 } else {
                     reject(new Error('Submission not found'));
                 }
+            };
+
+            request.onerror = () => reject(request.error);
+        });
+    }
+
+    /**
+     * Bump the retry counter for a submission after a failed sync attempt.
+     * Returns the new retry_count so SyncQueue can compare it against
+     * `max_offline_retries` without a second round-trip.
+     */
+    async incrementRetryCount(uuid, errorMessage = null) {
+        if (!this.db) await this.init();
+
+        return new Promise((resolve, reject) => {
+            const transaction = this.db.transaction([STORE_NAME], 'readwrite');
+            const store = transaction.objectStore(STORE_NAME);
+            const request = store.get(uuid);
+
+            request.onsuccess = () => {
+                const submission = request.result;
+                if (!submission) {
+                    reject(new Error('Submission not found'));
+                    return;
+                }
+
+                submission.retry_count = (submission.retry_count || 0) + 1;
+                submission.last_error = errorMessage;
+                submission.last_attempt_at = new Date().toISOString();
+
+                const updateRequest = store.put(submission);
+                updateRequest.onsuccess = () => resolve(submission.retry_count);
+                updateRequest.onerror = () => reject(updateRequest.error);
+            };
+
+            request.onerror = () => reject(request.error);
+        });
+    }
+
+    /**
+     * Mark a submission as permanently failed after exhausting retries.
+     * It will no longer be picked up by getPendingSubmissions(), so
+     * SyncQueue won't keep hammering the server for it.
+     */
+    async markFailed(uuid, errorMessage = null) {
+        if (!this.db) await this.init();
+
+        return new Promise((resolve, reject) => {
+            const transaction = this.db.transaction([STORE_NAME], 'readwrite');
+            const store = transaction.objectStore(STORE_NAME);
+            const request = store.get(uuid);
+
+            request.onsuccess = () => {
+                const submission = request.result;
+                if (!submission) {
+                    reject(new Error('Submission not found'));
+                    return;
+                }
+
+                submission.status = 'failed';
+                submission.last_error = errorMessage;
+                submission.failed_at = new Date().toISOString();
+
+                const updateRequest = store.put(submission);
+                updateRequest.onsuccess = () => resolve(submission);
+                updateRequest.onerror = () => reject(updateRequest.error);
+            };
+
+            request.onerror = () => reject(request.error);
+        });
+    }
+
+    /**
+     * Reset a failed submission back to 'pending' with a clean retry
+     * counter, so it re-enters the normal sync queue. Intended for a
+     * "Retry" button an officer taps manually.
+     */
+    async requeueSubmission(uuid) {
+        if (!this.db) await this.init();
+
+        return new Promise((resolve, reject) => {
+            const transaction = this.db.transaction([STORE_NAME], 'readwrite');
+            const store = transaction.objectStore(STORE_NAME);
+            const request = store.get(uuid);
+
+            request.onsuccess = () => {
+                const submission = request.result;
+                if (!submission) {
+                    reject(new Error('Submission not found'));
+                    return;
+                }
+
+                submission.status = 'pending';
+                submission.retry_count = 0;
+                submission.last_error = null;
+
+                const updateRequest = store.put(submission);
+                updateRequest.onsuccess = () => resolve(submission);
+                updateRequest.onerror = () => reject(updateRequest.error);
             };
 
             request.onerror = () => reject(request.error);

@@ -54,7 +54,7 @@ export default function OfficerDashboard({
                 {/* Header */}
                 <div className="mb-8">
                     <h1 className="text-3xl font-bold text-iec-navy">Polling Officer Dashboard</h1>
-                    <p className="text-slate-500 mt-1 text-sm">
+                    <p className="text-slate-800 mt-1 text-sm">
                         Your role: <strong className="text-iec-navy">Submit and manage election results</strong> from your assigned polling station.
                     </p>
                 </div>
@@ -88,8 +88,8 @@ export default function OfficerDashboard({
                 {/* No station assigned warning */}
                 {!station && (
                     <div className="mb-6 p-5 bg-red-500/10 border border-red-500/40 rounded-xl">
-                        <h2 className="text-red-300 font-bold mb-1">⚠ No Polling Station Assigned</h2>
-                        <p className="text-red-400 text-sm">
+                        <h2 className="text-red-800 font-bold mb-1">⚠ No Polling Station Assigned</h2>
+                        <p className="text-red-800 text-sm">
                             You have not been assigned to a polling station yet.
                             Contact the IEC Administrator to complete your assignment before Election Day.
                         </p>
@@ -101,16 +101,16 @@ export default function OfficerDashboard({
                     <div className="bg-white rounded-xl p-6 border border-slate-200 mb-6">
                         <div className="flex flex-wrap gap-6 items-start justify-between">
                             <div>
-                                <div className="text-xs text-slate-500 uppercase tracking-wide mb-1">Your Assigned Station</div>
+                                <div className="text-xs text-slate-800 uppercase tracking-wide mb-1">Your Assigned Station</div>
                                 <h2 className="text-2xl font-bold text-iec-navy">{station.name}</h2>
                                 <div className="flex items-center gap-4 mt-2 flex-wrap">
-                                    <span className="text-xs font-mono bg-white text-slate-600 px-2 py-1 rounded">
+                                    <span className="text-xs font-mono bg-white text-slate-800 px-2 py-1 rounded">
                                         {station.code}
                                     </span>
-                                    <span className="text-slate-500 text-sm">
+                                    <span className="text-slate-800 text-sm">
                                         {station.registered_voters?.toLocaleString()} registered voters
                                     </span>
-                                    <span className="text-slate-500 text-sm">{station.election_name}</span>
+                                    <span className="text-slate-800 text-sm">{station.election_name}</span>
                                 </div>
                             </div>
 
@@ -120,7 +120,7 @@ export default function OfficerDashboard({
                                     🔒 Election Closed
                                 </div>
                             ) : hasSubmitted ? (
-                                <div className="px-4 py-2 bg-iec-pink-500/20 border border-teal-500/40 rounded-xl text-iec-pink-600 text-sm font-semibold">
+                                <div className="px-4 py-2 bg-iec-pink-500/20 border border-teal-500/40 rounded-xl text-iec-pink-800 text-sm font-semibold">
                                     ✓ Results Submitted
                                 </div>
                             ) : (
@@ -136,7 +136,7 @@ export default function OfficerDashboard({
                 {statistics.rejected > 0 && !electionClosed && (
                     <div className="mb-6 p-4 bg-red-500/10 border border-red-500/40 rounded-xl flex items-center gap-3">
                         <span className="w-3 h-3 bg-red-400 rounded-full animate-pulse flex-shrink-0" />
-                        <p className="text-red-300 flex-1">
+                        <p className="text-red-800 flex-1">
                             <strong>{statistics.rejected}</strong> result{statistics.rejected > 1 ? 's have' : ' has'} been
                             rejected and requires resubmission.
                         </p>
@@ -151,13 +151,13 @@ export default function OfficerDashboard({
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
                     {[
                         { label: 'Total Submissions', value: statistics.totalSubmissions || 0, color: 'text-iec-navy' },
-                        { label: 'In Pipeline',       value: statistics.pending          || 0, color: 'text-amber-400' },
-                        { label: 'Certified',         value: statistics.certified        || 0, color: 'text-iec-pink-600' },
-                        { label: 'Rejected',          value: statistics.rejected         || 0, color: 'text-red-700' },
+                        { label: 'In Pipeline',       value: statistics.pending          || 0, color: 'text-amber-800' },
+                        { label: 'Certified',         value: statistics.certified        || 0, color: 'text-iec-pink-800' },
+                        { label: 'Rejected',          value: statistics.rejected         || 0, color: 'text-red-800' },
                     ].map((card) => (
                         <div key={card.label} className="bg-white rounded-xl p-5 border border-slate-200">
                             <div className={`text-3xl font-bold mb-1 ${card.color}`}>{card.value}</div>
-                            <div className="text-slate-500 text-sm">{card.label}</div>
+                            <div className="text-slate-800 text-sm">{card.label}</div>
                         </div>
                     ))}
                 </div>
@@ -172,8 +172,8 @@ export default function OfficerDashboard({
                                     🔒
                                 </div>
                                 <div>
-                                    <div className="font-bold text-red-800 text-lg">Submissions Closed</div>
-                                    <div className="text-red-600 text-sm mt-0.5">
+                                    <div className="font-bold text-red-900 text-lg">Submissions Closed</div>
+                                    <div className="text-red-800 text-sm mt-0.5">
                                         The election has been officially closed by the IEC Chairman. No new results can be submitted.
                                     </div>
                                 </div>
@@ -200,7 +200,7 @@ export default function OfficerDashboard({
                                     <div className="font-bold text-iec-navy text-lg">
                                         {statistics.rejected > 0 ? 'Resubmit Results' : 'Submit Results'}
                                     </div>
-                                    <div className="text-slate-500 text-sm mt-0.5">
+                                    <div className="text-slate-800 text-sm mt-0.5">
                                         {canSubmit
                                             ? 'Enter vote counts and upload result sheet photo'
                                             : statistics.rejected > 0
@@ -221,7 +221,7 @@ export default function OfficerDashboard({
                             <div className="w-10 h-10 bg-iec-pink-500/20 rounded-xl flex items-center justify-center text-xl">📊</div>
                             <div>
                                 <div className="font-bold text-iec-navy text-lg">My Submissions</div>
-                                <div className="text-slate-500 text-sm mt-0.5">
+                                <div className="text-slate-800 text-sm mt-0.5">
                                     View all submitted results and their current certification status
                                 </div>
                             </div>
@@ -236,16 +236,16 @@ export default function OfficerDashboard({
                         {ACTIVE_CERTIFICATION_PIPELINE.map((step, idx) => (
                             <div key={step.key} className="flex items-center gap-2">
                                 <div className="flex items-center gap-1.5 px-3 py-1.5 bg-white rounded-lg border border-slate-200">
-                                    <span className="text-xs text-slate-500 font-mono">{step.step}</span>
-                                    <span className="text-xs text-slate-600">{step.label}</span>
+                                    <span className="text-xs text-slate-800 font-mono">{step.step}</span>
+                                    <span className="text-xs text-slate-800">{step.label}</span>
                                 </div>
                                 {idx < ACTIVE_CERTIFICATION_PIPELINE.length - 1 && (
-                                    <span className="text-slate-600">→</span>
+                                    <span className="text-slate-800">→</span>
                                 )}
                             </div>
                         ))}
                     </div>
-                    <p className="text-slate-500 text-xs mt-3">
+                    <p className="text-slate-800 text-xs mt-3">
                         Party representatives review in parallel; their response does not block this certification path.
                     </p>
                 </div>
