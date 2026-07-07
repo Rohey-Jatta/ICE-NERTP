@@ -92,12 +92,12 @@ const SEVERITY_CONFIG = {
 };
 
 // ── Observation Card ──────────────────────────────────────────────────────────
-function ObservationCard({ obs }) {
+function ObservationCard({ obs, onOpen }) {
     const type     = OBS_TYPE_CONFIG[obs.observation_type]  || OBS_TYPE_CONFIG.general;
     const severity = SEVERITY_CONFIG[obs.severity] || SEVERITY_CONFIG.low;
 
     return (
-        <div className={`bg-white rounded-lg border ${severity.border} p-4 flex flex-col gap-2`}>
+        <button type="button" onClick={() => onOpen(obs)} className={`text-left bg-white rounded-lg border ${severity.border} p-4 flex flex-col gap-2 hover:shadow-md hover:-translate-y-0.5 transition-all focus:outline-none focus:ring-2 focus:ring-pink-500`}>
             {/* Header row */}
             <div className="flex items-start justify-between gap-2">
                 <div className="flex items-center gap-2 flex-wrap flex-1 min-w-0">
@@ -129,11 +129,90 @@ function ObservationCard({ obs }) {
                 {obs.admin_area_name && <span>🏛 {obs.admin_area_name}</span>}
                 <span>👤 {obs.monitor_name}</span>
                 {obs.has_photos && <span>📷 Photos</span>}
+                {obs.has_documents && <span>📄 Documents</span>}
             </div>
 
             {/* Timestamp */}
             <div className="text-[10px] text-slate-400 mt-0.5">
                 Observed: {obs.observed_at ? new Date(obs.observed_at).toLocaleString() : '—'}
+            </div>
+        </button>
+    );
+}
+
+function ObservationModal({ observation, onClose }) {
+    if (!observation) return null;
+
+    const type = OBS_TYPE_CONFIG[observation.observation_type] || OBS_TYPE_CONFIG.general;
+    const severity = SEVERITY_CONFIG[observation.severity] || SEVERITY_CONFIG.low;
+    const documents = observation.documents || [];
+    const photos = observation.photos || [];
+
+    return (
+        <div className="fixed inset-0 z-50 bg-slate-900/70 p-4 flex items-center justify-center" onClick={onClose}>
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[92vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
+                <div className="px-5 py-4 border-b flex items-start justify-between gap-4">
+                    <div>
+                        <div className="flex flex-wrap items-center gap-2 mb-2">
+                            <span className="text-xl">{type.icon}</span>
+                            <span className={`text-xs font-semibold px-2 py-1 rounded ${type.bg} ${type.text}`}>{type.label}</span>
+                            <span className={`text-xs font-bold px-2 py-1 rounded-full ${severity.badge}`}>{severity.label} severity</span>
+                        </div>
+                        <h2 className="text-xl font-extrabold text-slate-900">{observation.title}</h2>
+                        <p className="text-xs text-slate-500 mt-1">
+                            {observation.station_code} — {observation.station_name} · {observation.ward_name || 'Unknown ward'} · {observation.admin_area_name || 'Unknown area'}
+                        </p>
+                    </div>
+                    <button type="button" onClick={onClose} className="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold">✕</button>
+                </div>
+
+                <div className="p-5 overflow-y-auto grid grid-cols-1 lg:grid-cols-2 gap-5">
+                    <div className="space-y-4">
+                        <section>
+                            <h3 className="text-sm font-extrabold text-slate-800 uppercase tracking-wide mb-2">Full observation</h3>
+                            <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">{observation.observation}</p>
+                        </section>
+                        <section className="text-xs text-slate-600 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            <div><strong>Monitor:</strong> {observation.monitor_name}</div>
+                            <div><strong>Observed:</strong> {observation.observed_at ? new Date(observation.observed_at).toLocaleString() : '—'}</div>
+                            <div><strong>Constituency:</strong> {observation.constituency_name || '—'}</div>
+                            <div><strong>GPS:</strong> {observation.latitude && observation.longitude ? `${observation.latitude}, ${observation.longitude}` : '—'}</div>
+                        </section>
+                        <section>
+                            <h3 className="text-sm font-extrabold text-slate-800 uppercase tracking-wide mb-2">Attached documents</h3>
+                            {documents.length === 0 ? (
+                                <p className="text-sm text-slate-400">No documents attached.</p>
+                            ) : (
+                                <div className="space-y-3">
+                                    {documents.map((doc, idx) => (
+                                        <div key={doc.url} className="border rounded-lg overflow-hidden">
+                                            <div className="px-3 py-2 bg-slate-50 flex items-center justify-between gap-2">
+                                                <span className="text-sm font-semibold text-slate-700 truncate">📄 {doc.name || `Document ${idx + 1}`}</span>
+                                                <a href={doc.url} download className="text-xs font-bold text-pink-700 hover:text-pink-900">Download</a>
+                                            </div>
+                                            <iframe title={doc.name || `Document ${idx + 1}`} src={doc.url} className="w-full h-72 bg-white" />
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </section>
+                    </div>
+
+                    <section>
+                        <h3 className="text-sm font-extrabold text-slate-800 uppercase tracking-wide mb-2">Evidence images</h3>
+                        {photos.length === 0 ? (
+                            <p className="text-sm text-slate-400">No images attached.</p>
+                        ) : (
+                            <div className="grid grid-cols-1 gap-3">
+                                {photos.map((photo, idx) => (
+                                    <a key={photo.url} href={photo.url} target="_blank" rel="noreferrer" className="block border rounded-lg overflow-hidden bg-slate-50">
+                                        <img src={photo.url} alt={photo.name || `Evidence ${idx + 1}`} className="w-full max-h-96 object-contain" />
+                                    </a>
+                                ))}
+                            </div>
+                        )}
+                    </section>
+                </div>
             </div>
         </div>
     );
@@ -145,6 +224,7 @@ export default function ElectionOperationsDashboard({ auth, data: initialData })
     const [refreshing, setRefreshing] = useState(false);
     const [lastUpdated, setLastUpdated] = useState(new Date());
     const [obsExpanded, setObsExpanded] = useState(false);
+    const [selectedObservation, setSelectedObservation] = useState(null);
 
     const refresh = useCallback(async () => {
         setRefreshing(true);
@@ -568,7 +648,7 @@ export default function ElectionOperationsDashboard({ auth, data: initialData })
                                 <>
                                     <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
                                         {visibleObs.map(o => (
-                                            <ObservationCard key={o.id} obs={o} />
+                                            <ObservationCard key={o.id} obs={o} onOpen={setSelectedObservation} />
                                         ))}
                                     </div>
 
@@ -591,6 +671,7 @@ export default function ElectionOperationsDashboard({ auth, data: initialData })
                 </div>
 
             </div>
+        <ObservationModal observation={selectedObservation} onClose={() => setSelectedObservation(null)} />
         </AppLayout>
     );
 }

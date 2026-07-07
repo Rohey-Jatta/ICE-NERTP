@@ -94,6 +94,8 @@ class ResultsSummaryController extends Controller
             'start_date' => $election->start_date?->toDateString(),
         ];
 
+        $isPublished = in_array($election->status, ['results_pending', 'certified'], true);
+
         // Use ALL submitted results (not just nationally_certified) for the
         // stats display — this ensures the station count and vote totals
         // update as soon as officers submit, not only after chairman certifies.
@@ -143,14 +145,16 @@ SQL;
             ->first();
 
         // Count stations that have submitted ANY result (for reporting stat)
-        $reportingStats = DB::table(DB::raw("({$latestAnyResult}) AS r"))
+        $reportingStats = $isPublished
+            ? DB::table(DB::raw("({$latestAnyResult}) AS r"))
             ->selectRaw('
                 COUNT(*) as stations_reported,
                 COALESCE(SUM(total_votes_cast), 0) as total_cast,
                 COALESCE(SUM(valid_votes), 0) as valid_votes,
                 COALESCE(SUM(rejected_votes), 0) as rejected_votes
             ')
-            ->first();
+            ->first()
+            : (object) ['stations_reported' => 0, 'total_cast' => 0, 'valid_votes' => 0, 'rejected_votes' => 0];
 
         $totalStations         = (int) ($stationStats->total_stations ?? 0);
         $totalRegisteredVoters = (int) ($stationStats->total_registered ?? 0);
@@ -182,13 +186,15 @@ ORDER BY polling_station_id,
     id DESC
 SQL;
 
-        $pipelineRaw = DB::table(DB::raw("({$latestResults}) as r"))
+        $pipelineRaw = $isPublished
+            ? DB::table(DB::raw("({$latestResults}) as r"))
             ->selectRaw("
                 SUM(CASE WHEN certification_status = 'submitted'             THEN 1 ELSE 0 END) AS submitted,
                 SUM(CASE WHEN certification_status NOT IN ('submitted','nationally_certified') THEN 1 ELSE 0 END) AS under_review,
                 SUM(CASE WHEN certification_status = 'nationally_certified'  THEN 1 ELSE 0 END) AS certified
             ")
-            ->first();
+            ->first()
+            : (object) ['submitted' => 0, 'under_review' => 0, 'certified' => 0];
 
         $pipeline = [
             'submitted'    => (int) ($pipelineRaw->submitted    ?? 0),
@@ -206,7 +212,7 @@ SQL;
     ORDER BY polling_station_id, nationally_certified_at DESC NULLS LAST, id DESC
     SQL;
 
-        $candidates = DB::table('candidates as c')
+        $candidates = $isPublished ? DB::table('candidates as c')
             ->selectRaw("
                 c.id,
                 c.name,
@@ -235,7 +241,7 @@ SQL;
                 'party_abbr'  => $c->party_abbr,
                 'party_color' => $this->partyColor($c->party_abbr, $c->party_color),
                 'total_votes' => (int) $c->total_votes,
-            ]);
+            ]) : collect();
 
         // Only show candidate tiles when there are nationally certified results
         if ((int) ($pipeline['certified'] ?? 0) === 0) {
@@ -247,12 +253,14 @@ SQL;
             'stats'      => $stats,
             'pipeline'   => $pipeline,
             'candidates' => $candidates,
-            'regions'    => $this->computeRegions($election),
-            'message'    => $stationsReported === 0
+            'regions'    => $isPublished ? $this->computeRegions($election) : [],
+            'message'    => !$isPublished
+                ? 'Results are not published yet. Vote totals will appear after the IEC Chairman publishes certified results.'
+                : ($stationsReported === 0
                 ? 'No results have been submitted yet. Results will appear here as polling officers file their station counts.'
                 : ((int) ($pipeline['certified'] ?? 0) === 0
                     ? 'Results are being processed. Candidate totals and vote counts publish once the IEC Chairman certifies results nationally.'
-                    : null),
+                    : null)),
         ];
     }
 

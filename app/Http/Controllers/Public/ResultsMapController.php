@@ -145,6 +145,7 @@ class ResultsMapController extends Controller
 
     private function computeStationsData(Election $election): array
     {
+        $isPublished = in_array($election->status, ['results_pending', 'certified'], true);
         $latestResults = <<<SQL
 SELECT DISTINCT ON (polling_station_id)
     *
@@ -179,7 +180,7 @@ SQL;
             ->get();
 
         $certifiedResultIds = collect($stationsRaw)
-            ->filter(fn($s) => $s->result_id !== null && $s->status === Result::STATUS_NATIONALLY_CERTIFIED)
+            ->filter(fn($s) => $isPublished && $s->result_id !== null && $s->status === Result::STATUS_NATIONALLY_CERTIFIED)
             ->pluck('result_id')->unique()->values()->all();
 
         $votesByResult            = collect();
@@ -209,8 +210,8 @@ SQL;
                 ->groupBy('result_id');
         }
 
-        return $stationsRaw->map(function ($station) use ($votesByResult, $partyAcceptancesByResult) {
-            $isCertified = $station->result_id !== null && $station->status === Result::STATUS_NATIONALLY_CERTIFIED;
+        return $stationsRaw->map(function ($station) use ($votesByResult, $partyAcceptancesByResult, $isPublished) {
+            $isCertified = $isPublished && $station->result_id !== null && $station->status === Result::STATUS_NATIONALLY_CERTIFIED;
 
             $votes = $isCertified ? $votesByResult->get($station->result_id, collect()) : collect();
             $station->candidate_votes = $votes->map(fn($v) => [
@@ -243,6 +244,19 @@ SQL;
 
     private function computeRegionAggregates(Election $election): array
     {
+        if (!in_array($election->status, ['results_pending', 'certified'], true)) {
+            return [
+                'regions' => [],
+                'national' => [
+                    'candidates' => [],
+                    'total_votes' => 0,
+                    'total_stations' => DB::table('polling_stations')->where('is_active', true)->count(),
+                    'reported_stations' => 0,
+                    'reporting_pct' => 0,
+                ],
+            ];
+        }
+
         $voteRows = DB::table('polling_stations as ps')
             ->join('administrative_hierarchy as w',   'ps.ward_id',    '=', 'w.id')
             ->join('administrative_hierarchy as con', 'w.parent_id',   '=', 'con.id')

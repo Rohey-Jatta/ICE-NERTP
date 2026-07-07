@@ -391,6 +391,23 @@ class CertificationWorkflowService
                 Cache::forget("ward_dashboard_v3_{$approver}_{$ward->id}_{$result->election_id}");
                 Cache::forget("ward_dashboard_v2_{$approver}_{$ward->id}_{$result->election_id}");
             }
+
+            $constituency = $ward?->parent;
+            if ($constituency?->assigned_approver_id) {
+                $approver = $constituency->assigned_approver_id;
+                Cache::forget("constituency_dashboard_{$approver}_{$constituency->id}_{$result->election_id}");
+                foreach (['pending', 'certified', 'rejected', 'all'] as $filter) {
+                    Cache::forget("constituency_queue_counts_{$approver}_{$constituency->id}_{$result->election_id}_{$filter}");
+                }
+            }
+
+            $adminArea = $constituency?->parent;
+            if ($adminArea?->assigned_approver_id) {
+                $approver = $adminArea->assigned_approver_id;
+                foreach (['pending', 'approved', 'rejected', 'all'] as $filter) {
+                    Cache::forget("admin_area_queue_counts_v2_{$approver}_{$adminArea->id}_{$result->election_id}_{$filter}");
+                }
+            }
         }
     }
 }
