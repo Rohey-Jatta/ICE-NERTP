@@ -273,6 +273,7 @@ class ElectionOperationsController extends Controller
                     'mo.latitude',
                     'mo.longitude',
                     'mo.photo_paths',
+                    'mo.documents_paths',
                     'ps.name as station_name',
                     'ps.code as station_code',
                     'w.name as ward_name',
@@ -318,7 +319,10 @@ class ElectionOperationsController extends Controller
                     'monitor_name'     => $obs->monitor_name,
                     'latitude'         => $obs->latitude,
                     'longitude'        => $obs->longitude,
+                    'photos'           => $this->filePayloads($obs->photo_paths),
+                    'documents'        => $this->filePayloads($obs->documents_paths),
                     'has_photos'       => !empty($obs->photo_paths),
+                    'has_documents'    => !empty($obs->documents_paths),
                 ])->toArray(),
             ];
         } catch (\Throwable $e) {
@@ -330,6 +334,24 @@ class ElectionOperationsController extends Controller
                 'recent'   => [],
             ];
         }
+    }
+
+
+    private function filePayloads($paths): array
+    {
+        $decoded = is_string($paths) ? json_decode($paths, true) : $paths;
+        if (!is_array($decoded)) {
+            return [];
+        }
+
+        return collect($decoded)
+            ->filter(fn ($path) => is_string($path) && $path !== '')
+            ->map(fn ($path) => [
+                'name' => basename($path),
+                'url'  => asset('storage/' . ltrim($path, '/')),
+            ])
+            ->values()
+            ->toArray();
     }
 
     // ── User Activity ──────────────────────────────────────────────────────

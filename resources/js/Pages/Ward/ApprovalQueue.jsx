@@ -225,9 +225,9 @@ export default function WardApprovalQueue({ auth, ward, results = [], filter = '
                                             <div className="text-slate-500 text-xs">Party Responses</div>
                                             <div className={`font-semibold text-sm ${
                                                 result.party_total === 0 ? 'text-slate-500' :
-                                                result.party_accepted === result.party_total ? 'text-iec-pink-600' : 'text-slate-500'
+                                                result.party_responded === result.party_total ? 'text-iec-pink-600' : 'text-slate-500'
                                             }`}>
-                                                {result.party_total === 0 ? 'N/A' : `${result.party_accepted}/${result.party_total} Responded`}
+                                                {result.party_total === 0 ? 'N/A' : `${result.party_responded}/${result.party_total} Responded`}
                                             </div>
                                         </div>
                                     </div>

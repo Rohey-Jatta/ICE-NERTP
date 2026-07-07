@@ -140,6 +140,7 @@ class ResultsStationsController extends Controller
      */
     private function computeStations(Election $election): array
     {
+        $isPublished = in_array($election->status, ['results_pending', 'certified'], true);
         $latestResults = <<<SQL
 SELECT DISTINCT ON (polling_station_id)
     *
@@ -183,7 +184,7 @@ SQL;
         // Only nationally-certified (chairman-published) results unlock
         // candidate votes / party reactions.
         $certifiedResultIds = collect($stations)
-            ->filter(fn($s) => $s->result_id !== null && $s->status === Result::STATUS_NATIONALLY_CERTIFIED)
+            ->filter(fn($s) => $isPublished && $s->result_id !== null && $s->status === Result::STATUS_NATIONALLY_CERTIFIED)
             ->pluck('result_id')
             ->unique()
             ->values()
@@ -248,10 +249,11 @@ SQL;
 
         $mappedStations = collect($stations)->map(function ($station) use (
             $candidateVotesByResult,
-            $partyAcceptancesByResult
+            $partyAcceptancesByResult,
+            $isPublished
         ) {
             $resultId    = $station->result_id;
-            $isCertified = $resultId !== null && $station->status === Result::STATUS_NATIONALLY_CERTIFIED;
+            $isCertified = $isPublished && $resultId !== null && $station->status === Result::STATUS_NATIONALLY_CERTIFIED;
 
             return [
                 'id'                => $station->id,

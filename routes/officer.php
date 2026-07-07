@@ -37,9 +37,9 @@ Route::middleware(['auth', 'role:polling-officer'])
             ->when($activeElection, fn ($q) => $q->where('election_id', $activeElection->id))
             ->selectRaw(
                 'COUNT(*) as total, '
-                . 'SUM(CASE WHEN certification_status IN (?, ?, ?) THEN 1 ELSE 0 END) as pending, '
+                . 'SUM(CASE WHEN ((certification_status IN (?, ?, ?)) AND (rejection_count = 0 OR submitted_at > last_rejected_at)) THEN 1 ELSE 0 END) as pending, '
                 . 'SUM(CASE WHEN certification_status IN (?, ?, ?, ?, ?, ?, ?) THEN 1 ELSE 0 END) as certified, '
-                . 'SUM(CASE WHEN certification_status = ? AND rejection_count > 0 THEN 1 ELSE 0 END) as rejected',
+                . 'SUM(CASE WHEN certification_status = ? AND rejection_count > 0 AND last_rejected_at IS NOT NULL AND submitted_at <= last_rejected_at THEN 1 ELSE 0 END) as rejected',
                 [
                     Result::STATUS_SUBMITTED,
                     Result::STATUS_PENDING_PARTY_ACCEPTANCE,
